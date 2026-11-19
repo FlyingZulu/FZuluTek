@@ -12,7 +12,7 @@ Deux livrables, un même moteur :
    : un clone de la surface du FM-1 (27 touches F3..G5, 14 boutons, 7 encodeurs SELECT/PRESET/ALGO/K1..K4,
    écran LCD noir et blanc avec flash/icône caméra et léger effet VHS) qui embarque **les mêmes
    fichiers DSP** (`app-zulutek/src/main/cpp/dsp/`, copiés tels quels de l'arbre patché), pour
-   tester le rendu avant de porter/flasher sur le FM-1.
+   tester le rendu avant de porter/flâsher sur le FM-1.
 
 ## La chaîne audio (identique des deux côtés)
 
@@ -71,7 +71,7 @@ On développe/test d'abord sur l'APK (`app-zulutek`), puis on porte sur le FM-1 
 Voir `docs/ZULUTEK-MIDI-LOOPER.md` pour le détail. En bref : **REC+EDIT** = page LOOP
 (16 slots = les 16 blanches), **REC+GLO** = procédure REC (caméra cinéma, armement
 1,2 s, REC+GLO clignotent + logo REC rouge, départ immédiat, stop = longueur prédéfinie
-ou quantizée au tempo), appui long = édition du slot (ALGO = source, SELECT = longueur,
+ou quantizee au tempo), appui long = édition du slot (ALGO = source, SELECT = longueur,
 PRESET = niveau, K1 PITCH / K2 POS / K3 MODE rev-pingpong / K4 MUTATION), touche 25 + pad
 = grille 16 pas (SELECT = vélocité), GLO(15) + pad = RESAMPLE (ring auto-RAM), page MIX
 (SEL) = niveaux + aux -> LOOP / POW!, source PoW! par slot (ALGO en page PUNCH),
