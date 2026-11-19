@@ -33,7 +33,9 @@
 
 /* the seven controls of the 303, 0..1 each. WAVE picks from the oscillator list (AT_OSC_NAME): 0 is SAW, 1 is SQUARE
  * and the combinations of the extra layer lie between, at k / (AT_NOSC - 1) */
-enum { AT_TUNING, AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT_DECAY, AT_ACCENT, AT_WAVE, AT_NPARAMS };
+enum { AT_TUNING, AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT_DECAY, AT_ACCENT, AT_WAVE, AT_ENGINE, AT_NPARAMS };
+/* AT_ENGINE picks the voice engine (0..1 -> AT_NENGINES-1, see bass_engines.h): 0 is the ATEK303
+ * voice itself, the rest are the bass engines in bass_engines.c (appended: the saved ids do not move) */
 
 typedef struct {
     float b0, b1, b2, a1, a2, x1, x2, y1, y2;
@@ -83,6 +85,8 @@ typedef struct {
 
     /* ATEK filter */
     float f_cut, f_res, f_drive, f_b0, f_k, f_gcomp, y1, y2, y3, y4, fb_hp, fb_prev, fb_hp_c;
+    int f_model;                      /* zuluTek FILTER: 0 ORG (the original diode ladder), 1 NEW (Neo-inspired) */
+    float f_morph;                    /* zuluTek FILTER: LP -> HP morph, 0..1 */
 
     /* the module's extras */
     float acc_fast, acc_slow, drift_pitch, drift_cut;
@@ -94,7 +98,7 @@ typedef struct {
 void at_init(at_voice_t *v, float sr);
 
 /* the oscillator list that WAVE walks: the 303's two waves at the ends and the extra layer's combinations between */
-#define AT_NOSC 14
+#define AT_NOSC 17
 extern const char *const AT_OSC_NAME[AT_NOSC];
 int at_osc_index(float wave);                 /* WAVE's value to its entry */
 
