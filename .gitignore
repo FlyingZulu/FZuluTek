@@ -1,0 +1,4 @@
+# Visuels pixel art générés en CI par tools/make_icon.py
+# (les binaires poussés via le connecteur arrivent corrompus)
+app-zulutek/src/main/res/mipmap-*/
+app-zulutek/src/main/res/drawable-nodpi/
