@@ -43,7 +43,7 @@ static const float DRIFT_CENTS[4] = {0.0f, 1.5f, 3.5f, 6.0f};
 static const float AA_SOS[6][5] = {
     {1.3671732100e-04f, 1.8695892579e-04f, 1.3671732100e-04f, -1.5863116559e+00f, 6.4282028140e-01f},
     {1.0000000000e+00f, -3.7140354711e-01f, 1.0000000000e+00f, -1.5620957226e+00f, 7.1615708784e-01f},
-    {1.0000000000e+00f, -1.0298242816e+00f, 1.0000000000e+00f, -1.5310700890e+00f, 8.1309516633e-01f},
+    {1.0000000000e+00f, -1.0298242816e-01f, 1.0000000000e+00f, -1.5310700890e+00f, 8.1309516633e-01f},
     {1.0000000000e+00f, -1.2676403937e+00f, 1.0000000000e+00f, -1.5080939976e+00f, 8.9315821803e-01f},
     {1.0000000000e+00f, -1.3628794779e+00f, 1.0000000000e+00f, -1.4983265470e+00f, 9.4752881661e-01f},
     {1.0000000000e+00f, -1.3980247164e+00f, 1.0000000000e+00f, -1.5032624531e+00f, 9.8437474069e-01f},
@@ -303,10 +303,13 @@ static const at_osc_t OSC_LIST[AT_NOSC] = {
     {1, {0, 1, 3, 2, 0, 0, 0, 0}},             /* OCT UP: the saw an octave up at 100 % */
     {1, {0, 1, 2, 3, 0, 0, 0, 0}},             /* FIFTH UP: the saw at +19 st, 50 % */
     {1, {4, 1, 0, 0, 0, 0, 0, 0}},             /* SQR+SUB */
+    {0, {0, 1, 0, 0, 0, 2, 0, 0}},             /* GRIT: saw + white noise 25 % */
+    {0, {4, 0, 0, 0, 0, 0, 0, 0}},             /* SUB2: the sine two octaves down at 50 % */
+    {1, {0, 1, 0, 0, 0, 1, 0, 0}},             /* BUZZ: square + noise 10 % */
     {1, {0, 1, 0, 0, 0, 0, 0, 0}},             /* SQUARE */
 };
 const char *const AT_OSC_NAME[AT_NOSC] = {"SAW", "SAW+SUB", "FAT", "DETUNE+SUB", "SHINE", "METAL", "GROWL", "BREATH",
-    "WILD", "OCTAVES", "OCT UP", "FIFTH UP", "SQR+SUB", "SQUARE"};
+    "WILD", "OCTAVES", "OCT UP", "FIFTH UP", "SQR+SUB", "GRIT", "SUB2", "BUZZ", "SQUARE"};
 int at_osc_index(float wave)
 {
     int k = (int)(clampf(wave, 0.0f, 1.0f) * (float)(AT_NOSC - 1) + 0.5f);
@@ -356,17 +359,30 @@ static void filt_coeffs(at_voice_t *v, float cutoff)
 static void filt_reset(at_voice_t *v) { v->y1 = v->y2 = v->y3 = v->y4 = v->fb_hp = v->fb_prev = 0.0f; }
 static inline float filt_sample(at_voice_t *v, float in)
 {
-    float fb = v->f_k * diode(v->y4), x, b0 = v->f_b0;
-    v->fb_hp = v->fb_hp_c * (v->fb_hp + fb - v->fb_prev);
-    v->fb_prev = fb;
-    x = v->f_drive * in - v->fb_hp;
-    v->y1 += CAP_RATIO * b0 * diode(x - v->y1 + v->y2);
-    v->y2 += b0 * diode(v->y1 - 2.0f * v->y2 + v->y3);
-    v->y3 += b0 * diode(v->y2 - 2.0f * v->y3 + v->y4);
-    v->y4 += b0 * diode(v->y3 - 2.0f * v->y4);
-    if (!(fm_fabsf(v->y1) + fm_fabsf(v->y2) + fm_fabsf(v->y3) + fm_fabsf(v->y4) < 1e6f))   /* NaN or runaway */
+    float u = v->f_drive * in, x, b0 = v->f_b0, m = v->f_morph, lp;
+    if (v->f_model) {               /* zuluTek FILTER "NEW" (Neo-inspired): linear ladder cells,
+                                     the soft saturation in the feedback loop, not per cell */
+        float fb = v->f_k * fm_tanhf(v->y4);
+        x = u - fb;
+        v->y1 += b0 * (x - v->y1);
+        v->y2 += b0 * (v->y1 - v->y2);
+        v->y3 += b0 * (v->y2 - v->y3);
+        v->y4 += b0 * (v->y3 - v->y4);
+    } else {                        /* FILTER "ORG": the original ATEK diode ladder, untouched */
+        float fb = v->f_k * diode(v->y4);
+        v->fb_hp = v->fb_hp_c * (v->fb_hp + fb - v->fb_prev);
+        v->fb_prev = fb;
+        x = u - v->fb_hp;
+        v->y1 += CAP_RATIO * b0 * diode(x - v->y1 + v->y2);
+        v->y2 += b0 * diode(v->y1 - 2.0f * v->y2 + v->y3);
+        v->y3 += b0 * diode(v->y2 - 2.0f * v->y3 + v->y4);
+        v->y4 += b0 * diode(v->y3 - 2.0f * v->y4);
+    }
+    lp = v->y4;
+    if (!(fm_fabsf(v->y1) + fm_fabsf(v->y2) + fm_fabsf(v->y3) + fm_fabsf(lp) < 1e6f))   /* NaN or runaway */
         filt_reset(v);
-    return 2.0f * v->f_gcomp * v->y4;
+    /* the LP -> HP morph: the HP is the input minus the ladder's LP output */
+    return 2.0f * ((1.0f - m) * v->f_gcomp * lp + m * (u - lp));
 }
 
 /* ------------------------------------------------------------- Open303 --- */
