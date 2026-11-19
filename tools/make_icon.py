@@ -82,7 +82,7 @@ def draw(cv, bg=True):
         return v * k
     if bg:
         cv.rect(0, 0, cv.s, cv.s, (10, 10, 16, 255), r=9 * k)
-    # traînée arc-en-ciel derrière le boombox
+    # traînee arc-en-ciel derriere le boombox
     bh, y0 = 6, 53
     for i, c in enumerate(RAINBOW):
         cv.rect(0, X(y0 + i * bh), X(55), X(y0 + (i + 1) * bh), c)
