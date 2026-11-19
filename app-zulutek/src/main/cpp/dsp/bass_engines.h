@@ -15,14 +15,9 @@
 extern const char *const AT_ENGINE_NAME[AT_NENGINES];
 int at_engine_index(float v);               /* AT_ENGINE's 0..1 to its entry */
 
-/* the engine choice rides in the param slot right after the AT_ ids (the zuluTek patch appends
- * AT_ENGINE to the 303's param list; on the host the vendored atek_voice.h stays at AT_NPARAMS) */
-#define AT_ENGINE AT_NPARAMS
-
 typedef struct {
     float sr;
-    int engine;                             /* 0..AT_NENGINES-1; 0 = the ATEK303 voice itself (not rendered here) */
-    float param[AT_NPARAMS + 1];
+    float param[AT_NPARAMS];
     int gate, held, accent, slide;
     float env;                              /* amp envelope, 0..1 */
     float freq, freq_t;                     /* Hz; freq slews to freq_t on slide */
@@ -30,7 +25,6 @@ typedef struct {
     float ks[2304];                         /* PLUK's string, up to sr/20 Hz */
     uint32_t ks_n, ks_pos;
     float ks_last;
-    float lp_y;                             /* output tone filter state (persists across blocks) */
     uint32_t rng;
 } bass_t;
 
