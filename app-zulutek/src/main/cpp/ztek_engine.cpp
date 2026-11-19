@@ -18,10 +18,12 @@ extern "C" {
 #include <stdlib.h>
 #include <string.h>
 #include <new>
+#include <memory>
+#include <oboe/Oboe.h>
 
 #define ZTEK_MAX_BLOCK 4096
 
-struct ztek_s {
+struct ztek_s : public oboe::AudioStreamDataCallback {
     float sr;
     float bpm;
     float master;
@@ -44,7 +46,58 @@ struct ztek_s {
     int seq_note;                   /* the note the sequencer is holding, -1 none */
 
     float *mono;                    /* scratch, ZTEK_MAX_BLOCK */
+    float lbuf[ZTEK_MAX_BLOCK], rbuf[ZTEK_MAX_BLOCK];
+
+    std::shared_ptr<oboe::AudioStream> out;
+
+    oboe::DataCallbackResult onAudioReady(oboe::AudioStream *, void *audioData, int32_t numFrames) override
+    {
+        float *o = static_cast<float *>(audioData);
+        uint32_t done = 0;
+        while (done < (uint32_t)numFrames) {
+            uint32_t blk = (uint32_t)numFrames - done;
+            if (blk > ZTEK_MAX_BLOCK) blk = ZTEK_MAX_BLOCK;
+            memset(lbuf, 0, blk * sizeof(float));
+            memset(rbuf, 0, blk * sizeof(float));
+            ztek_render(this, lbuf, rbuf, blk);
+            for (uint32_t i = 0; i < blk; i++) {
+                o[(done + i) * 2] = lbuf[i];
+                o[(done + i) * 2 + 1] = rbuf[i];
+            }
+            done += blk;
+        }
+        return oboe::DataCallbackResult::Continue;
+    }
 };
+
+int ztek_start(ztek_t *z)
+{
+    if (z->out) return 1;
+    oboe::AudioStreamBuilder b;
+    b.setDirection(oboe::Direction::Output)
+     ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
+     ->setSharingMode(oboe::SharingMode::Exclusive)
+     ->setSampleRate((int32_t)z->sr)
+     ->setChannelCount(2)
+     ->setFormat(oboe::AudioFormat::Float)
+     ->setCallback(z);
+    oboe::Result r = b.openStream(z->out);
+    if (r != oboe::Result::OK) {
+        b.setSharingMode(oboe::SharingMode::Shared);
+        r = b.openStream(z->out);
+    }
+    if (r != oboe::Result::OK) return 0;
+    return z->out->requestStart() == oboe::Result::OK ? 1 : 0;
+}
+
+void ztek_stop(ztek_t *z)
+{
+    if (z->out) {
+        z->out->stop();
+        z->out->close();
+        z->out.reset();
+    }
+}
 
 /* ---- looper callbacks (audio thread): loop events drive the synth -------------------- */
 
@@ -80,9 +133,8 @@ static void cb_param(void *ctx, int slot, int key, float v)
 
 ztek_t *ztek_create(float sr)
 {
-    ztek_t *z = new (std::nothrow) ztek_t();
+    ztek_t *z = new (std::nothrow) ztek_t();   /* value-init: ztek_s has a shared_ptr member */
     if (!z) return NULL;
-    memset(z, 0, sizeof *z);
     z->sr = sr;
     z->bpm = 120.0f;
     z->master = 0.8f;
@@ -129,6 +181,7 @@ ztek_t *ztek_create(float sr)
 void ztek_destroy(ztek_t *z)
 {
     if (!z) return;
+    ztek_stop(z);
     free(z->mono);
     delete z;
 }
@@ -175,9 +228,12 @@ void ztek_set_engine(ztek_t *z, int engine)
     if (engine < 0) engine = 0;
     if (engine >= AT_NENGINES) engine = AT_NENGINES - 1;
     z->engine = engine;
-    bass_set(&z->bass, AT_ENGINE, (float)engine / (float)(AT_NENGINES - 1));
-    /* re-apply the shared knobs so the new engine starts from the same page */
-    for (int p = 0; p < AT_NPARAMS; p++) bass_set(&z->bass, p, z->param[p]);
+    z->param[AT_ENGINE] = (float)engine / (float)(AT_NENGINES - 1);
+    /* re-apply the shared knobs (incl. AT_ENGINE) so the new engine starts from the same page */
+    for (int p = 0; p < AT_NPARAMS; p++) {
+        at_set(&z->voice, p, z->param[p]);
+        bass_set(&z->bass, p, z->param[p]);
+    }
 }
 
 int ztek_get_engine(const ztek_t *z) { return z->engine; }

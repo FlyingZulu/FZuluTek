@@ -2,9 +2,9 @@
  * Copyright (C) 2026 FlyingZulu
  *
  * JNI bridge between the Kotlin UI (com.zulutek.preview.ZtekAudio) and ztek_engine.
- * The audio callback passes Oboe's direct ByteBuffer: nativeRender writes interleaved
- * stereo float32 frames straight into it. All control calls are plain state setters,
- * safe to call from the UI thread (the engine is single-instance, as on the FM-1). */
+ * As in the app module, the Oboe stream lives in the native engine (oboe::oboe via prefab):
+ * the UI only starts/stops it and sets control state. All control calls are plain state
+ * setters, safe to call from the UI thread (the engine is single-instance, as on the FM-1). */
 #include <jni.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -24,30 +24,14 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDestroy(JNIEnv *,
     ztek_destroy(zte(NULL, h));
 }
 
-ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeRender(JNIEnv *env, jclass, jlong h,
-                                                                      jobject buf, jint frames)
+ZTEK_JNI jboolean JNICALL Java_com_zulutek_preview_ZtekAudio_nativeStart(JNIEnv *, jclass, jlong h)
 {
-    ztek_t *z = zte(NULL, h);
-    if (!z || frames <= 0) return;
-    float *base = (float *)env->GetDirectBufferAddress(buf);
-    if (!base) return;
-    /* interleaved stereo float32: deinterleave into two planes, render, re-interleave */
-    static thread_local float l[4096], r[4096];
-    uint32_t done = 0;
-    while (done < (uint32_t)frames) {
-        uint32_t blk = (uint32_t)frames - done;
-        if (blk > 4096) blk = 4096;
-        for (uint32_t i = 0; i < blk; i++) {
-            l[i] = 0.0f;
-            r[i] = 0.0f;
-        }
-        ztek_render(z, l, r, blk);
-        for (uint32_t i = 0; i < blk; i++) {
-            base[(done + i) * 2] = l[i];
-            base[(done + i) * 2 + 1] = r[i];
-        }
-        done += blk;
-    }
+    return ztek_start(zte(NULL, h)) ? JNI_TRUE : JNI_FALSE;
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeStop(JNIEnv *, jclass, jlong h)
+{
+    ztek_stop(zte(NULL, h));
 }
 
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeNoteOn(JNIEnv *, jclass, jlong h,

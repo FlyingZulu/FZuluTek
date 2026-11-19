@@ -1,13 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
  *
- * The audio side of the ZuluTek preview APK: one Oboe output stream (float32 stereo,
- * low latency) whose callback renders through the native ztek engine (libzulutek.so,
- * the same vendored DSP the FM-1 firmware runs). All controls are JNI state setters. */
+ * The audio side of the ZuluTek preview APK. As in the app module, Oboe runs in the native
+ * lib (oboe::oboe via prefab, stream owned by ztek_engine): here we only load libzulutek.so,
+ * start/stop the stream and set control state through JNI. */
 package com.zulutek.preview
-
-import java.nio.ByteBuffer
-import com.google.oboe.*
 
 object ZtekAudio {
 
@@ -19,6 +16,7 @@ object ZtekAudio {
     const val AT_DECAY = 4
     const val AT_ACCENT = 5
     const val AT_WAVE = 6
+    const val AT_ENGINE = 7
 
     /* the FX_ param ids (dsp/fx.h) */
     const val FX_DRIVE_TYPE = 0
@@ -33,57 +31,30 @@ object ZtekAudio {
     const val ML_SP_VOL = 6
 
     private var handle: Long = 0
-    private var stream: AudioStream? = null
-    var sampleRate: Int = 48000
-        private set
+    const val SAMPLE_RATE = 48000
 
     val running: Boolean get() = handle != 0L
 
+    init {
+        System.loadLibrary("zulutek")
+    }
+
     fun start(): Boolean {
         if (handle != 0L) return true
-        System.loadLibrary("zulutek")
-        sampleRate = 48000
-        handle = nativeCreate(sampleRate)
+        handle = nativeCreate(SAMPLE_RATE)
         if (handle == 0L) return false
-        val callback = object : AudioStreamCallback {
-            override fun onAudioReady(
-                stream: AudioStream,
-                audioData: ByteBuffer,
-                numFrames: Int
-            ): AudioStreamCallback.Result {
-                if (handle != 0L) nativeRender(handle, audioData, numFrames)
-                return AudioStreamCallback.Result.Continue
-            }
-        }
-        val s = AudioStreamBuilder()
-            .setDirection(Direction.OUTPUT)
-            .setSharingMode(SharingMode.LOW_LATENCY)
-            .setPerformanceMode(PerformanceMode.LOW_LATENCY)
-            .setFormat(Format.FLOAT)
-            .setChannelCount(2)
-            .setSampleRate(sampleRate)
-            .setAudioApi(AudioApi.AAudio)
-            .setCallback(callback)
-            .build()
-        val res = s.requestStart()
-        return if (res == Result.OK) {
-            stream = s
-            nativeSetBpm(handle, 120f)
-            true
-        } else {
-            s.close()
+        if (!nativeStart(handle)) {
             nativeDestroy(handle)
             handle = 0
-            false
+            return false
         }
+        nativeSetBpm(handle, 120f)
+        return true
     }
 
     fun stop() {
-        stream?.let {
-            try { it.stop(); it.close() } catch (_: Exception) {}
-        }
-        stream = null
         if (handle != 0L) {
+            nativeStop(handle)
             nativeDestroy(handle)
             handle = 0
         }
@@ -149,7 +120,8 @@ object ZtekAudio {
 
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
-    private external fun nativeRender(handle: Long, buf: ByteBuffer, frames: Int)
+    private external fun nativeStart(handle: Long): Boolean
+    private external fun nativeStop(handle: Long)
     private external fun nativeNoteOn(handle: Long, note: Int, vel: Int, accent: Int, slide: Int)
     private external fun nativeNoteOff(handle: Long, note: Int)
     private external fun nativeAllNotesOff(handle: Long)

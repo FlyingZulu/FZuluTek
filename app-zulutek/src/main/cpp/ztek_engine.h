@@ -19,6 +19,11 @@ typedef struct ztek_s ztek_t;
 ztek_t *ztek_create(float sr);
 void ztek_destroy(ztek_t *z);
 
+/* the Oboe output stream lives in the engine (C++ side, as in the app module): start/stop it
+ * from the UI thread; the audio callback renders blocks through ztek_render */
+int  ztek_start(ztek_t *z);      /* 1 ok */
+void ztek_stop(ztek_t *z);
+
 /* n stereo frames, separate L/R planes, not cleared: the engine adds into them */
 void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n);
 
