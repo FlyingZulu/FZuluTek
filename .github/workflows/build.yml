@@ -23,7 +23,7 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Générer les visuels pixel art (les binaires ne passent pas par le connecteur)
+      - name: Générer les visuels PNG (pixel art)
         run: python3 tools/make_icon.py
 
       - name: Construire les APK de test
