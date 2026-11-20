@@ -14,7 +14,9 @@ package com.zulutek.preview
 
 import android.app.Activity
 import android.os.Bundle
-import android.view.Gravity
+import android.os.Handler
+import android.os.Looper
+import android.view.MotionEvent
 import android.widget.LinearLayout
 import kotlin.math.roundToInt
 
@@ -29,6 +31,47 @@ class MainActivity : Activity(), SurfaceListener {
     private var bpm = 120f
     private val tapTimes = LongArray(8)
     private var tapIdx = 0
+
+    /* veille auto (docs/ZULUTEK.md) : 150 s -> traversée 7 s, 180 s -> spectacle 30 s,
+     * 210 s -> écran éteint + lampe torche / 30 s ; tout appui réveille */
+    private val handler = Handler(Looper.getMainLooper())
+    private var lastActivity = System.currentTimeMillis()
+    private val tick = object : Runnable {
+        override fun run() {
+            val now = System.currentTimeMillis()
+            val idle = now - lastActivity
+            val ph = when {
+                !st.veilleOn -> 0
+                idle < 150_000 -> 0
+                idle < 157_000 -> 1
+                idle < 210_000 -> 2
+                else -> 3
+            }
+            st.veillePhase = ph
+            st.catX = when (ph) {
+                1 -> ((idle - 150_000) / 7000f).coerceIn(0f, 1f)
+                2 -> {
+                    val t = ((idle - 157_000) / 30000f) * 6f   // 3 allers-retours en 30 s
+                    val leg = t.toInt()
+                    if (leg % 2 == 0) t - leg else 1f - (t - leg)
+                }
+                else -> 0f
+            }
+            st.torch = ph == 3 && (now % 30_000) < 3_000
+            lcd.invalidate()
+            handler.postDelayed(this, 250)
+        }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        lastActivity = System.currentTimeMillis()
+        if (st.veillePhase > 0) {
+            st.veillePhase = 0
+            st.coucouUntil = lastActivity + 1000
+            lcd.invalidate()
+        }
+        return super.dispatchTouchEvent(ev)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,11 +97,22 @@ class MainActivity : Activity(), SurfaceListener {
         layout.addView(surface, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(layout)
+        handler.postDelayed(tick, 250)
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(tick)
         ZtekAudio.stop()
         super.onDestroy()
+    }
+
+    // ---- appui long sur un bouton : PLAY bascule la veille auto ----
+    override fun onButtonLong(i: Int) {
+        if (SurfaceView.BTN_LABELS[i] == "PLAY") {
+            st.veilleOn = !st.veilleOn
+            st.veillePhase = 0
+            lcd.invalidate()
+        }
     }
 
     // ---- encoders ----

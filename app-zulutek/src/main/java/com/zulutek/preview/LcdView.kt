@@ -9,9 +9,15 @@
 package com.zulutek.preview
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.view.View
 
@@ -34,6 +40,13 @@ class LcdState {
     val slotRec = BooleanArray(16)
     val popUntil = LongArray(10)      // per-widget pop animation (frame turquoise while it runs)
     fun pop(i: Int) { popUntil[i] = System.currentTimeMillis() + 1200 }
+
+    // veille auto (docs/ZULUTEK.md) : 0 off, 1 traversée ~7 s, 2 spectacle 30 s, 3 écran éteint
+    var veilleOn = true
+    var veillePhase = 0
+    var catX = 0f                     // 0..1 across the 240 px
+    var coucouUntil = 0L             // pop de réveil au centre
+    var torch = false                // lampe torche (écran éteint, toutes les 30 s)
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -59,6 +72,39 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
     }
     private val frame = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 1f }
 
+    /* décor PCB pixel art (généré en CI par tools/make_icon.py ; absent en build local nu :
+     * référencé par nom pour que le code compile même sans les PNG générés) */
+    private val pcb: Bitmap? by lazy {
+        val id = ctx.resources.getIdentifier("pcb_scene", "drawable", ctx.packageName)
+        if (id != 0) BitmapFactory.decodeResource(ctx.resources, id) else null
+    }
+
+    private val RAINBOW = intArrayOf(
+        Color.rgb(255, 60, 60), Color.rgb(255, 160, 40), Color.rgb(255, 238, 0),
+        Color.rgb(60, 220, 90), Color.rgb(60, 160, 255), Color.rgb(150, 80, 255))
+
+    /* the Nyan Cat ghetto blaster crossing the FM-1's inside, rainbow trail behind */
+    private fun drawCat(c: Canvas, x: Float, y: Float, scale: Float) {
+        val body = Paint().apply { color = Color.rgb(255, 150, 190); style = Paint.Style.FILL }
+        val head = Paint().apply { color = Color.rgb(190, 195, 205); style = Paint.Style.FILL }
+        // traînée arc-en-ciel
+        for (k in RAINBOW.indices) {
+            frame.color = RAINBOW[k]
+            frame.strokeWidth = 2.2f * scale
+            val yy = y + (k - 2.5f) * 3.2f * scale
+            c.drawLine(x - 8f * scale, yy, x - 52f * scale, yy, frame)
+        }
+        // corps (pop-tart) + tête + oreilles + yeux
+        c.drawRect(x - 10f * scale, y - 8f * scale, x + 14f * scale, y + 8f * scale, body)
+        c.drawCircle(x + 18f * scale, y, 9f * scale, head)
+        c.drawRect(x + 12f * scale, y - 15f * scale, x + 16f * scale, y - 8f * scale, head)
+        c.drawRect(x + 20f * scale, y - 15f * scale, x + 24f * scale, y - 8f * scale, head)
+        mono.color = Color.BLACK
+        mono.textSize = 6f * scale
+        c.drawText("o", x + 15f * scale, y + 2f * scale, mono)
+        c.drawText("o", x + 21f * scale, y + 2f * scale, mono)
+    }
+
     private fun text(c: Canvas, x: Float, y: Float, s: String, color: Int, size: Float) {
         mono.color = color
         mono.textSize = size
@@ -83,6 +129,45 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         val now = System.currentTimeMillis()
         val blink = (now / 260) % 2 == 0L
+
+        // ---- veille auto : décor PCB + Nyan Cat, puis écran éteint + lampe torche ----
+        if (st.veillePhase > 0) {
+            val bmp = pcb
+            if (bmp != null) c.drawBitmap(bmp, null, RectF(0f, 0f, W.toFloat(), H.toFloat()), null)
+            else c.drawColor(Color.argb(255, 16, 18, 22))
+            when (st.veillePhase) {
+                1, 2 -> {
+                    drawCat(c, 20f + st.catX * (W - 60f), H / 2f, 1f)
+                    if (st.veillePhase == 2 && (now / 130) % 7 == 0L) {
+                        // glitch : bandes RGB décalées
+                        for (k in 0 until 3) {
+                            frame.color = RAINBOW[(k * 2 + (now / 130).toInt()) % RAINBOW.size]
+                            frame.alpha = 60
+                            val yy = ((now / 130) % H).toFloat()
+                            c.drawRect(0f, yy, W.toFloat(), yy + 4f, frame)
+                            frame.alpha = 255
+                        }
+                    }
+                }
+                3 -> {
+                    // écran « éteint » : tout noir, la lampe torche balaie le coin bas-droit
+                    c.drawColor(Color.argb(255, 4, 4, 6))
+                    if (st.torch) {
+                        val g = RadialGradient(216f, 216f, 8f, 216f, 216f, 70f,
+                            Color.argb(160, 255, 255, 240), Color.argb(0, 255, 255, 240),
+                            android.graphics.Shader.TileMode.CLAMP)
+                        val p = Paint().apply {
+                            shader = g
+                            xfermode = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+                        }
+                        c.drawCircle(216f, 216f, 70f, p)
+                    }
+                }
+            }
+            if (now < st.coucouUntil) drawCat(c, W / 2f, H / 2f, 1.6f)   // coucou au réveil
+            c.restore()
+            return
+        }
 
         // ---- top bar ----
         text(c, 6f, 15f, "ZULUTEK", FLUO_YEL, 12f)
