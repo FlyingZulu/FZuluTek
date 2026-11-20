@@ -15,7 +15,28 @@ transférables aussi. Deux modes visés :
   le FM-1 le charge et le joue. À terme : page « vue étendue » sur le téléphone (éditeur de presets,
   baie de patch avec boîtes/câbles) — voir §6.
 
-## 1. Transport : USB-MIDI (disponible aujourd'hui, aucun changement hardware)
+## 1. Transport : un seul câble USB (MIDI + audio), la sortie d'écoute en jack
+
+**Pont audio hybride — le choix initial** (à prévoir comme ça dès le patch 0009) :
+
+- **FM-1 → jack** : la sortie analogique (haut-parleurs/casque, switch `plat_headphones`) sert au
+  monitoring — c'est « le son qui sort du FM-1 sort en jack ».
+- **FM-1 → téléphone, via l'USB** : `usb_audio_in = true` (déjà actif) — `uac_tap()` envoie le render de
+  l'app vers l'hôte USB ; l'APK enregistre avec `AudioRecord` sur le device UAC-in (miroir, capture,
+  traitement côté téléphone). Donc « le son qui vient du FM-1 passe par l'USB ».
+- **Téléphone → FM-1, via l'USB aussi** : `usb_audio_out = true` (à activer, patch 0009) — `uac_play()`
+  mixe l'audio de l'hôte dans la sortie du FM-1 (`plat_usb_play_gain` = niveau). **Patch à prévoir** :
+  aucun hook app ne reçoit aujourd'hui cet audio entrant — ajouter `APP_USB_IN` /
+  `app_usb_in(const int32_t *lr, uint32_t n)` (même pattern que `APP_BT_FRAMES`/`app_bt_frames`), qui
+  reçoit l'audio USB entrant pour que le firmware l'échantillonne (ring resample du looper patch 0008,
+  ou futur SMP du FM-1). Côté APK : `AudioTrack` routé vers le device UAC-out (Android host le supporte).
+- **Contrôle/données sur le même câble** : USB-MIDI SysEx (voir ci-dessous).
+
+Résultat : un seul câble USB entre téléphone et FM-1 porte MIDI (contrôle) + audio dans les deux sens ;
+le jack reste la sortie d'écoute analogique. C'est l'hybride : **pas totalement en USB** (l'écoute est
+en jack), le pont audio/contrôle est en USB. « Le FM-1 sample via l'APK » devient du live : l'APK joue le
+sample (Koala/importé) → USB → FM-1 → `app_usb_in` → ring → le FM-1 le rejoue et le processe. Le push
+de fichiers (flash) reste pour la **persistance**, pas pour le live.
 
 Le FM-1 énumère déjà en **USB-MIDI** (MIDI in/out de l'ATEK303) + USB-audio. Côté téléphone : USB host
 (`android.hardware.usb`), on réclame l'interface classe MIDI (class 0x01, subclass 0x03), endpoints bulk
@@ -97,9 +118,9 @@ côté APK (`filesDir/ztek/samples/*.wav`).
 
 - **Flash FM-1** : zone data ~288 Ko (+ XDATA 16 KiB ×2, + 12 KiB en `xdata2=true`) — samples courts
   uniquement ; le reste reste sur le téléphone. Ne JAMAIS remplir la zone app (0xD4000..0xFC000).
-- **Pas de streaming audio phone→FM-1** en v1 : l'USB du FM-1 est device (USB-audio IN = le FM-1
-  s'enregistre chez l'hôte) ; le flux audio live phone→FM-1 demanderait un routage UAC-in dans le
-  firmware — piste v3, pas promis.
+- **Audio live phone→FM-1** : possible en USB (`usb_audio_out = true` + hook `app_usb_in`, patch 0009)
+  — c'est le pont hybride choisi au départ. Ce qui reste hors v1 : recevoir cet audio *dans le moteur*
+  au-delà du ring resample (SMP complet côté FM-1 = v3). Le monitoring reste en jack (analogique).
 - **ZuluLink** : spec confidentielle (KB privée), non décrite ici ; ZTF est un protocole minimal séparé,
   interopérable au niveau MIDI (CC/notes) avec n'importe quel hôte.
 - Dépôts privés en dev ; ouverture publique plus tard en GPL-3.0 + crédits Animatek (PRISE-EN-MAIN.md).
@@ -108,9 +129,10 @@ côté APK (`filesDir/ztek/samples/*.wav`).
 
 ## 7. Fichiers visés
 
-- Firmware (patch 0009, branche `vibe/fm1-patch-link-c9ef18`) : `fm1.toml` (`companion = true`),
-  `app.h` (APP_FILE_OBJS/APP_FILES/APP_PARAMS/APP_SYSEX/APP_COMPANION_EXTRAS), nouveau `ztek_link.c/h`
-  (dispatch SysEx ZTF, fichiers ZSMP/ZLUP/ZPRE/ZMAC, commit→chargement), hooks `app.c` (page LINK côté
-  FM-1 minimale : état du transfert), `patches/README.md`.
+- Firmware (patch 0009, branche `vibe/fm1-patch-link-c9ef18`) : `fm1.toml` (`companion = true`,
+  `usb_audio_out = true`), `app.h` (APP_FILE_OBJS/APP_FILES/APP_PARAMS/APP_SYSEX/APP_USB_IN/
+  APP_COMPANION_EXTRAS), patch de `device/uac_mix.h` ou `main_fm1.c` (tap `app_usb_in` sur l'audio entrant
+  USB, avant le mix), nouveau `ztek_link.c/h` (dispatch SysEx ZTF, fichiers ZSMP/ZLUP/ZPRE/ZMAC,
+  commit→chargement, AIN USB → ring resample), hooks `app.c`, `patches/README.md`.
 - APK (branche `vibe/ztf-link-c9ef18`) : `Fm1Usb.kt`, `SampleLibrary.kt`, `ZtekAudio.kt` (WAV
   encode/décode natif + banque), `MainActivity.kt` (page LINK), `LcdView.kt`, tests host.
