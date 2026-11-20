@@ -58,7 +58,7 @@ La charge lourde reste les voix/FX par échantillon.
 
 ## 4. Matrice ASSIGN typée, façon panneau VCV Rack / miRack
 
-Page **ASSIGN** (REC+HOME sur l'APK) : **SEL = destination (entrée), PRESET = source
+Page **ASSIGN** (double-tap REV sur l'APK, page 9) : **SEL = destination (entrée), PRESET = source
 (sortie), K1 = depth, ALG = option LUDIQUE**. Règles de typage (un câble ne va que
 **out → in**) :
 
@@ -89,7 +89,7 @@ mener des expériences plus poussées (les 4 labos + la matrice ASSIGN typée so
   (modes PLAY, TM au wrap, RAND, `ztek_seq_mutate`), tout en blocs de 32 échantillons.
 - `app-zulutek/src/main/cpp/jni_bridge.cpp` — bindings JNI des nouvelles API.
 - `app-zulutek/src/main/java/com/zulutek/preview/{ZtekAudio,MainActivity,LcdView,SurfaceView}.kt`
-  — pages 3 (SEQ+), 10 (LFO), 11 (ENV), 12 (ASSIGN), double-tap SEQ, ENV/LFO = mutation,
+  — pages 6 (SEQ+, double-tap SEQ), 7 (LFO, double-tap MUT), 8 (ENV, double-tap DLY), 9 (ASSIGN, double-tap REV), 10 (PRESETS, double-tap ERS), mutation live (appui long TAP/SCL, double-tap GEN), presets live (double-tap R-/R+),
   sens interdit + bulles de conseils, option LUDIQUE.
 - Vérifs : `g++ -fsyntax-only` (stubs jni/oboe) OK ; test hôte gcc sur
   `acid_mutate_burst_range` + rotation TM + `acid_import` OK.
@@ -98,11 +98,11 @@ mener des expériences plus poussées (les 4 labos + la matrice ASSIGN typée so
 
 Deux niveaux de presets :
 
-- **8 presets usine pré-patchés** façon ZuluFx (bouton **EDIT** sur la page MAIN de l'APK) :
+- **8 presets usine pré-patchés** façon ZuluFx (double-tap **R+** (preset suivant en live, page MAIN)) :
   ACID 303, FILTRE WOBBLE (LFO1→CUTOFF), PITCH DRIFT (LFO2 DRUNK→TUNING), GATE 303
   (ENV1→ENVMOD/DECAY), SLIDE CITY (PING-PONG + LFO3→TEMPO), LABO CHAOS (LABO1→RESO),
   TM MAX (Turing Machine ouverte), MARÉE (LABO4 MARÉE→REV MIX, ENV2→DLY TIME).
-- **Presets par partie, banc LIBRE** : page **PRESETS** (REC+EDIT) — **3 parties × 16 slots**
+- **Presets par partie, banc LIBRE** : page **PRESETS** (double-tap ERS, page 10) — **3 parties × 16 slots**
   (0 = BASSE, 1 = LEAD, 2 = DRUMS) ; SEL = slot, PRE = partie, K1 = LOAD, K2 = SAVE,
   K3 = effacer. Le banc est libre : les 8 premiers slots contiennent les presets usine,
   mais **n'importe quel slot peut être écrasé par un save user** (pas de séparation fixe

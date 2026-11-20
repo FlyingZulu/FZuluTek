@@ -23,6 +23,7 @@ import kotlin.math.sin
 interface SurfaceListener {
     fun onEncoder(i: Int, v: Float)
     fun onButton(i: Int, down: Boolean)
+    fun onButtonLong(i: Int)
     fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean)
     fun onBlackKey(note: Int, down: Boolean)
 }
@@ -52,7 +53,10 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
     private var longPosted = false
     private val longRunnable = Runnable {
         longPosted = false
-        if (zone == 3 && idx >= 0) listener.onWhiteKey(idx, true, true)
+        when (zone) {
+            3 -> if (idx >= 0) listener.onWhiteKey(idx, true, true)
+            2 -> if (idx >= 0) listener.onButtonLong(idx)
+        }
     }
 
     private fun encX(i: Int) = width * (i + 0.5f) / 7f
@@ -174,7 +178,11 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                 zone = z; idx = i; startY = y; longPosted = false
                 when (z) {
                     1 -> { startVal = st.encVals[i] }
-                    2 -> listener.onButton(i, true)
+                    2 -> {
+                        listener.onButton(i, true)
+                        handler.postDelayed(longRunnable, 600)
+                        longPosted = true
+                    }
                     3 -> {
                         handler.postDelayed(longRunnable, 500)
                         longPosted = true

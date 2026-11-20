@@ -14,8 +14,8 @@
 extern "C" {
 #endif
 
-#include "dsp/atek_voice.h"     /* AT_NPARAMS: voice destinations 0..7 */
-#include "dsp/fx.h"             /* FX_NPARAMS: FX destinations 8..(8+FX_NPARAMS-1) */
+#include "dsp/atek_voice.h"
+#include "dsp/fx.h"
 
 typedef struct ztek_s ztek_t;
 
@@ -55,11 +55,51 @@ void ztek_loop_set_len(ztek_t *z, int slot, int len64);
 void ztek_loop_set_sp(ztek_t *z, int slot, int idx, float v);
 int  ztek_loop_slot_on(const ztek_t *z, int slot);
 int  ztek_loop_slot_rec(const ztek_t *z, int slot);
+float ztek_loop_get_sp(const ztek_t *z, int slot, int idx);   /* ML_SP_* */
+/* resample (reloop) : enregistre le bus monitoré dans un slot en ring audio (µ-law 8 bits) */
+void ztek_loop_rs_start(ztek_t *z, int dst, uint16_t monmask, int fmt, int khz);
+void ztek_loop_rs_stop(ztek_t *z);
+int  ztek_loop_rs_rec(const ztek_t *z);
 
 /* the acid pattern sequencer (dsp/acid_pattern.h) */
 void ztek_acid_generate(ztek_t *z, uint32_t seed);
 void ztek_acid_play(ztek_t *z, int on);
 void ztek_acid_knob(ztek_t *z, int which, float v);    /* 0 density 1 accent 2 slide 3 range 4 tie */
+
+/* the SMP page (audio-in sampler, docs/ZULUTEK.md page 17): 4 s buffer @ sr, recorded from
+ * the input stream; played one-shot between START and END. which: 0 START 1 END 2 VOL
+ * 3 PITCH 4 MODE (0 OFF 1 BEAT snapped to the tempo 2 CLEAN resample 3 OLD = x2 decimation) */
+#define ZTEK_SMP_SECONDS 4
+void ztek_smp_rec(ztek_t *z, int on);
+void ztek_smp_play(ztek_t *z, int on);
+void ztek_smp_set(ztek_t *z, int which, float v);
+int  ztek_smp_len(const ztek_t *z);                    /* recorded frames */
+void ztek_smp_peaks(const ztek_t *z, float *out, int nbuckets);   /* min/max per bucket for the LCD */
+
+/* circuit bend, post-master (docs/ZULUTEK.md "Lot D") : on + position du doigt x/y (densité/niveau),
+ * mode 0 GLITCH (sample-hold + bit-crush + trémolo) 1 LOW BAT (décimation + soft-clip) */
+void ztek_bend(ztek_t *z, int on, float x, float y, int mode);
+
+/* ---- SNAP / KIT / undo-redo (docs/ZULUTEK.md) ------------------------------------
+ * Un état = moteur + params AT_ + params FX + PoW! + page XY + bpm + masque des slots actifs.
+ * 16 snapshots (8 ZU / 8 LU), undo/redo 3 niveaux, 16 kits (kits = état + slots). */
+void ztek_snap_store(ztek_t *z, int slot);
+void ztek_snap_load(ztek_t *z, int slot);
+void ztek_undo(ztek_t *z);
+void ztek_redo(ztek_t *z);
+void ztek_kit_store(ztek_t *z, int slot);
+void ztek_kit_load(ztek_t *z, int slot);
+
+/* ---- page XY (18) : un pad, cibles routables --------------------------------------
+ * target 0..6 = params AT_, 7 = AT_ENGINE, 8..25 = params FX (0..17).
+ * (les cibles LFO 26..33 et la matrice ASSIGN appartiennent à la branche seq-plus, PR #3)
+ * holdMode 0 MOM (revient au repos en sortant) 1 HOLD (reste). */
+void ztek_xy_set(ztek_t *z, int on, float x, float y);
+void ztek_xy_target(ztek_t *z, int axis, int target);   /* axis 0 = X, 1 = Y */
+void ztek_xy_hold(ztek_t *z, int holdMode);
+
+/* ---- sirène (mode SIREN, triple-tap GLO côté FM-1) -------------------------------- */
+void ztek_siren(ztek_t *z, int on, float lvl, float t, float fb);
 
 /* ---- sequencer advanced sub-mode (double-tap SEQ on page SEQ) ----------------------
  * 5 extra knobs, also matrix destinations 30..34:

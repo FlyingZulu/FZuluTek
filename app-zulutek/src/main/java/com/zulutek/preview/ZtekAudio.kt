@@ -30,35 +30,6 @@ object ZtekAudio {
     const val ML_SP_SRC = 4
     const val ML_SP_VOL = 6
 
-    /* modulation sources (ztek_engine.h): page LFO subs 0..7 = LFO1..4 + LABO1..4,
-     * page ENV subs 0..7 = ENV1, ENV2, EF, LOG, SLEW, CMP, QUANT, ATT */
-    const val ZT_NSRC = 16
-    const val ZT_NDST = 35                 /* 0..7 voice, 8..25 FX, 26..34 seq */
-    const val ZT_SEQ_DST0 = 26
-    val SRC_NAMES = arrayOf("LFO1", "LFO2", "LFO3", "LFO4",
-        "LAB1", "LAB2", "LAB3", "LAB4",
-        "ENV1", "ENV2", "EF", "LOG", "SLEW", "CMP", "QUANT", "ATT")
-    val LAB_NAMES = arrayOf("LINK", "MYCEL", "HUMUS", "NETVINT", "CHAOS", "OISEAUX", "INSECT", "MAREE")
-    val LFO_WAVES = arrayOf("SIN", "TRI", "SQ", "SAW", "S&H", "DRUNK")
-    val TOOL_NAMES = arrayOf("ENV1", "ENV2", "EF", "LOG", "SLEW", "CMP", "QUANT", "ATT")
-    const val ACID_MUT_TIME = 1
-    const val ACID_MUT_PITCH = 2
-    const val ACID_MUT_ARTICULATION = 3
-    const val DST_OFF = 255
-    const val ZT_NPRESETS = 8
-    val PRESET_NAMES = arrayOf("ACID 303", "FILTRE WOBBLE", "PITCH DRIFT", "GATE 303",
-        "SLIDE CITY", "LABO CHAOS", "TM MAX", "MAREE")
-    const val ZT_NPARTS = 3          // 0 BASSE, 1 LEAD, 2 DRUMS
-    val PART_NAMES = arrayOf("BASSE", "LEAD", "DRUMS")
-    const val ZT_PSLOTS = 16         // banc libre par partie: slots usine en premier, user par-dessus
-
-    /* persistence of the user presets (SharedPreferences, Base64 blobs) */
-    private var prefs: android.content.SharedPreferences? = null
-    fun initPrefs(ctx: android.content.Context) {
-        prefs = ctx.getSharedPreferences("zulutek_presets", android.content.Context.MODE_PRIVATE)
-    }
-    private fun pkey(part: Int, slot: Int) = "p${part}s${slot}"
-
     private var handle: Long = 0
     const val SAMPLE_RATE = 48000
 
@@ -142,64 +113,44 @@ object ZtekAudio {
     fun loopSetSp(slot: Int, idx: Int, v: Float) { if (handle != 0L) nativeLoopSetSp(handle, slot, idx, v) }
     fun loopSlotOn(slot: Int): Boolean = handle != 0L && nativeLoopSlotOn(handle, slot)
     fun loopSlotRec(slot: Int): Boolean = handle != 0L && nativeLoopSlotRec(handle, slot)
+    fun loopGetSp(slot: Int, idx: Int): Float = if (handle != 0L) nativeLoopGetSp(handle, slot, idx) else 0f
 
     fun acidGenerate(seed: Int) { if (handle != 0L) nativeAcidGenerate(handle, seed) }
     fun acidPlay(on: Int) { if (handle != 0L) nativeAcidPlay(handle, on) }
     fun acidKnob(which: Int, v: Float) { if (handle != 0L) nativeAcidKnob(handle, which, v) }
 
-    /* sequencer advanced (double-tap SEQ): k = 5..9 */
-    fun seqKnob(k: Int, v: Float) { if (handle != 0L) nativeSeqKnob(handle, k, v) }
-    fun seqKnobGet(k: Int): Float = if (handle != 0L) nativeSeqKnobGet(handle, k) else 0f
-    fun seqMutate(layer: Int) { if (handle != 0L) nativeSeqMutate(handle, layer) }
+    /* page SMP (sampleur audio-in) : which = 0 START 1 END 2 VOL 3 PITCH 4 MODE */
+    fun smpRec(on: Int) { if (handle != 0L) nativeSmpRec(handle, on) }
+    fun smpPlay(on: Int) { if (handle != 0L) nativeSmpPlay(handle, on) }
+    fun smpSet(which: Int, v: Float) { if (handle != 0L) nativeSmpSet(handle, which, v) }
+    fun smpLen(): Int = if (handle != 0L) nativeSmpLen(handle) else 0
+    fun smpPeaks(out: FloatArray) { if (handle != 0L) nativeSmpPeaks(handle, out) }
 
-    /* modulation: 16 sources x 4 knobs */
-    fun modKnob(src: Int, k: Int, v: Float) { if (handle != 0L) nativeModKnob(handle, src, k, v) }
-    fun modKnobGet(src: Int, k: Int): Float = if (handle != 0L) nativeModKnobGet(handle, src, k) else 0f
-    fun lfoOpt(which: Int, on: Int) { if (handle != 0L) nativeLfoOpt(handle, which, on) }
-    fun envLoop(e: Int, on: Int) { if (handle != 0L) nativeEnvLoop(handle, e, on) }
-    fun srcVal(src: Int): Float = if (handle != 0L) nativeSrcVal(handle, src) else 0f
-
-    /* ASSIGN matrix */
-    fun assign(dst: Int, src: Int, depth: Float) { if (handle != 0L) nativeAssign(handle, dst, src, depth) }
-    fun assignSrc(dst: Int): Int = if (handle != 0L) nativeAssignSrc(handle, dst) else DST_OFF
-    fun assignDepth(dst: Int): Float = if (handle != 0L) nativeAssignDepth(handle, dst) else 0f
-
-    /* pre-patched presets (ZuluFx style) */
-    fun preset(i: Int) { if (handle != 0L) nativePreset(handle, i) }
-    fun presetName(i: Int): String = if (handle != 0L) nativePresetName(i) else "?"
-
-    /* user presets per part (bass/lead/drums) x 8 slots, persisted to SharedPreferences */
-    fun presetSave(part: Int, slot: Int) {
-        if (handle == 0L) return
-        nativePresetSave(handle, part, slot)
-        val blob = nativePresetExport(handle, part, slot) ?: return
-        prefs?.edit()?.putString(pkey(part, slot),
-            android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP))?.apply()
+    /* circuit bend post-master : mode 0 GLITCH 1 LOW BAT */
+    fun bend(on: Int, x: Float, y: Float, mode: Int) {
+        if (handle != 0L) nativeBend(handle, on, x, y, mode)
     }
-    fun presetLoad(part: Int, slot: Int): Boolean {
-        if (handle == 0L) return false
-        var blob = nativePresetExport(handle, part, slot)
-        if (blob == null) {   // not in RAM: try the persisted copy
-            val s = prefs?.getString(pkey(part, slot), null) ?: return false
-            blob = android.util.Base64.decode(s, android.util.Base64.NO_WRAP)
-            if (!nativePresetImport(handle, part, slot, blob)) return false
-        }
-        nativePresetLoad(handle, part, slot)
-        return true
-    }
-    /* unified bank: user save wins, else factory preset (slot < ZT_NPRESETS), else nothing */
-    fun bankLoad(part: Int, slot: Int) { if (handle != 0L) nativeBankLoad(handle, part, slot) }
-    fun bankName(part: Int, slot: Int): String =
-        if (handle != 0L) nativeBankName(handle, part, slot) else ""
-    fun presetUsed(part: Int, slot: Int): Boolean =
-        handle != 0L && (nativePresetUsed(handle, part, slot) ||
-            (prefs?.getString(pkey(part, slot), null) != null))
-    fun presetClear(part: Int, slot: Int) {
-        if (handle != 0L) nativePresetClear(handle, part, slot)
-        prefs?.edit()?.remove(pkey(part, slot))?.apply()
-    }
-    fun presetSlotName(part: Int, slot: Int): String =
-        if (handle != 0L) nativePresetSlotName(handle, part, slot) else ""
+
+    /* SNAP (16) / KIT (16) / undo-redo */
+    fun snapStore(slot: Int) { if (handle != 0L) nativeSnapStore(handle, slot) }
+    fun snapLoad(slot: Int) { if (handle != 0L) nativeSnapLoad(handle, slot) }
+    fun undo() { if (handle != 0L) nativeUndo(handle) }
+    fun redo() { if (handle != 0L) nativeRedo(handle) }
+    fun kitStore(slot: Int) { if (handle != 0L) nativeKitStore(handle, slot) }
+    fun kitLoad(slot: Int) { if (handle != 0L) nativeKitLoad(handle, slot) }
+
+    /* page XY */
+    fun xySet(on: Int, x: Float, y: Float) { if (handle != 0L) nativeXySet(handle, on, x, y) }
+    fun xyTarget(axis: Int, t: Int) { if (handle != 0L) nativeXyTarget(handle, axis, t) }
+    fun xyHold(h: Int) { if (handle != 0L) nativeXyHold(handle, h) }
+
+    /* sirène */
+    fun siren(on: Int, lvl: Float, t: Float, fb: Float) { if (handle != 0L) nativeSiren(handle, on, lvl, t, fb) }
+
+    /* resample dans un slot looper (ring audio) */
+    fun loopRsStart(dst: Int, monmask: Int, fmt: Int, khz: Int) { if (handle != 0L) nativeLoopRsStart(handle, dst, monmask, fmt, khz) }
+    fun loopRsStop() { if (handle != 0L) nativeLoopRsStop(handle) }
+    fun loopRsRec(): Boolean = handle != 0L && nativeLoopRsRec(handle)
 
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
@@ -228,6 +179,99 @@ object ZtekAudio {
     private external fun nativeAcidGenerate(handle: Long, seed: Int)
     private external fun nativeAcidPlay(handle: Long, on: Int)
     private external fun nativeAcidKnob(handle: Long, which: Int, v: Float)
+    private external fun nativeSmpRec(handle: Long, on: Int)
+    private external fun nativeSmpPlay(handle: Long, on: Int)
+    private external fun nativeSmpSet(handle: Long, which: Int, v: Float)
+    private external fun nativeSmpLen(handle: Long): Int
+    private external fun nativeSmpPeaks(handle: Long, out: FloatArray)
+    private external fun nativeBend(handle: Long, on: Int, x: Float, y: Float, mode: Int)
+    private external fun nativeSnapStore(handle: Long, slot: Int)
+    private external fun nativeSnapLoad(handle: Long, slot: Int)
+    private external fun nativeUndo(handle: Long)
+    private external fun nativeRedo(handle: Long)
+    private external fun nativeKitStore(handle: Long, slot: Int)
+    private external fun nativeKitLoad(handle: Long, slot: Int)
+    private external fun nativeXySet(handle: Long, on: Int, x: Float, y: Float)
+    private external fun nativeXyTarget(handle: Long, axis: Int, target: Int)
+    private external fun nativeXyHold(handle: Long, hold: Int)
+    private external fun nativeSiren(handle: Long, on: Int, lvl: Float, t: Float, fb: Float)
+    private external fun nativeLoopGetSp(handle: Long, slot: Int, idx: Int): Float
+    private external fun nativeLoopRsStart(handle: Long, dst: Int, monmask: Int, fmt: Int, khz: Int)
+    private external fun nativeLoopRsStop(handle: Long)
+    private external fun nativeLoopRsRec(handle: Long): Boolean
+
+    /* ===== pack SEQ+ (branche seq-plus, PR #3) ===== */
+    /* modulation sources: page LFO subs 0..7 = LFO1..4 + LABO1..4 ; page ENV subs 0..7 = ENV1,ENV2,EF,LOG,SLEW,CMP,QUANT,ATT */
+    const val ZT_NSRC = 16
+    const val ZT_NDST = 35                 /* 0..7 voice, 8..25 FX, 26..34 seq */
+    const val ZT_SEQ_DST0 = 26
+    val SRC_NAMES = arrayOf("LFO1", "LFO2", "LFO3", "LFO4",
+        "LAB1", "LAB2", "LAB3", "LAB4",
+        "ENV1", "ENV2", "EF", "LOG", "SLEW", "CMP", "QUANT", "ATT")
+    val LAB_NAMES = arrayOf("LINK", "MYCEL", "HUMUS", "NETVINT", "CHAOS", "OISEAUX", "INSECT", "MAREE")
+    val LFO_WAVES = arrayOf("SIN", "TRI", "SQ", "SAW", "S&H", "DRUNK")
+    val TOOL_NAMES = arrayOf("ENV1", "ENV2", "EF", "LOG", "SLEW", "CMP", "QUANT", "ATT")
+    const val ACID_MUT_TIME = 1
+    const val ACID_MUT_PITCH = 2
+    const val ACID_MUT_ARTICULATION = 3
+    const val DST_OFF = 255
+    const val ZT_NPRESETS = 8
+    val PRESET_NAMES = arrayOf("ACID 303", "FILTRE WOBBLE", "PITCH DRIFT", "GATE 303",
+        "SLIDE CITY", "LABO CHAOS", "TM MAX", "MAREE")
+    const val ZT_NPARTS = 3          // 0 BASSE, 1 LEAD, 2 DRUMS
+    val PART_NAMES = arrayOf("BASSE", "LEAD", "DRUMS")
+    const val ZT_PSLOTS = 16         // banc libre par partie
+
+    private var prefs: android.content.SharedPreferences? = null
+    fun initPrefs(ctx: android.content.Context) {
+        prefs = ctx.getSharedPreferences("zulutek_presets", android.content.Context.MODE_PRIVATE)
+    }
+    private fun pkey(part: Int, slot: Int) = "p" + part + "s" + slot
+
+    fun seqKnob(k: Int, v: Float) { if (handle != 0L) nativeSeqKnob(handle, k, v) }
+    fun seqKnobGet(k: Int): Float = if (handle != 0L) nativeSeqKnobGet(handle, k) else 0f
+    fun seqMutate(layer: Int) { if (handle != 0L) nativeSeqMutate(handle, layer) }
+    fun modKnob(src: Int, k: Int, v: Float) { if (handle != 0L) nativeModKnob(handle, src, k, v) }
+    fun modKnobGet(src: Int, k: Int): Float = if (handle != 0L) nativeModKnobGet(handle, src, k) else 0f
+    fun lfoOpt(which: Int, on: Int) { if (handle != 0L) nativeLfoOpt(handle, which, on) }
+    fun envLoop(e: Int, on: Int) { if (handle != 0L) nativeEnvLoop(handle, e, on) }
+    fun srcVal(src: Int): Float = if (handle != 0L) nativeSrcVal(handle, src) else 0f
+    fun assign(dst: Int, src: Int, depth: Float) { if (handle != 0L) nativeAssign(handle, dst, src, depth) }
+    fun assignSrc(dst: Int): Int = if (handle != 0L) nativeAssignSrc(handle, dst) else DST_OFF
+    fun assignDepth(dst: Int): Float = if (handle != 0L) nativeAssignDepth(handle, dst) else 0f
+
+    fun preset(i: Int) { if (handle != 0L) nativePreset(handle, i) }
+    fun presetName(i: Int): String = if (handle != 0L) nativePresetName(i) else "?"
+    fun presetSave(part: Int, slot: Int) {
+        if (handle == 0L) return
+        nativePresetSave(handle, part, slot)
+        val blob = nativePresetExport(handle, part, slot) ?: return
+        prefs?.edit()?.putString(pkey(part, slot),
+            android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP))?.apply()
+    }
+    fun presetLoad(part: Int, slot: Int): Boolean {
+        if (handle == 0L) return false
+        var blob = nativePresetExport(handle, part, slot)
+        if (blob == null) {
+            val st = prefs?.getString(pkey(part, slot), null) ?: return false
+            blob = android.util.Base64.decode(st, android.util.Base64.NO_WRAP)
+            if (!nativePresetImport(handle, part, slot, blob)) return false
+        }
+        nativePresetLoad(handle, part, slot)
+        return true
+    }
+    fun presetUsed(part: Int, slot: Int): Boolean =
+        handle != 0L && (nativePresetUsed(handle, part, slot) || (prefs?.getString(pkey(part, slot), null) != null))
+    fun presetClear(part: Int, slot: Int) {
+        if (handle != 0L) nativePresetClear(handle, part, slot)
+        prefs?.edit()?.remove(pkey(part, slot))?.apply()
+    }
+    fun presetSlotName(part: Int, slot: Int): String =
+        if (handle != 0L) nativePresetSlotName(handle, part, slot) else ""
+    fun bankLoad(part: Int, slot: Int) { if (handle != 0L) nativeBankLoad(handle, part, slot) }
+    fun bankName(part: Int, slot: Int): String =
+        if (handle != 0L) nativeBankName(handle, part, slot) else ""
+
     private external fun nativeSeqKnob(handle: Long, k: Int, v: Float)
     private external fun nativeSeqKnobGet(handle: Long, k: Int): Float
     private external fun nativeSeqMutate(handle: Long, layer: Int)
@@ -243,12 +287,12 @@ object ZtekAudio {
     private external fun nativePresetName(i: Int): String
     private external fun nativePresetSave(handle: Long, part: Int, slot: Int)
     private external fun nativePresetLoad(handle: Long, part: Int, slot: Int)
-    private external fun nativeBankLoad(handle: Long, part: Int, slot: Int)
-    private external fun nativeBankName(handle: Long, part: Int, slot: Int): String
     private external fun nativePresetUsed(handle: Long, part: Int, slot: Int): Boolean
     private external fun nativePresetClear(handle: Long, part: Int, slot: Int)
     private external fun nativePresetExport(handle: Long, part: Int, slot: Int): ByteArray?
     private external fun nativePresetImport(handle: Long, part: Int, slot: Int, data: ByteArray): Boolean
     private external fun nativePresetSlotName(handle: Long, part: Int, slot: Int): String
     private external fun nativePresetSlotSetName(handle: Long, part: Int, slot: Int, name: String)
+    private external fun nativeBankLoad(handle: Long, part: Int, slot: Int)
+    private external fun nativeBankName(handle: Long, part: Int, slot: Int): String
 }
