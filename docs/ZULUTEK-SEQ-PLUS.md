@@ -116,8 +116,27 @@ Deux niveaux de presets :
   fait défiler les **16 slots du banc de la partie courante pendant qu'on joue** ; slot
   vide → sens interdit + suggestion « SAVE d'abord » (si LUDIQUE on).
 
-## 7. À faire ensuite
+## 7. Agglomération avec la branche looper (PR #1 @ 7d87264) — merge `8af3450`
 
-- Porter le pack sur le FM-1 (patches `patches/atek303-*.patch`) : `EV_MUTATE`, pages,
-  option LUDIQUE dans OPTIONS, presets user en flash.
+La session parallèle a livré sur `ml` la **page MIX + baie de patch façon AUM** ; agglomérée
+avec le pack SEQ+ dans `vibe/zulutek-seq-plus-c9ef18` :
+
+- **page 11 = MIX** : niveaux des 16 slots du looper, aux (send) vers PoW!, gain du bus LOOP
+  (`ztek_mix_set_vol/aux/gain`, `ztek_mix_get_gain`). SEL=slot, K1=vol, PRE=aux, ALG=gain bus.
+- **page 12 = PATCH** : baie de patch **façon AUM/VCV** — 4 sources (VOIX, SIREN, SMP/AIN,
+  bus LOOP) × 3 destinations (chaîne FX, MASTER direct, entrée anneau PoW!) ;
+  `ztek_patch_compat(src,dst)` = 0 → connexion impossible (estompée dans la baie, comme le
+  typage out→in de la matrice ASSIGN page 9). SEL=rangée(source), ALG=colonne(dest),
+  tap cellule ou PLAY = toggle.
+- Navigation : bouton **DLY** cycle 0→6→7→…→12→0 ; **REC** quitte les pages 1 et 6..12.
+- Pages finales APK : 0 MAIN, 1 LOOP, 2 SNAP, 3 KIT, 4 XY, 5 POW!, 6 SEQ+, 7 LFO, 8 ENV,
+  9 ASSIGN, 10 PRESETS, 11 MIX, 12 PATCH.
+
+## 8. À faire ensuite
+
+- Porter le pack sur le FM-1 : fait dans PR #4 (`patches/0005-zulutek-seq-plus.patch`) —
+  reste à **builder avec la toolchain JieLi et pré-tester dans fm1-emu** (voir
+  `docs/FM1-EMULATEUR.md`) avant tout flash.
+- Porter aussi MIX/PATCH sur le firmware FM-1 (pages 11/12 côté ATEK303, baie de patch
+  out→in comme page ASSIGN).
 - Mix des slots PoW! comme destinations de la matrice (`labApply` au-delà de `ZT_NDST`).

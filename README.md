@@ -7,12 +7,25 @@ Firmware ATEK303 personnalisé (dérivé GPL-3.0 d'Animatek — crédits : Anima
 code publié en GPL-3.0 + crédits Animatek, nouvelle clé de signature générée (l'actuelle
 reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
 
-## En cours — branche `vibe/zulutek-seq-plus-c9ef18`
+## État des branches (maj 2026-11-20 ~02:05Z) — 4 PR draft ouvertes
 
-Pack « SEQ+ » + modulation 8/8 (voir `docs/ZULUTEK-SEQ-PLUS.md`) : double-tap SEQ = sous-mode
-avancé (Turing Machine LOCK/LEN, MUT, PLAY NORM/REV/PING-PONG, RAND), mutation live via ENV/LFO,
-page ENV = ENV1/ENV2 bouclables + 6 tools, page LFO = 4 LFO + 4 labos, matrice ASSIGN typée
-façon VCV Rack (out→in, sens interdit + conseils, option HINTS).
+- **PR #3** `vibe/zulutek-seq-plus-c9ef18` (`8af3450`) — **branche principale APK** : moteur complet
+  (PR #1) + pack « SEQ+ » + modulation 8/8 (voir `docs/ZULUTEK-SEQ-PLUS.md`) : double-tap SEQ =
+  sous-mode avancé (Turing Machine LOCK/LEN, MUT, PLAY NORM/REV/PING-PONG, RAND), mutation live
+  ENV/LFO, pages 6..10 = SEQ+/LFO/ENV/ASSIGN/PRESETS (ENV = ENV1/ENV2 bouclables + 6 tools,
+  LFO = 4 LFO + 4 labos, matrice ASSIGN typée façon VCV Rack out→in avec sens interdit 🚫 rond
+  rouge + barre blanche + suggestions, option LUDIQUE, presets pré-patchés 8 usine + banc libre
+  3 parties × 16 slots, molette PRESET en live), **pages 11 MIX + 12 PATCH** (baie de patch façon
+  AUM agglomérée depuis PR #1 @ 7d87264). CI verte.
+- **PR #1** `vibe/zulutek-midi-looper-c9ef18` (`7d87264`) — session B : moteur de base restauré
+  (veille Nyan, SMP, bend Lot D, ZuluLink, SNAP/KIT/undo, XY, POW!, sirène) + page MIX/baie de
+  patch. CI verte.
+- **PR #4** `vibe/fm1-patch-seqplus-c9ef18` (`2c11cc7`) — **firmware FM-1** : patch
+  `patches/0005-zulutek-seq-plus.patch` (pack SEQ+ porté sur ATEK303, `git apply --check` OK,
+  compile host C99 OK) + `docs/FM1-EMULATEUR.md` (pré-test via fm1-emu avant flash). CI verte.
+  ⚠️ pas encore buildé avec la toolchain JieLi ni testé dans l'émulateur.
+- **PR #2** `vibe/atek303-mojo-patch-c9ef18` (`24d6d32`) — patches 0001-0004 (`git am`) : voix/FX/
+  bass engines/looper portés sur `animatek/FM1-Animatek` (base main HEAD 8934f53).
 
 ## Docs
 
