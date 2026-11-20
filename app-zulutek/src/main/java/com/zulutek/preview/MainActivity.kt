@@ -62,6 +62,9 @@ class MainActivity : Activity(), SurfaceListener {
                 st.smpLen = ZtekAudio.smpLen()
                 ZtekAudio.smpPeaks(st.smpPeaks)
             }
+            val peers = ZuluLink.peersSnapshot()
+            st.linkPeers = peers.count { !it.lost }
+            st.linkName = peers.firstOrNull { !it.lost }?.name?.take(6)?.let { ":$it" } ?: ""
             lcd.invalidate()
             handler.postDelayed(this, 250)
         }
@@ -103,6 +106,12 @@ class MainActivity : Activity(), SurfaceListener {
         setContentView(layout)
         handler.postDelayed(tick, 250)
 
+        /* ZuluLink : l'APK est CONSOLE (surface + horloge). Le FM-1 (module) suit notre
+         * tempo ; on reçoit ses CC (74..80 voix/moteur, 20..37 FX, 102..115 boutons). */
+        ZuluLink.onMessage = { msg -> handler.post { onZuluMessage(msg) } }
+        ZuluLink.onPeersChanged = { handler.post { lcd.invalidate() } }
+        ZuluLink.start("zulu-apk", ZuluLink.Role.CONSOLE)
+
         /* dans l'APK le LCD est tactile : POW maintenu + toucher = circuit bend
          * (bible : REC maintenu + toucher l'écran ; REC sert déjà au looper ici) */
         lcd.setOnTouchListener { _, ev ->
@@ -132,8 +141,41 @@ class MainActivity : Activity(), SurfaceListener {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        ZuluLink.stop()
         ZtekAudio.stop()
         super.onDestroy()
+    }
+
+    /* messages ZuluLink reçus (thread UI via handler.post) */
+    private fun onZuluMessage(msg: ZuluLink.RxMessage) {
+        when (msg.type) {
+            ZuluLink.T_CLOCK -> {
+                bpm = msg.tempo.toFloat().coerceIn(30f, 300f)
+                ZtekAudio.setBpm(bpm)
+                st.bpm = bpm.roundToInt()
+            }
+            ZuluLink.T_START -> { st.playing = true; ZtekAudio.loopPlay(1) }
+            ZuluLink.T_STOP -> { st.playing = false; ZtekAudio.loopPlay(0) }
+            ZuluLink.T_TAP -> tapTempo()
+            ZuluLink.T_CC -> {
+                val v = msg.value / 127f
+                when {
+                    msg.cc in 74..80 -> {
+                        if (msg.cc == 80) {
+                            ZtekAudio.setEngine((v * 4.999f).toInt().coerceIn(0, 4))
+                            st.engine = (v * 4.999f).toInt().coerceIn(0, 4)
+                        } else {
+                            ZtekAudio.setParam(msg.cc - 74, v)
+                            st.encVals[3 + (msg.cc - 74)] = v
+                        }
+                    }
+                    msg.cc in 20..37 -> ZtekAudio.fxSet(msg.cc - 20, v)
+                    msg.cc in 102..115 -> onButton(msg.cc - 102, msg.value > 0)
+                }
+            }
+        }
+        lcd.invalidate()
+        surface.invalidate()
     }
 
     // ---- appui long sur un bouton : PLAY bascule la veille auto, SEQ ouvre la page SMP ----
@@ -208,6 +250,7 @@ class MainActivity : Activity(), SurfaceListener {
             "PLAY" -> if (down) {
                 st.playing = !st.playing
                 ZtekAudio.loopPlay(if (st.playing) 1 else 0)
+                if (st.playing) ZuluLink.sendStart("TOUS") else ZuluLink.sendStop("TOUS")
             }
             "REC" -> if (down) {
                 val s = st.selSlot
@@ -300,6 +343,7 @@ class MainActivity : Activity(), SurfaceListener {
                 bpm = (60000f * (n - 1) / span).coerceIn(30f, 300f)
                 ZtekAudio.setBpm(bpm)
                 st.bpm = bpm.roundToInt()
+                ZuluLink.sendClock(bpm.toDouble(), 0.0, System.currentTimeMillis())
             }
         }
         st.pop(9)

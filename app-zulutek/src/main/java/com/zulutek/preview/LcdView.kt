@@ -62,6 +62,10 @@ class LcdState {
     var bendX = 0f
     var bendY = 0f
     var bendMode = 0                 // 0 GLITCH 1 LOW BAT
+
+    // ZuluLink : pairs vus sur le réseau local
+    var linkPeers = 0
+    var linkName = ""
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -248,6 +252,8 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         if (st.recArmed && blink) text(c, 222f, 15f, "R", REC_RED, 10f)
 
         // ---- engine + drive line ----
+        text(c, 6f, 30f, if (st.linkPeers > 0) "LNK:${st.linkPeers}${st.linkName}" else "LNK:--",
+            if (st.linkPeers > 0) FLUO_TURQ else DIM, 8f)
         text(c, 6f, 34f, "ENG", DIM, 9f)
         text(c, 34f, 34f, st.engineNames[st.engine], FLUO_PINK, 11f)
         text(c, 110f, 34f, "DRV", DIM, 9f)
