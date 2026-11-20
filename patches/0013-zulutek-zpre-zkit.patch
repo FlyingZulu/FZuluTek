@@ -1,0 +1,383 @@
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 6c2c483..04f7a9a 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -1290,6 +1290,63 @@ void app_file_changed(uint32_t obj)              /* un objet store réécrit par
+ int  app_preset_used_raw(int slot) { return presets[slot].used; }
+ void app_preset_set_used_raw(int slot, int raw) { presets[slot].used = (unsigned)raw; set_dirty = 1; }
+ 
++/* patch 0013: presets individuels en blob 'ZTP1' (fichiers companion virtuels ZPRE00..31,
++ * miroir de ztek_preset_t côté APK — voir ztek_link.h). ZPRE%02d = part*8+slot = indice preset. */
++int app_zpre_export(int p, uint8_t *buf, int cap)
++{
++    zlk_ztp1_t t;
++    if (p < 0 || p >= NPRESETS || !presets[p].used || !buf || cap < (int)sizeof t) return 0;
++    memset(&t, 0, sizeof t);
++    t.magic = ZLK_ZTP1_MAGIC;
++    t.part = p / PRESETS_PER_OBJ;
++    t.slot = p % PRESETS_PER_OBJ;
++    memcpy(t.name, presets[p].name, sizeof presets[p].name);   /* name[8] -> name[16], complété à 0 */
++    memcpy(t.param, presets[p].s.param, sizeof t.param);
++    memcpy(t.fx, presets[p].s.fx, sizeof t.fx);
++    t.bpm = (float)presets[p].s.tempo;
++    t.root = presets[p].s.root;
++    t.scale = presets[p].s.scale;
++    memcpy(t.seqk, presets[p].s.seqk, sizeof t.seqk);
++    /* le reste (mod_knob, lab, asg, macros, strip, siren, opt) n'existe pas en preset_t ATEK303 : à 0 */
++    memcpy(buf, &t, sizeof t);
++    return (int)sizeof t;
++}
++
++int app_zpre_import(int p, const uint8_t *buf, int len)
++{
++    zlk_ztp1_t t;
++    int bank;
++    if (p < 0 || p >= NPRESETS || !buf || len != (int)sizeof t) return 0;
++    memcpy(&t, buf, sizeof t);
++    if (t.magic != ZLK_ZTP1_MAGIC) return 0;
++    presets[p].s = set;                          /* base valide (magic, steps, pattern), on écrase dessous */
++    memset(presets[p].name, 0, sizeof presets[p].name);
++    memcpy(presets[p].name, t.name, sizeof presets[p].name - 1);
++    memcpy(presets[p].s.param, t.param, sizeof t.param);
++    memcpy(presets[p].s.fx, t.fx, sizeof t.fx);
++    memcpy(presets[p].s.seqk, t.seqk, sizeof t.seqk);
++    presets[p].s.tempo = (uint16_t)(t.bpm >= 30.0f && t.bpm <= 300.0f ? (uint32_t)t.bpm : 120u);
++    presets[p].s.root = (uint8_t)(t.root >= 0 && t.root < 12 ? t.root : 0);
++    presets[p].s.scale = (uint8_t)(t.scale >= 0 && t.scale < ACID_SCALES_LEN ? t.scale : 0);
++    if (!settings_ok(&presets[p].s)) return 0;
++    presets[p].used = 1;
++    bank = p / PRESETS_PER_OBJ;
++    set_dirty = 1;
++    return plat_store_save((uint32_t)(OBJ_PRESETS_A + bank), &presets[bank * PRESETS_PER_OBJ],
++                           sizeof(preset_t) * PRESETS_PER_OBJ) == 0 ? 1 : 0;
++}
++
++int app_zpre_clear(int p)
++{
++    int bank;
++    if (p < 0 || p >= NPRESETS) return -1;
++    presets[p].used = 0;
++    set_dirty = 1;
++    bank = p / PRESETS_PER_OBJ;
++    return plat_store_save((uint32_t)(OBJ_PRESETS_A + bank), &presets[bank * PRESETS_PER_OBJ],
++                           sizeof(preset_t) * PRESETS_PER_OBJ);
++}
++
+ static void text_cat(char *d, const char *s)
+ {
+     while (*d)
+diff --git a/atek303/app/dsp/drum_engine.c b/atek303/app/dsp/drum_engine.c
+index c7b27c7..6502a91 100644
+--- a/atek303/app/dsp/drum_engine.c
++++ b/atek303/app/dsp/drum_engine.c
+@@ -812,6 +812,32 @@ void drum_set_kit(drum_t *d, int kit)
+         memcpy(d->pad[p].par, KITPAR[kit][p], sizeof(d->pad[p].par));
+ }
+ 
++/* patch 0013: export/import d'un kit en blob 'ZKT1' (fichiers companion ZKIT00..02) */
++int drum_kit_export(int kit, uint8_t *buf, int cap)
++{
++    dr_zkt1_t t;
++    if (kit < 0 || kit >= DR_KIT_N || !buf || cap < (int)sizeof t) return 0;
++    memset(&t, 0, sizeof t);
++    t.magic = DR_ZKT1_MAGIC;
++    t.kit = (uint32_t)kit;
++    memcpy(t.name, DR_KIT_NAMES[kit], sizeof t.name - 1);
++    for (int p = 0; p < DR_NPADS; p++)
++        memcpy(t.par[p], KITPAR[kit][p], sizeof t.par[p]);
++    memcpy(buf, &t, sizeof t);
++    return (int)sizeof t;
++}
++
++int drum_kit_import(drum_t *d, int kit, const uint8_t *buf, int len)
++{
++    dr_zkt1_t t;
++    if (!d || kit < 0 || kit >= DR_KIT_N || !buf || len != (int)sizeof t) return 0;
++    memcpy(&t, buf, sizeof t);
++    if (t.magic != DR_ZKT1_MAGIC || (int)t.kit != kit) return 0;
++    for (int p = 0; p < DR_NPADS; p++)
++        memcpy(d->pad[p].par, t.par[p], sizeof d->pad[p].par);
++    return 1;
++}
++
+ void drum_set_hyb(drum_t *d, int pad, float h)       /* alias knob P4 */
+ {
+     if (pad < 0 || pad >= DR_NPADS) return;
+diff --git a/atek303/app/dsp/drum_engine.h b/atek303/app/dsp/drum_engine.h
+index b55589b..3b257b9 100644
+--- a/atek303/app/dsp/drum_engine.h
++++ b/atek303/app/dsp/drum_engine.h
+@@ -195,6 +195,17 @@ void drum_rand_pat(drum_t *d, int pad, float density, unsigned seed);
+ void drum_set_param(drum_t *d, int pad, int k, float v);   /* k 0..7 (8 knobs/voie), shapable */
+ float drum_get_param(const drum_t *d, int pad, int k);
+ void drum_set_kit(drum_t *d, int kit);                     /* DR_KIT_* : params par défaut des pads */
++
++/* patch 0013: blob kit 'ZKT1' (fichiers companion ZKIT00..02, contrat APK PR #20 : .zkt1 opaque) */
++#define DR_ZKT1_MAGIC 0x5A4B5431u                              /* 'ZKT1' */
++typedef struct {
++    uint32_t magic;                                            /* 'ZKT1' */
++    uint32_t kit;                                              /* DR_KIT_* */
++    char     name[8];                                          /* DR_KIT_NAMES[kit] */
++    float    par[DR_NPADS][DR_NPAR];                           /* KITPAR[kit] */
++} dr_zkt1_t;
++int drum_kit_export(int kit, uint8_t *buf, int cap);           /* octets, 0 si kit invalide */
++int drum_kit_import(drum_t *d, int kit, const uint8_t *buf, int len);  /* 1 ok : params appliqués aux pads */
+ void drum_set_hyb(drum_t *d, int pad, float h);            /* hybridation custom <-> bass engine */
+ float drum_get_hyb(const drum_t *d, int pad);
+ void drum_set_comp(drum_t *d, int on, float thr, float ratio, float makeup);
+diff --git a/atek303/app/ztek_drum.c b/atek303/app/ztek_drum.c
+index bac63f2..79ac822 100644
+--- a/atek303/app/ztek_drum.c
++++ b/atek303/app/ztek_drum.c
+@@ -203,12 +203,27 @@ void zdr_act_mode(void)
+     zdr_say("MODE", m == DR_MODE_NORM ? "NORM" : m == DR_MODE_REV ? "REV" : "PING-PONG");
+ }
+ 
++static int s_kit;                                /* patch 0013: kit courant (aussi lu par zdr_kit_export) */
++
+ void zdr_act_kit(void)
+ {
+-    static int kit;
+-    kit = (kit + 1) % DR_KIT_N;
+-    drum_set_kit(&d, kit);
++    s_kit = (s_kit + 1) % DR_KIT_N;
++    drum_set_kit(&d, s_kit);
++    zdr_say("KIT", DR_KIT_NAMES[s_kit]);
++}
++
++/* patch 0013: kits en blob 'ZKT1' (fichiers companion ZKIT00..02) */
++int zdr_kit_export(int kit, uint8_t *buf, int cap)
++{
++    return drum_kit_export(kit, buf, cap);
++}
++
++int zdr_kit_import(int kit, const uint8_t *buf, int len)
++{
++    if (!drum_kit_import(&d, kit, buf, len)) return 0;
++    s_kit = kit;
+     zdr_say("KIT", DR_KIT_NAMES[kit]);
++    return 1;
+ }
+ 
+ void zdr_act_comp(void)
+diff --git a/atek303/app/ztek_drum.h b/atek303/app/ztek_drum.h
+index c159c8c..0150723 100644
+--- a/atek303/app/ztek_drum.h
++++ b/atek303/app/ztek_drum.h
+@@ -39,6 +39,8 @@ void  zdr_act_rec(void);                 /* REC : REC live on/off */
+ void  zdr_act_cond(void);                /* ENV : COND du step courant (Elektron 1:1..FILL) */
+ void  zdr_act_mode(void);                /* LFO : mode du pad (NORM/REV/PING-PONG) */
+ void  zdr_act_kit(void);                 /* EDIT : kit ZULU/808/909 */
++int   zdr_kit_export(int kit, uint8_t *buf, int cap);          /* patch 0013: blob 'ZKT1', octets */
++int   zdr_kit_import(int kit, const uint8_t *buf, int len);   /* patch 0013: applique le kit, 1 ok */
+ void  zdr_act_comp(void);                /* SAVE : compresseur de bus on/off */
+ void  zdr_act_rand(void);                /* SEQ : RAND du pad sel */
+ void  zdr_act_clear(void);               /* ARP : clear du pad sel */
+diff --git a/atek303/app/ztek_link.c b/atek303/app/ztek_link.c
+index d4bbb2e..dfef73f 100644
+--- a/atek303/app/ztek_link.c
++++ b/atek303/app/ztek_link.c
+@@ -5,14 +5,20 @@
+  * Les fichiers vivent en flash (zone data, copies A/B via plat_file_t) ; à chaque commit on
+  * relit et on applique (sample -> ring looper, slot -> looper, macros). */
+ #include <string.h>
++#include <stdio.h>
+ #include "ztek_link.h"
+ #include "ztek_loop.h"
+ #include "ztek_macro.h"
++#include "ztek_drum.h"
+ #include "dsp/fx.h"
++#include "dsp/drum_engine.h"
++
++extern int app_preset_used_raw(int slot);   /* app.c (même pattern que ztek_seqplus.c) */
+ 
+ #define ZLK_NSMP 8
+ #define ZLK_NLUP 8
+-#define ZLK_NFILE (ZLK_NSMP + ZLK_NLUP + 1)          /* + ZMAC */
++#define ZLK_NFLASH (ZLK_NSMP + ZLK_NLUP + 1)         /* + ZMAC : fichiers en flash (copies A/B) */
++#define ZLK_NFILE (ZLK_NFLASH + ZLK_NPRE + ZLK_NKIT) /* patch 0013: + ZPRE00..31 + ZKIT00..02 virtuels */
+ 
+ /* copies A/B dans la zone data (0x97000..0xD3FFF libre sous la zone app 0xD4000..) :
+  * samples 0xB0000.., loops 0xC0000.., ZMAC 0xD0000.. ; n = 0x1000 (1 secteur A + 1 secteur B) */
+@@ -51,9 +57,39 @@ static const char *const ZLK_NAMES[ZLK_NFILE] = {
+ static int cur_file = -1;
+ static uint32_t cur_size;
+ 
++/* patch 0013: fichiers virtuels ZPRE/ZKIT — le contenu reçu est accumulé en RAM (pas de flash),
++ * appliqué au commit (preset -> objet store, kit -> pads). */
++static uint8_t zlk_vbuf[sizeof(zlk_ztp1_t) > sizeof(dr_zkt1_t) ? sizeof(zlk_ztp1_t) : sizeof(dr_zkt1_t)];
++static uint32_t cur_written;
++
++/* noms des fichiers virtuels : tableau stable (le platform garde les pointeurs toute la liste) */
++static char zlk_vnames[ZLK_NPRE + ZLK_NKIT][8];
++
++static const char *zlk_vname(int i)
++{
++    if (i < ZLK_NFLASH)
++        return ZLK_NAMES[i];
++    return zlk_vnames[i - ZLK_NFLASH];
++}
++
++/* taille courante d'un fichier virtuel : ZPRE = blob ZTP1 si le preset est utilisé, ZKIT = toujours */
++static uint32_t zlk_vsize(int i)
++{
++    if (i >= ZLK_NFLASH && i < ZLK_NFLASH + ZLK_NPRE)
++        return app_preset_used_raw(i - ZLK_NFLASH) ? sizeof(zlk_ztp1_t) : 0u;
++    if (i >= ZLK_NFLASH + ZLK_NPRE)
++        return sizeof(dr_zkt1_t);
++    return 0;
++}
++
+ void zlk_init(void)
+ {
++    int k;
+     cur_file = -1;
++    for (k = 0; k < ZLK_NPRE; k++)
++        snprintf(zlk_vnames[k], 8, "ZPRE%02d", k);
++    for (k = 0; k < ZLK_NKIT; k++)
++        snprintf(zlk_vnames[ZLK_NPRE + k], 8, "ZKIT%02d", k);
+ }
+ 
+ /* applique un fichier commité (relit depuis la flash et applique au moteur) ; 0 ok */
+@@ -89,6 +125,14 @@ int zlk_file(int i, plat_file_info_t *f)
+     int sz;
+     if (!f) return -1;
+     if (i < 0 || i >= ZLK_NFILE) return -1;
++    if (i >= ZLK_NFLASH) {                        /* patch 0013: fichier virtuel ZPRE/ZKIT */
++        f->name = zlk_vname(i);
++        f->kind = i < ZLK_NFLASH + ZLK_NPRE ? PLAT_FK_PRESET : PLAT_FK_BANK;
++        f->flags = PLAT_FF_READ | PLAT_FF_WRITE | PLAT_FF_DELETE;
++        f->size = zlk_vsize(i);
++        f->room = i < ZLK_NFLASH + ZLK_NPRE ? sizeof(zlk_ztp1_t) : sizeof(dr_zkt1_t);
++        return 0;
++    }
+     sz = plat_file_size(&zlk_files[i]);
+     f->name = ZLK_NAMES[i];
+     f->kind = i < ZLK_NSMP ? PLAT_FK_SAMPLE : (i < ZLK_NSMP + ZLK_NLUP ? PLAT_FK_BANK : PLAT_FK_SETTINGS);
+@@ -100,13 +144,32 @@ int zlk_file(int i, plat_file_info_t *f)
+ 
+ int zlk_file_read(int i, uint32_t off, void *dst, uint32_t n)
+ {
++    int n_export;
+     if (i < 0 || i >= ZLK_NFILE) return -1;
+-    return plat_file_read(&zlk_files[i], off, dst, n);
++    if (i < ZLK_NFLASH)
++        return plat_file_read(&zlk_files[i], off, dst, n);
++    /* patch 0013: virtuel — on resérialise le blob complet en RAM puis on copie le chunk */
++    if (i < ZLK_NFLASH + ZLK_NPRE)
++        n_export = app_zpre_export(i - ZLK_NFLASH, zlk_vbuf, (int)sizeof zlk_vbuf);
++    else
++        n_export = zdr_kit_export(i - ZLK_NFLASH - ZLK_NPRE, zlk_vbuf, (int)sizeof zlk_vbuf);
++    if (n_export <= 0) return -1;
++    if (off + n > (uint32_t)n_export) return -1;
++    memcpy(dst, zlk_vbuf + off, n);
++    return 0;
+ }
+ 
+ int zlk_file_begin(int i, uint32_t size)
+ {
+-    if (i < 0 || i >= ZLK_NFILE || size > ZLK_FN - PLAT_FILE_HEAD) return -1;
++    if (i < 0 || i >= ZLK_NFILE) return -1;
++    if (i >= ZLK_NFLASH) {                        /* patch 0013: virtuel — rien à effacer, juste le buffer */
++        if (size > sizeof zlk_vbuf) return -1;
++        cur_file = i;
++        cur_size = size;
++        cur_written = 0;
++        return 0;
++    }
++    if (size > ZLK_FN - PLAT_FILE_HEAD) return -1;
+     cur_file = i;
+     cur_size = size;
+     return plat_file_begin(&zlk_files[i], size);
+@@ -116,6 +179,12 @@ int zlk_file_write(int i, uint32_t off, const void *src, uint32_t n)
+ {
+     if (i != cur_file || i < 0 || i >= ZLK_NFILE) return -1;
+     if (off + n > cur_size) return -1;
++    if (i >= ZLK_NFLASH) {                        /* patch 0013: virtuel — accumulation en RAM, en ordre */
++        if (off != cur_written) return -1;
++        memcpy(zlk_vbuf + off, src, n);
++        cur_written = off + n;
++        return 0;
++    }
+     return plat_file_write(&zlk_files[i], off, src, n);
+ }
+ 
+@@ -123,6 +192,16 @@ int zlk_file_commit(int i, uint32_t size, uint32_t crc)
+ {
+     int rc;
+     if (i != cur_file || i < 0 || i >= ZLK_NFILE) return -1;
++    (void)crc;                                    /* le platform a déjà vérifié le CRC du flux */
++    if (i >= ZLK_NFLASH) {                        /* patch 0013: virtuel — applique au commit */
++        if (size != cur_written || size > sizeof zlk_vbuf) { cur_file = -1; return -1; }
++        if (i < ZLK_NFLASH + ZLK_NPRE)
++            rc = app_zpre_import(i - ZLK_NFLASH, zlk_vbuf, (int)size) ? 0 : -1;
++        else
++            rc = zdr_kit_import(i - ZLK_NFLASH - ZLK_NPRE, zlk_vbuf, (int)size) ? 0 : -1;
++        cur_file = -1;
++        return rc;
++    }
+     rc = plat_file_commit(&zlk_files[i], size, crc);
+     if (rc == 0)
+         zlk_apply(i);                            /* commit ok -> on applique au moteur */
+@@ -133,6 +212,11 @@ int zlk_file_commit(int i, uint32_t size, uint32_t crc)
+ int zlk_file_delete(int i)
+ {
+     if (i < 0 || i >= ZLK_NFILE) return -1;
++    if (i >= ZLK_NFLASH) {                        /* patch 0013: ZPRE vidé (store sauvé), ZKIT refusé */
++        if (i < ZLK_NFLASH + ZLK_NPRE)
++            return app_zpre_clear(i - ZLK_NFLASH);
++        return -1;                                /* kits usine : non supprimables */
++    }
+     return plat_file_delete(&zlk_files[i]);
+ }
+ 
+diff --git a/atek303/app/ztek_link.h b/atek303/app/ztek_link.h
+index b7536c8..2fc15d3 100644
+--- a/atek303/app/ztek_link.h
++++ b/atek303/app/ztek_link.h
+@@ -66,3 +66,45 @@ void  zlk_loop_gain_set(float g);
+ float zlk_swing(void);
+ void  zlk_swing_set(float v);
+ uint32_t zlk_data_free(void);               /* octets libres estimés dans la zone data */
++
++/* ---- patch 0013: fichiers companion VIRTUELS ZPRE00..31 / ZKIT00..02 (pas de flash : le store
++ * sert de backing) — contrat avec la PR #20 (APK) ----
++ * ZPRE%02d = preset part×8+slot (part 0..3 = objets PRESETS_A..D, slot 0..7) en blob 'ZTP1',
++ * miroir exact de ztek_preset_t côté APK (ztek_engine.h, sizeof = 1284 o au patch 0013).
++ * ZKIT00..02 = kits usine ZULU/808/909 en blob 'ZKT1' (voir dsp/drum_engine.h). */
++#define ZLK_NPRE 32
++#define ZLK_NKIT 3
++#define ZLK_ZTP1_MAGIC 0x5A545031u          /* 'ZTP1' */
++typedef struct {
++    uint32_t magic;                         /* 'ZTP1' */
++    int32_t  part, slot;                    /* part 0..3, slot 0..7 */
++    char     name[16];
++    int      engine;
++    float    param[8];                      /* AT_NPARAMS (patch 0001: 8) */
++    float    fx[18];                        /* FX_NPARAMS (patch 0002: 18) */
++    float    bpm;
++    int      root, scale;
++    float    mod_knob[16][4];               /* ZT_NSRC = 16 */
++    int      lab_type[4];
++    int      lab_src[4][2];
++    int      lfo_sync, lfo_trig;
++    int      env_loop[2];
++    int      asg_src[51];                   /* ZT_NDST_ALL = 51 */
++    float    asg_depth[51];
++    float    seqk[5];
++    uint8_t  mac_used[16];                  /* ZT_NMACRO = 16 */
++    int16_t  mac_dst[16];
++    int16_t  mac_sub[16];
++    float    mac_val[16];
++    float    strip_par[4][13];              /* ZTEK_NSTRIP=4, ZTEK_MIX_N=13 */
++    float    master_par[3];                 /* ZTEK_MIXM_N = 3 */
++    int      siren_wave;
++    float    siren_mix;
++    uint8_t  opt[13];                       /* ZTEK_NOPT = AT_NOPTS+2 = 13 */
++} zlk_ztp1_t;
++typedef char zlk_ztp1_fits[sizeof(zlk_ztp1_t) == 1284 ? 1 : -1];   /* contrat blob APK (patch 0013) */
++
++/* fournis par app.c (patch 0013) — presets individuels <-> blob ZTP1 */
++int app_zpre_export(int p, uint8_t *buf, int cap);        /* octets, 0 si preset vide */
++int app_zpre_import(int p, const uint8_t *buf, int len);  /* 1 ok (objet store sauvé) */
++int app_zpre_clear(int p);                                /* 0 ok (preset vidé + sauvé) */

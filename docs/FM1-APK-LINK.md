@@ -73,7 +73,8 @@ plus fenêtres XDATA en option ; plafond par fichier `APP_FILE_OBJ_MAX`) :
 |---|---|---|
 | `ZSMP00..07` | `ZSM1` + sr u32 + len u32 + fmt u8 + payload | sample slot (µ-law 8 bits ou int16 mono, rééchantillonné 44,1 kHz) — poussé depuis l'APK, joué via le ring resample du looper (slot ≤ 4096 éch.) ou stocké |
 | `ZLUP` | `ZLB1` + état `ml_t` (événements, sp, len ; ring non persisté) | banque de loops MIDI (16 slots) |
-| `ZPRE00..31` | blob `ZTP1` existant (`ztek_preset_export`) | presets — même format APK/FM-1, interchangeables |
+| `ZPRE00..31` | blob `ZTP1` (miroir `zlk_ztp1_t`, 1284 o — patch 0013, fichiers **virtuelle**, 0 octet de flash) | presets — même format APK/FM-1, interchangeables ; `ZPRE%02d` = part×8+slot (part 0..3 = PRESETS_A..D) |
+| `ZKIT00..02` | blob `ZKT1` (`dr_zkt1_t`, 400 o — patch 0013, virtuel) | kits usine ZULU/808/909, pull `.zkt1` côté APK (PR #20) |
 | `ZMAC` | 16 slots {dst, val} | banque de macros |
 
 Règles : un sample « long » reste sur le téléphone ; on ne pousse dans le FM-1 que des extraits courts

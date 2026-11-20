@@ -46,6 +46,10 @@ secteurs d'une région `res.bin` demandée par le package (record `RES1`) — no
   Magics `ZSM1`/`ZLS1`/`ZMC1` : ne collisionnent ni avec les records store `X0X0` ni avec
   les records de mise à jour `AT` (0xF06) du loader.
 - Espace libre restant : `0x97000..0xAFFFF` (~60 KiB) + `0xD2000..0xD3FFF`.
+- **Patch 0013 (ZPRE/ZKIT) consomme 0 octet de flash** : fichiers companion *virtuels* —
+  `ZPRE00..31` (blob `ZTP1`, 1284 o) adossés aux objets store PRESETS_A..D, `ZKIT00..02`
+  (blob `ZKT1`, 400 o) adossés aux kits usine du drum engine ; écriture accumulée en RAM,
+  appliquée au commit via `plat_store_save`.
 - ⚠️ Ne JAMAIS déplacer les fichiers ZTF vers `0xE0000+` (OTA staging / records / VM / BTIF / USR / globals / key_mac).
 
 ## Révision matérielle octobre 2026 (info clé)
