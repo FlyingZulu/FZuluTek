@@ -211,6 +211,16 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
 - APK : appui **PRE** (ou DLY dans le cycle) = page 18 ; persistance `ztek_opts` (`fine_$idx`) + presets/snapshots (champ `opt[]` du POD). Moteur : `ztek_set_option/get_option` (opt 0..10 = `AT_OPT_*`, 11 = model, 12 = morph 0..255).
 - FM-1 (patch 0012, PR #15 **mergée** → **parité FINE atteinte** FM-1 page 14 ↔ APK page 18) : REC maintenu + EDIT = page 14, GLO quitte ; CC MIDI 84..96 ; persistance OBJ_OPTIONS (OPT5). Numérotation : page 17 APK prise par PR #13 (LINK) → FINE = 18 côté APK, 14 côté FM-1.
 
+## Navigation (bouton HOME) — APK
+
+- **HOME court** = cycle de partie jouée : BASSE → LEAD → DRUMS → LOOP (pop du nom). BASSE/LEAD switchent
+  l'engine de la voix (0 = LEAD, 1..4 = BASSE, même bus voix) sans changer de page ; DRUMS ouvre la page 15,
+  LOOP la page 1.
+- **HOME + Shift** (noire 10 maintenue) = cycle des pages de travail : **FX (5) → MIX (11) → SNAP (2) → KIT (3)**.
+  C'est le raccourci d'entrée de SNAP/KIT (les anciens bras legacy dbl-DRV/dbl-MUT étaient morts depuis PR #18).
+- **HOME long** = page LINK 17 (ZTF, inchangé).
+- Prévu bible, pas encore câblé : REC+dbl-FX = SNAP, REC+SAVE = KIT.
+
 ## OPTIONS (page 9 APK, long-SCL ; OBJ_OPTIONS OPT6 côté FM-1)
 
 - **OPTIONS > ECO = OFF/ON** (« MODE ECO (BATTERIE) », comme Zulu v0.33) — mode éco DSP/RAM :
