@@ -2,7 +2,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (C) 2026 FlyingZulu
 
 Patch fm1-base (à appliquer APRÈS `herramientas/clonar-terceros.sh`, dans le clone de
-charlesvestal/fm1-base) — pont audio hybride APK -> FM-1 (patch 0009 zuluTek).
+charlesvestal/fm1-base) — pont audio hybride APK -> FM-1 (patch 0010 zuluTek).
 
 But : donner à l'app l'audio entrant USB (usb_audio_out = true, uac_play) via le hook
 APP_USB_IN / app_usb_in(lr, n) déclaré dans attek303/app/app.h, pour que le firmware
@@ -10,7 +10,7 @@ puisse échantillonner ce que le téléphone joue (ring resample du looper, patc
 
 Ce patch ajoute l'appel au hook dans device/uac_mix.h, juste avant uac_play(), en lisant
 les trames entrantes SANS les consommer via uac_in_peek() — fonction fournie par le patch
-jume patches/felucca-bsp/0009-uac-in-tap.patch (ring UAC-out du bsp). Les deux patches vont
+jume patches/felucca-bsp/0010-uac-in-tap.patch (ring UAC-out du bsp). Les deux patches vont
 ensemble ; sans le patch bsp, uac_in_peek() n'existe pas et ce patch ne compile pas —
 appliquer les deux, ou aucun (sans APP_USB_IN le firmware zuluTek fonctionne quand même :
 app_usb_in n'est alors jamais appelé).

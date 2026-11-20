@@ -1,12 +1,11 @@
-From f1e3e5751c0be73f62e3637043f1f30b158aa6c0 Mon Sep 17 00:00:00 2001
-From: Flying Zulu <zulu@tek>
-Date: Fri, 20 Nov 2026 14:20:36 +0000
-Subject: [PATCH] =?UTF-8?q?feat(atek303):=20patch=200009=20zuluTek=20?=
- =?UTF-8?q?=E2=80=94=20liaison=20APK<->FM-1=20ZTF=20:=20companion=3Dtrue?=
- =?UTF-8?q?=20(files=20ZSMP/ZLUP/ZMAC=20+=20presets/ZSEQ,=20params),=20Sys?=
- =?UTF-8?q?Ex=20ZTF=20(PING/PARAM/PAGE/TRIG/PLAY/LOAD),=20usb=5Faudio=5Fou?=
- =?UTF-8?q?t=3Dtrue=20+=20hook=20app=5Fusb=5Fin,=20zml=20ring/slot=20impor?=
- =?UTF-8?q?t,=20zmac=20blob?=
+From 63bce14cd667a856778aa67dc3c2d0397dc51b36 Mon Sep 17 00:00:00 2001
+From: t <z@z>
+Date: Fri, 20 Nov 2026 14:30:50 +0000
+Subject: [PATCH] =?UTF-8?q?feat(atek303):=20patch=200010=20zuluTek=20?=
+ =?UTF-8?q?=E2=80=94=20liaison=20APK<->FM-1=20ZTF=20(sur=200009-choke)=20:?=
+ =?UTF-8?q?=20companion=20files=20ZSMP/ZLUP/ZMAC=20+=20presets,=20params,?=
+ =?UTF-8?q?=20SysEx=20ZTF,=20usb=5Faudio=5Fout=20+=20app=5Fusb=5Fin,=20zml?=
+ =?UTF-8?q?=20import/export,=20zmac=20blob?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -18,15 +17,15 @@ Content-Transfer-Encoding: 8bit
  atek303/app/ztek_link.c  | 300 +++++++++++++++++++++++++++++++++++++++
  atek303/app/ztek_link.h  |  68 +++++++++
  atek303/app/ztek_loop.c  | 141 ++++++++++++++++++
- atek303/app/ztek_loop.h  |   6 +
+ atek303/app/ztek_loop.h  |   5 +
  atek303/app/ztek_macro.c |  36 +++++
  atek303/app/ztek_macro.h |   4 +
- 9 files changed, 619 insertions(+), 3 deletions(-)
+ 9 files changed, 618 insertions(+), 3 deletions(-)
  create mode 100644 atek303/app/ztek_link.c
  create mode 100644 atek303/app/ztek_link.h
 
 diff --git a/atek303/app/app.c b/atek303/app/app.c
-index 7793de7..56cc415 100644
+index d41d4a5..fcc477c 100644
 --- a/atek303/app/app.c
 +++ b/atek303/app/app.c
 @@ -63,6 +63,7 @@
@@ -37,7 +36,7 @@ index 7793de7..56cc415 100644
  
  /* the Animatek palette, as on the VCV Rack modules (UZZ-VCV-RACK src/ui/CommonWidgets.hpp, AcidEditor.hpp):
   * the screens are slate, the values in the displays' blue, the selection in the logo's blue */
-@@ -1103,6 +1104,7 @@ void app_init(void)
+@@ -1105,6 +1106,7 @@ void app_init(void)
      zdr_init((float)SR);                  /* patch 0007: drum machine */
      zml_init((float)SR);                  /* patch 0008: MIDI looper */
      zmac_init();                          /* patch 0008: macros */
@@ -45,7 +44,7 @@ index 7793de7..56cc415 100644
      int i;
      at_init(&voice, SR);
      options_load();
-@@ -1211,6 +1213,50 @@ void  zml_gate(int on, int note, int accent, int slide) { at_gate(&voice, on, no
+@@ -1215,6 +1217,50 @@ void  zml_gate(int on, int note, int accent, int slide) { at_gate(&voice, on, no
  void  zml_param(int key, float v) { if (key >= 0 && key < AT_NPARAMS) { set.param[key] = v; at_set(&voice, key, v); } }
  void  zml_say(const char *a, const char *b) { app_say(a, b); }
  void  zmac_say(const char *a, const char *b) { app_say(a, b); }
@@ -522,10 +521,10 @@ index 0000000..b7536c8
 +void  zlk_swing_set(float v);
 +uint32_t zlk_data_free(void);               /* octets libres estimés dans la zone data */
 diff --git a/atek303/app/ztek_loop.c b/atek303/app/ztek_loop.c
-index 0c028fa..9c369a5 100644
+index e58f581..38b9da7 100644
 --- a/atek303/app/ztek_loop.c
 +++ b/atek303/app/ztek_loop.c
-@@ -179,3 +179,144 @@ int zml_sel(void) { return ml.sel; }
+@@ -272,3 +272,144 @@ int zml_sel(void) { return ml.sel; }
  
  void zml_gain(float g) { ml.loop_gain = clamp01(g); }
  float zml_gain_get(void) { return ml.loop_gain; }
@@ -671,14 +670,13 @@ index 0c028fa..9c369a5 100644
 +    ml_rs_feed(&ml, f, n);
 +}
 diff --git a/atek303/app/ztek_loop.h b/atek303/app/ztek_loop.h
-index 2783555..fe0072a 100644
+index b2b5f51..ff51e9a 100644
 --- a/atek303/app/ztek_loop.h
 +++ b/atek303/app/ztek_loop.h
-@@ -59,3 +59,9 @@ void  zml_act_rand(void);
- int   zml_sel(void);
- void  zml_gain(float g);                 /* macro / matrice ASSIGN : loop_gain 0..1 */
- float zml_gain_get(void);
-+
+@@ -72,3 +72,8 @@ void  zml_set_leader(int on);                 /* OPTIONS > CHOKE LDR = ON/OFF */
+ void  zml_set_eco(int on);                    /* OPTIONS > ECO (resample ring au plus bas) */
+ int   zml_get_choke(int slot);
+ int   zml_choke_master(int grp);
 +/* patch 0009: import/export pour la liaison APK <-> FM-1 (fichiers companion ZSMP/ZLUP) */
 +int  zml_ring_import(int slot, int fmt, uint32_t ring_sr, uint32_t len, const void *data); /* 0 ok ; fmt 0 int16 1 µ-law */
 +int  zml_slot_save(int slot, uint8_t *buf, int cap);        /* blob 'ZLS1' (little-endian explicite), octets écrits */

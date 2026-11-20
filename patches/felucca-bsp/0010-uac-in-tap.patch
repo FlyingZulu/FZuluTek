@@ -2,7 +2,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (C) 2026 FlyingZulu
 
 Patch felucca-bsp (à appliquer APRÈS `herramientas/clonar-terceros.sh`, dans le clone de
-Hugelton-Instruments/felucca-bsp) — jumeau de patches/fm1-base/0009-app-usb-in.patch.
+Hugelton-Instruments/felucca-bsp) — jumeau de patches/fm1-base/0010-app-usb-in.patch.
 
 But : exposer en lecture NON destructive les trames UAC-out entrantes (l'audio que
 l'ordinateur/téléphone envoie au FM-1 quand usb_audio_out = true), via :
