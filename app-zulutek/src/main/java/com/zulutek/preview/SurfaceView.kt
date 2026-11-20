@@ -37,6 +37,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                                  "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+")
         // 27 keys F3..G5: white keys (16) carry slot indices, black keys (11) MIDI notes
         val BLACK_NOTES = intArrayOf(54, 56, 58, 61, 63, 66, 68, 70, 73, 75, 78)
+        val WHITE_NOTES = intArrayOf(53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79)
         const val KEY_TOP = 150f
         const val KEY_BOT = 270f
         const val BLACK_H = 90f
@@ -139,7 +140,8 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             val x0 = col * bw + 3f
             val y0 = 76f + row * 30f
             val active = (i == 10 && st.playing) || (i == 11 && st.recArmed) || (i == 9 && st.seqOn) ||
-                         (st.slotRec.getOrElse(st.selSlot) { false } && i == 11)
+                         (st.slotRec.getOrElse(st.selSlot) { false } && i == 11) ||
+                         (i == 5 && st.sirenMode && (System.currentTimeMillis() / 260) % 2 == 0L)
             frame.color = if (active) LcdView.REC_RED else LcdView.DIM
             c.drawRect(x0, y0, x0 + bw - 6f, y0 + 24f, frame)
             mono.color = if (active) LcdView.INK else LcdView.DIM
