@@ -1186,7 +1186,10 @@ class MainActivity : Activity(), SurfaceListener {
         }
         if (st.page == 14 && down && !longPress) { ZtekAudio.macroApply(slot); hint("MACRO ${slot + 1}"); return }
         st.selSlot = slot
-        if (st.page == 5) {                     // page SIREN : les blanches ne font rien
+        if (st.page == 5) {                     // page SIREN : clavier chromatique (les 16 blanches jouent des notes)
+            val n = SurfaceView.WHITE_NOTES[slot]
+            if (down && !longPress) { st.curNote = n; ZtekAudio.noteOn(n, 100, 0, 0) }
+            else if (!down) { ZtekAudio.noteOff(n); if (st.curNote == n) st.curNote = -1 }
             lcd.invalidate(); return
         }
         if (st.page == 11) {                    // page MIX : 16 pads PoW! momentanés ; Shift+slot = overlay PUNCH
@@ -1283,8 +1286,9 @@ class MainActivity : Activity(), SurfaceListener {
             }
             lcd.invalidate(); surface.invalidate(); return
         }
-        // sirène momentanée hors page MIX (noires 6..9), sauf MONO/POLY en contexte choke
-        if (bi in 6..9 && !(chokeCtx() && (note == KEY_MONO || note == KEY_POLY))) {
+        // sirène momentanée hors pages MIX/SIREN (noires 6..9), sauf MONO/POLY en contexte choke
+        // (page SIREN : tout le clavier est chromatique, la sirène se règle au SEL/ALGO de la page)
+        if (bi in 6..9 && st.page != 5 && !(chokeCtx() && (note == KEY_MONO || note == KEY_POLY))) {
             if (down) {
                 sirenMom = bi - 6
                 st.sirenWave = sirenMom; ZtekAudio.sirenWave(sirenMom)

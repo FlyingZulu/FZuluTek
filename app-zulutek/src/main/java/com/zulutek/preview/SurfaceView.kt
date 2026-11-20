@@ -37,6 +37,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                                  "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+")
         // 27 keys F3..G5: white keys (16) carry slot indices, black keys (11) MIDI notes
         val BLACK_NOTES = intArrayOf(54, 56, 58, 61, 63, 66, 68, 70, 73, 75, 78)
+        val WHITE_NOTES = intArrayOf(53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79)
         const val KEY_TOP = 150f
         const val KEY_BOT = 270f
         const val BLACK_H = 90f

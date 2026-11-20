@@ -542,7 +542,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 text(c, 200f, y0 + 15f, "${(bars[i].second * 100).toInt()}", INK, 9f)
             }
             text(c, 6f, 224f, "SEL=ON/OFF  ALG=type(4)  K1=RATE K2=DEPTH K3=FB K4=MIX", DIM, 8f)
-            text(c, 6f, 236f, "REC+FX=quitte  triple-tap GLO=mode SIREN  noires PIT/GLO/MONO/POLY=momentané", DIM, 8f)
+            text(c, 6f, 236f, "clavier chromatique  REC+FX=quitte  (hors page: triple-tap GLO, noires PIT/GLO/MONO/POLY)", DIM, 8f)
             c.restore()
             return
         }
