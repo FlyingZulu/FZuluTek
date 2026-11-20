@@ -136,3 +136,30 @@ côté APK (`filesDir/ztek/samples/*.wav`).
   commit→chargement, AIN USB → ring resample), hooks `app.c`, `patches/README.md`.
 - APK (branche `vibe/ztf-link-c9ef18`) : `Fm1Usb.kt`, `SampleLibrary.kt`, `ZtekAudio.kt` (WAV
   encode/décode natif + banque), `MainActivity.kt` (page LINK), `LcdView.kt`, tests host.
+
+## 8. Tests d'intégration réels (host simulator, 2026-11 — main `5c7b5a8`)
+
+Clone neuf `animatek/FM1-Animatek@8934f53` + `clonar-terceros.sh` + patches `0001..0010`
+appliqués, build host : `X0X_FONTSET=terminus python3 base/tools/build.py app --host`
+→ `atek303/app/build/host/atek303_host` compile (2 bugs corrigés avant : syntaxe 0005,
+`preset_fits` 0010). Test via `terceros/fm1-base/tools/fm1_companion.py --serve-cmd
+".../atek303_host --serve"` + ServeLink, **une seule session** — 12/12 PASS :
+
+- `info` : `ATEK303 DEV (FM-1_33000, companion protocol 3)`, 22 fichiers, 12 params,
+  extras `app = zuluTek / link = ztf / v = 1` (patch 0010 visible côté hôte) ;
+- `ls` : PRESETS_A..D + ZSEQ (0/3840) + ZSMP00..07/ZLUP00..07/ZMAC (0/4064, `rwdp`) ;
+- `params` : les 12 params (CUTOFF RESO ENV MOD DECAY WAVE ENGINE TEMPO PAGE LOOP GAIN
+  DLY TIME REV MIX SWING) avec ranges ;
+- **ZTF brut** `F0 7D 5A 54 50 F7` → PONG `…50 "zuluTek" 01 00 20 00 00 F7` (free = 0x2000) ;
+- **ZTF `W` tempo(6)=140** → echo `…57 06 8C 00 00 00`, puis **`R` → 140**, et le
+  companion `get-param 6` voit **140** → les deux protocoles tapent la même table live ;
+- companion `put` ZSM1 (45 o) sur ZSMP00 → « written and checked », `get` → **round-trip
+  octets identiques (CRC-32)**, `ls` → 45/4064, `rm` → size 0.
+
+⚠️ Piège de test : chaque invocation CLI `--serve-cmd` spawne un **nouveau** processus
+simulateur (flash neuve) — faire put/get/param dans **une seule session** (classe `Client`
+sur un `ServeLink`), sinon on croit à des pertes alors que c'est juste un process frais.
+
+Reste : build `.fwsc` avec la toolchain JieLi (indisponible en sandbox, curl bloqué) +
+test dans `fm1-emu` avant tout flash sur le FM-1 (briqué, en attente Seeed — voir
+`docs/FM1-HARDWARE.md` / `docs/FM1-FLASHMAP.md`).
