@@ -102,11 +102,14 @@ float ztek_assign_depth(const ztek_t *z, int dst);
 void ztek_preset(ztek_t *z, int i);              /* 0..ZT_NPRESETS-1, wraps */
 const char *ztek_preset_name(int i);
 
-/* user presets per part: part 0 = BASSE, 1 = LEAD, 2 = DRUMS; 8 slots each.
- * A preset is a POD snapshot of the whole modulable state; export/import give a binary
- * blob so the APK can persist it (SharedPreferences) and the FM-1 its flash. */
+/* preset bank per part: part 0 = BASSE, 1 = LEAD, 2 = DRUMS; 16 slots each. The bank is
+ * FREE: the first ZT_NPRESETS slots hold the factory pre-patched presets, but any slot can
+ * be overwritten by a user save. ztek_bank_load() picks the right one (user save wins over
+ * the factory preset). A preset is a POD snapshot of the whole modulable state; export/
+ * import give a binary blob so the APK can persist it (SharedPreferences) and the FM-1
+ * its flash. */
 #define ZT_NPARTS 3
-#define ZT_PSLOTS 8
+#define ZT_PSLOTS 16
 typedef struct {
     uint32_t magic;                  /* 'ZTP1' when used */
     int32_t part, slot;
@@ -128,6 +131,7 @@ typedef struct {
 
 void ztek_preset_save(ztek_t *z, int part, int slot);
 void ztek_preset_load(ztek_t *z, int part, int slot);      /* no-op if empty */
+void ztek_bank_load(ztek_t *z, int part, int slot);        /* user save if any, else factory preset if slot < ZT_NPRESETS */
 int  ztek_preset_used(const ztek_t *z, int part, int slot);
 void ztek_preset_clear(ztek_t *z, int part, int slot);
 void ztek_preset_set_name(ztek_t *z, int part, int slot, const char *name);

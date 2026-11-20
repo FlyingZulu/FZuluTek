@@ -58,8 +58,10 @@ class MainActivity : Activity(), SurfaceListener {
                 st.asgDepth = ZtekAudio.assignDepth(st.sub)
             }
             if (st.page == 13) {
-                st.psUsed = ZtekAudio.presetUsed(st.psPart, st.psSlot)
-                st.psName = if (st.psUsed) ZtekAudio.presetSlotName(st.psPart, st.psSlot) else ""
+                val bn = ZtekAudio.bankName(st.psPart, st.psSlot)
+                st.psUsed = bn.isNotEmpty() || ZtekAudio.presetUsed(st.psPart, st.psSlot)
+                st.psName = if (bn.isNotEmpty()) bn else
+                    (if (ZtekAudio.presetUsed(st.psPart, st.psSlot)) ZtekAudio.presetSlotName(st.psPart, st.psSlot) else "")
             }
             lcd.invalidate()
             handler.postDelayed(this, 120)
@@ -204,13 +206,16 @@ class MainActivity : Activity(), SurfaceListener {
                     }
                 }
             }
-            13 -> when (i) {                      // PRESETS user par partie (basse/lead/drums)
-                0 -> st.psSlot = (v * 7.999f).toInt().coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
+            13 -> when (i) {                      // PRESETS: banc libre 16 slots par partie
+                0 -> st.psSlot = (v * (ZtekAudio.ZT_PSLOTS - 0.001f)).toInt().coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
                 1 -> st.psPart = (v * 2.999f).toInt().coerceIn(0, ZtekAudio.ZT_NPARTS - 1)
-                3 -> {                            // K1 = LOAD
-                    if (ZtekAudio.presetLoad(st.psPart, st.psSlot)) {
+                3 -> {                            // K1 = LOAD (bank: user save > usine)
+                    val nm = ZtekAudio.bankName(st.psPart, st.psSlot)
+                    if (nm.isNotEmpty()) {
+                        ZtekAudio.bankLoad(st.psPart, st.psSlot)
+                        st.presetName = nm
                         st.hintUntil = System.currentTimeMillis() + 1600
-                        st.hintMsg = "LOAD ${ZtekAudio.PART_NAMES[st.psPart]} ${st.psSlot + 1}"
+                        st.hintMsg = "LOAD ${ZtekAudio.PART_NAMES[st.psPart]} ${st.psSlot + 1}: $nm"
                     }
                 }
                 4 -> {                            // K2 = SAVE (persisted)
@@ -253,23 +258,18 @@ class MainActivity : Activity(), SurfaceListener {
             }
             else -> when (i) {                    // MAIN page
                 0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
-                1 -> {                            // PRESET knob: scroll presets live while playing
-                    val idx = (v * 15.999f).toInt().coerceIn(0, ZtekAudio.ZT_NPRESETS + ZtekAudio.ZT_PSLOTS - 1)
+                1 -> {                            // PRESET knob: scroll the free bank live while playing
+                    val idx = (v * (ZtekAudio.ZT_PSLOTS - 0.001f)).toInt().coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
                     if (idx != lastEncPreset) {
                         lastEncPreset = idx
-                        if (idx < ZtekAudio.ZT_NPRESETS) {      // factory preset
-                            presetIdx = idx
-                            ZtekAudio.preset(idx)
-                            st.presetName = ZtekAudio.presetName(idx)
-                        } else {                                // user preset of the current part
-                            val slot = idx - ZtekAudio.ZT_NPRESETS
-                            if (ZtekAudio.presetUsed(st.psPart, slot)) {
-                                st.psSlot = slot
-                                ZtekAudio.presetLoad(st.psPart, slot)
-                                st.presetName = ZtekAudio.presetSlotName(st.psPart, slot)
-                            } else {
-                                forbidden("SLT ${slot + 1} vide (${ZtekAudio.PART_NAMES[st.psPart]}) — SAVE d'abord")
-                            }
+                        st.psSlot = idx
+                        val nm = ZtekAudio.bankName(st.psPart, idx)
+                        if (nm.isNotEmpty()) {                  // user save or factory preset
+                            ZtekAudio.bankLoad(st.psPart, idx)
+                            st.presetName = nm
+                            if (idx < ZtekAudio.ZT_NPRESETS) presetIdx = idx
+                        } else {
+                            forbidden("SLT ${idx + 1} vide (${ZtekAudio.PART_NAMES[st.psPart]}) — SAVE d'abord")
                         }
                     }
                 }

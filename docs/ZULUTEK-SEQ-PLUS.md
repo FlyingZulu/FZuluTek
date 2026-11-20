@@ -102,16 +102,19 @@ Deux niveaux de presets :
   ACID 303, FILTRE WOBBLE (LFO1→CUTOFF), PITCH DRIFT (LFO2 DRUNK→TUNING), GATE 303
   (ENV1→ENVMOD/DECAY), SLIDE CITY (PING-PONG + LFO3→TEMPO), LABO CHAOS (LABO1→RESO),
   TM MAX (Turing Machine ouverte), MARÉE (LABO4 MARÉE→REV MIX, ENV2→DLY TIME).
-- **Presets user par partie** : page **PRESETS** (REC+EDIT) — **3 parties × 8 slots**
+- **Presets par partie, banc LIBRE** : page **PRESETS** (REC+EDIT) — **3 parties × 16 slots**
   (0 = BASSE, 1 = LEAD, 2 = DRUMS) ; SEL = slot, PRE = partie, K1 = LOAD, K2 = SAVE,
-  K3 = effacer. Un preset = snapshot POD complet de l'état modulable (knobs des 16
-  sources, labos, LFO SYNC/TRIG, ENV loop, matrice ASSIGN, seqk, params voix/FX, tempo,
-  root, scale, engine). Persistance : blob binaire `ztek_preset_export/import`
-  → **SharedPreferences (Base64) côté APK**, **flash côté FM-1** (à porter dans le patch).
+  K3 = effacer. Le banc est libre : les 8 premiers slots contiennent les presets usine,
+  mais **n'importe quel slot peut être écrasé par un save user** (pas de séparation fixe
+  8+8). `ztek_bank_load(part, slot)` charge le save user s'il existe, sinon le preset
+  usine si le slot est dans la plage usine. Un preset = snapshot POD complet de l'état
+  modulable (knobs des 16 sources, labos, LFO SYNC/TRIG, ENV loop, matrice ASSIGN, seqk,
+  params voix/FX, tempo, root, scale, engine). Persistance : blob binaire
+  `ztek_preset_export/import` → **SharedPreferences (Base64) côté APK**, **flash côté
+  FM-1** (à porter dans le patch).
 - **Molette PRESET en live** (comme sur le FM-1) : sur la page MAIN, l'encodeur **PST**
-  fait défiler les presets **pendant qu'on joue** — 8 presets usine puis les 8 slots user
-  de la partie courante (partie choisie sur la page PRESETS) ; slot vide → sens interdit
-  + suggestion « SAVE d'abord » (si LUDIQUE on).
+  fait défiler les **16 slots du banc de la partie courante pendant qu'on joue** ; slot
+  vide → sens interdit + suggestion « SAVE d'abord » (si LUDIQUE on).
 
 ## 7. À faire ensuite
 

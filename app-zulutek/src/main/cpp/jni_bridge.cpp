@@ -235,6 +235,21 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetLoad(JNIEnv
     ztek_preset_load(zte(NULL, h), part, slot);
 }
 
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeBankLoad(JNIEnv *, jclass, jlong h,
+    jint part, jint slot)
+{
+    ztek_bank_load(zte(NULL, h), part, slot);
+}
+
+ZTEK_JNI jstring JNICALL Java_com_zulutek_preview_ZtekAudio_nativeBankName(JNIEnv *env, jclass, jlong h,
+    jint part, jint slot)
+{
+    ztek_t *z = zte(NULL, h);
+    if (ztek_preset_used(z, part, slot)) return env->NewStringUTF(ztek_preset_slot_name(z, part, slot));
+    if (slot >= 0 && slot < ZT_NPRESETS) return env->NewStringUTF(ztek_preset_name(slot));
+    return env->NewStringUTF("");
+}
+
 ZTEK_JNI jboolean JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetUsed(JNIEnv *, jclass, jlong h,
     jint part, jint slot)
 {

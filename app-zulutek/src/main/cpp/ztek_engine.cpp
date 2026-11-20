@@ -1010,6 +1010,14 @@ int ztek_preset_used(const ztek_t *z, int part, int slot)
     return z->pstore[part][slot].magic == 0x5A545031u;
 }
 
+/* unified bank load: user save wins; otherwise the factory preset if the slot is in range */
+void ztek_bank_load(ztek_t *z, int part, int slot)
+{
+    if (!ztek_pslot_ok(part, slot)) return;
+    if (z->pstore[part][slot].magic == 0x5A545031u) ztek_preset_load(z, part, slot);
+    else if (slot < ZT_NPRESETS) ztek_preset(z, slot);
+}
+
 void ztek_preset_clear(ztek_t *z, int part, int slot)
 {
     if (!ztek_pslot_ok(part, slot)) return;

@@ -50,7 +50,7 @@ object ZtekAudio {
         "SLIDE CITY", "LABO CHAOS", "TM MAX", "MAREE")
     const val ZT_NPARTS = 3          // 0 BASSE, 1 LEAD, 2 DRUMS
     val PART_NAMES = arrayOf("BASSE", "LEAD", "DRUMS")
-    const val ZT_PSLOTS = 8
+    const val ZT_PSLOTS = 16         // banc libre par partie: slots usine en premier, user par-dessus
 
     /* persistence of the user presets (SharedPreferences, Base64 blobs) */
     private var prefs: android.content.SharedPreferences? = null
@@ -187,6 +187,10 @@ object ZtekAudio {
         nativePresetLoad(handle, part, slot)
         return true
     }
+    /* unified bank: user save wins, else factory preset (slot < ZT_NPRESETS), else nothing */
+    fun bankLoad(part: Int, slot: Int) { if (handle != 0L) nativeBankLoad(handle, part, slot) }
+    fun bankName(part: Int, slot: Int): String =
+        if (handle != 0L) nativeBankName(handle, part, slot) else ""
     fun presetUsed(part: Int, slot: Int): Boolean =
         handle != 0L && (nativePresetUsed(handle, part, slot) ||
             (prefs?.getString(pkey(part, slot), null) != null))
@@ -239,6 +243,8 @@ object ZtekAudio {
     private external fun nativePresetName(i: Int): String
     private external fun nativePresetSave(handle: Long, part: Int, slot: Int)
     private external fun nativePresetLoad(handle: Long, part: Int, slot: Int)
+    private external fun nativeBankLoad(handle: Long, part: Int, slot: Int)
+    private external fun nativeBankName(handle: Long, part: Int, slot: Int): String
     private external fun nativePresetUsed(handle: Long, part: Int, slot: Int): Boolean
     private external fun nativePresetClear(handle: Long, part: Int, slot: Int)
     private external fun nativePresetExport(handle: Long, part: Int, slot: Int): ByteArray?
