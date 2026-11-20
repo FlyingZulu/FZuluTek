@@ -378,6 +378,14 @@ object ZtekAudio {
     fun preset(i: Int) { if (handle != 0L) nativePreset(handle, i) }
     fun presetName(i: Int): String = if (handle != 0L) nativePresetName(i) else "?"
     fun presetSave(part: Int, slot: Int) = presetSaveNamed(part, slot, "")
+    fun presetRename(part: Int, slot: Int, name: String) {   // renomme un preset existant (crée un save user si slot usine) + re-persiste le blob
+        if (handle == 0L) return
+        if (!presetUsed(part, slot)) nativePresetSave(handle, part, slot)
+        nativePresetSlotSetName(handle, part, slot, name)
+        val blob = nativePresetExport(handle, part, slot) ?: return
+        prefs?.edit()?.putString(pkey(part, slot),
+            android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP))?.apply()
+    }
     fun presetSaveNamed(part: Int, slot: Int, name: String) {   // name vide = nom auto "P<part>-<slot>"
         if (handle == 0L) return
         nativePresetSave(handle, part, slot)

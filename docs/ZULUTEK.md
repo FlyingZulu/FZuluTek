@@ -230,7 +230,7 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
   En page SNAP/KIT : REC+touche = stocker, tap = charger, dbl-tap = copie miroir (xor 8) ; page SNAP : K1 = ZU/LU, K4 = FLY.
 - Page **PRESETS (10)** (REC+OCT+, validé) : presets par partie (PRE = BASSE/LEAD/DRUMS, SEL = slot 1..16).
   **Appui SEL = LOAD** du preset affiché ; **SEL maintenu + touche blanche = LOAD direct** du slot ; à la rotation seule, rien ne se charge.
-  **Enregistrement** : **SEL maintenu + SAVE** = mode save ; nommage : SEL = lettre/chiffre (A-Z 0-9), **Shift = espace**, **appui SEL = valide le nom** ; slot via SEL ou touche blanche 1..16 ; **SAVE = confirme** → preset assigné au slot (**si aucun nom saisi : nom aléatoire attribué**). K2 = SAVE direct, K3 = efface, REC = quitte. (validé Flying Zulu ~23:55Z)
+  **Enregistrement** : **SEL maintenu + SAVE** = mode save ; nommage : SEL = lettre/chiffre (A-Z 0-9), **Shift = espace**, **appui SEL = valide le nom** ; slot via SEL ou touche blanche 1..16 ; **SAVE = confirme** → preset assigné au slot (**si aucun nom saisi : nom aléatoire attribué**). **Renommage** d'un preset existant : slot sélectionné, **SEL maintenu + EDIT** → nommage (SEL = lettre/chiffre, Shift = espace, **appui SEL = valide**) → nom appliqué immédiatement. K2 = SAVE direct, K3 = efface, REC = quitte. (validé Flying Zulu ~23:55-00:00Z)
   Divergence FM-1 documentée : la liste hardware charge à la fin du pattern (NEXT) au curseur + SEL = load immédiat (`atek303/app/app.c:43-47`) ; l'APK ne charge que sur appui SEL / SEL+touche.
 - Undo/redo globaux : **HOME+REC** = undo, **HOME+GLO** = redo (à chaque tap) — **seule manip** undo/redo (dbl-REC / long-REC supprimés, remplacés par HOME+REC / HOME+GLO).
 

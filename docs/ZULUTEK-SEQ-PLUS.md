@@ -113,7 +113,7 @@ Deux niveaux de presets :
 - **Presets par partie, banc LIBRE** : page **PRESETS** (REC+OCT+ côté APK — validé Flying Zulu ; double-tap ERS historique) — **3 parties × 16 slots**
   (0 = BASSE, 1 = LEAD, 2 = DRUMS) ; SEL = slot, PRE = partie, K2 = SAVE direct, K3 = effacer.
   **LOAD** : uniquement sur **appui SEL** (confirme le slot affiché) ou **SEL maintenu + touche blanche** (load direct du slot) — à la rotation seule, rien ne se charge.
-  **Enregistrement** : **SEL maintenu + SAVE** = mode save → nommage : **SEL = lettre/chiffre** (A-Z 0-9), **Shift = espace**, **appui SEL = valide le nom** ; puis slot (SEL ou touche blanche 1..16), et **SAVE = confirme** → preset assigné au slot (**nom vide = nom aléatoire attribué**), procédure terminée (REC = annule). (validé Flying Zulu 2026-11-20 ~23:55Z). Le banc est libre : les 8 premiers slots contiennent les presets usine,
+  **Enregistrement** : **SEL maintenu + SAVE** = mode save → nommage : **SEL = lettre/chiffre** (A-Z 0-9), **Shift = espace**, **appui SEL = valide le nom** ; puis slot (SEL ou touche blanche 1..16), et **SAVE = confirme** → preset assigné au slot (**nom vide = nom aléatoire attribué**), procédure terminée (REC = annule). **Renommage** d'un preset existant : slot sélectionné + **SEL maintenu + EDIT** → nommage (SEL/Shift/appui SEL) → nom appliqué. (validé Flying Zulu 2026-11-20 ~23:55Z). Le banc est libre : les 8 premiers slots contiennent les presets usine,
   mais **n'importe quel slot peut être écrasé par un save user** (pas de séparation fixe
   8+8). `ztek_bank_load(part, slot)` charge le save user s'il existe, sinon le preset
   usine **de la partie** si le slot est dans la plage usine. Un preset = snapshot POD complet de l'état

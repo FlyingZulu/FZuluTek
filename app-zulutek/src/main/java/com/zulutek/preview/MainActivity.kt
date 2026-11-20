@@ -113,6 +113,7 @@ class MainActivity : Activity(), SurfaceListener {
                 prevPage = st.page
                 selHeld = false
                 st.psSaveArm = false
+                st.psRename = false
                 if (sirenModePersistent) {
                     sirenModePersistent = false
                     st.sirenOn = false
@@ -767,13 +768,19 @@ class MainActivity : Activity(), SurfaceListener {
     override fun onEncoderPress(i: Int) {
         if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40) ; page PRESETS 10 : appui SEL = LOAD (confirme le choix)
             if (recHeld) st.page = if (st.page == 2) 0 else 2
-            else if (st.page == 10 && st.psSaveArm) {   // mode enregistrement PRESETS : appui SEL = char suivante / valide le nom
+            else if (st.page == 10 && (st.psSaveArm || st.psRename)) {   // mode save/renommage PRESETS : appui SEL = char suivante / valide le nom
                 selHeld = false
                 if (st.psNameEdit) {
                     if (st.psNameCur >= st.psSaveName.length || st.psNameCur >= 11) {
                         st.psNameEdit = false
-                        st.psSaveName = st.psSaveName.trim()
-                        hint(if (st.psSaveName.isEmpty()) "nom auto" else "NOM " + st.psSaveName)
+                        val nm = st.psSaveName.trim().ifEmpty { randomPresetName() }
+                        val wasRename = st.psRename
+                        if (wasRename) {   // renommage : applique tout de suite
+                            ZtekAudio.presetRename(st.psPart, st.psSlot, nm)
+                            st.psName = nm; st.psUsed = true; st.psRename = false
+                        }
+                        st.psSaveName = nm
+                        hint("NOM " + nm + if (wasRename) " (renommé)" else "")
                     } else st.psNameCur++
                 } else {
                     st.psNameEdit = true
@@ -876,8 +883,8 @@ class MainActivity : Activity(), SurfaceListener {
                     }
                     3 -> { st.asgDepth = v; ZtekAudio.assign(st.sub, st.asgSrc, v) }
                 }
-                10 -> when (i) {   // PRESETS : LOAD uniquement par appui SEL ou SEL maintenu+touche — jamais à la rotation ; en mode save+nom, SEL édite le nom
-                    0 -> if (st.psSaveArm && st.psNameEdit) psSetChar(PS_CHARS[(v * (PS_CHARS.length - 0.001f)).toInt()])
+                10 -> when (i) {   // PRESETS : LOAD uniquement par appui SEL ou SEL maintenu+touche — jamais à la rotation ; en mode save/renommage+nom, SEL édite le nom
+                    0 -> if ((st.psSaveArm || st.psRename) && st.psNameEdit) psSetChar(PS_CHARS[(v * (PS_CHARS.length - 0.001f)).toInt()])
                          else st.psSlot = (v * (ZtekAudio.ZT_PSLOTS - 0.001f)).toInt().coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
                     1 -> st.psPart = (v * 2.999f).toInt().coerceIn(0, ZtekAudio.ZT_NPARTS - 1)
                     4 -> {
@@ -1457,6 +1464,15 @@ class MainActivity : Activity(), SurfaceListener {
                     selHeld = false
                     lcd.invalidate()
                 }
+                else if (st.page == 10 && label == "EDIT" && selHeld && st.psUsed) {   // PRESETS : SEL maintenu + EDIT = RENOMMAGE du slot sélectionné
+                    st.psRename = true
+                    st.psNameEdit = true
+                    st.psNameCur = 0
+                    st.psSaveName = st.psName
+                    selHeld = false
+                    hint("RENOMME: SEL=lettre Shift=espace appui SEL=ok")
+                    lcd.invalidate()
+                }
                 return
             }
             2, 3 -> { // SNAP / KIT : REC+touche = store (géré dans onWhiteKey) ; undo/redo = HOME+REC / HOME+GLO uniquement
@@ -1763,7 +1779,7 @@ class MainActivity : Activity(), SurfaceListener {
         val bi = SurfaceView.BLACK_NOTES.indexOf(note)
         if (bi == 10) {   // Shift (noire 10) global ; page OPTIONS : reset ; page PRESETS en mode save : espace dans le nom
             shiftHeld = down
-            if (down && st.page == 10 && st.psSaveArm && st.psNameEdit) psSetChar(' ')
+            if (down && st.page == 10 && (st.psSaveArm || st.psRename) && st.psNameEdit) psSetChar(' ')
             if (st.page == 16) {
                 if (down) { shiftLongFired = false; handler.postDelayed(shiftLongRunnable, 600) }
                 else {
