@@ -757,7 +757,7 @@ index ac32fc8..36038b9 100644
  #define PRESETS_PER_OBJ 8
  typedef struct {
 -    char name[15];
-+    char name[12];                             /* patch 0010 fix: idem, noms <= 11 cars */
++    char name[8];                              /* patch 0010 fix: preset_t 484->480 o (8x=3840 <= PLAT_STORE_MAX), noms <= 7 cars */
      uint8_t used;
      settings_t s;
  } preset_t;
