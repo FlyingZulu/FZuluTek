@@ -20,6 +20,9 @@ runs), so the smartphone preview sounds the same as the FM-1:
 
 Compile note: `FX_HOST` is defined so `fx.c`'s big buffers stay out of the FM-1's `.pool`
 section (plain heap on Android).
-- `midi_looper.c/h` — the zuluTek MIDI looper (16 slots, notes + knob automation,
-  bar-quantized), ported from the ZuluFx app's MIDI loops (FlyingZulu/fm1-Zulu,
-  GPL-3.0). Fixed-size state ~16 KB, no libm. Design: `docs/ZULUTEK-MIDI-LOOPER.md`.
+- `drum_engine.c/h` — the drum machine (8 pads 808/909-style + 16-step seq), vendored from
+  PR #5 (`app-zulutek-drums`, branche `vibe/zulutek-drum-analog-c9ef18`), C99, GPL-3.0 zuluTek.
+- `midi_looper.c/h` — the zuluTek **Loop** (16 slots, notes + knob automation,
+  bar-quantized; vendored file keeps its upstream name), ported from the ZuluFx app
+  (FlyingZulu/fm1-Zulu, GPL-3.0). Fixed-size state ~16 KB, no libm.
+  Design: `docs/ZULUTEK-LOOP.md`.

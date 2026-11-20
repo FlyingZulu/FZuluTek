@@ -64,6 +64,16 @@ typedef struct {
     int playing;
     float clk;               /* the master position, in 1/64 bar */
     uint32_t rng;
+    /* choke (style Koala) par slot, hors ml_sp_t (la baie garde ses 7 params/slot) :
+     * groupe 0 = off, 1..6 = groupe. Le premier slot assigné à un groupe en est le master ;
+     * en mode leader, seul le master arrête les autres membres quand il démarre,
+     * sinon (leader off) tout membre arrête les autres (Koala classique). */
+    uint8_t  choke[ML_NSLOTS];
+    uint32_t choke_order[ML_NSLOTS];
+    uint32_t choke_tick;
+    int8_t   lead[7];        /* leader explicite par groupe (touche POLY), -1 = auto (1er assigné) */
+    uint8_t  leader;         /* 1 = mode hybride (leader), 0 = choke mutuel classique */
+    uint8_t  eco;            /* MODE ECO : resample en µ-law + paliers lo-fi, ring 32 kHz, capacité /2 */
     /* resample (reloop): record the monitored slots' output into an audio ring */
     uint16_t monmask;        /* bit i = slot i is monitored during a resample rec */
     int rs_rec, rs_dst;      /* resampling now, into slot rs_dst */
@@ -89,6 +99,15 @@ void ml_set_cb(ml_t *m, void *ctx,
                void (*param)(void *, int, int, float));
 
 void ml_toggle(ml_t *m, int slot);          /* play/stop a slot */
+void ml_set_choke(ml_t *m, int slot, int grp);   /* grp 0..6 ; 1er assigné = master */
+int  ml_get_choke(const ml_t *m, int slot);
+int  ml_choke_master(const ml_t *m, int grp);    /* slot master du groupe, -1 si aucun */
+void ml_set_leader(ml_t *m, int on);             /* 1 hybride (leader), 0 mutuel (Koala) */
+int  ml_get_leader(const ml_t *m);
+void ml_set_leader_slot(ml_t *m, int slot, int on);  /* POLY : on=1 désigne leader, on=0 le désassigne */
+void ml_clear_leader(ml_t *m, int grp);              /* POLY sans pad : mode leader désactivé pour le groupe */
+void ml_set_eco(ml_t *m, int on);                    /* MODE ECO : bitrate du ring resample au plus bas */
+int  ml_get_eco(const ml_t *m);
 void ml_set_len(ml_t *m, int slot, int len64);  /* 0 = auto at rec stop, else 1..2048 */
 void ml_resize(ml_t *m, int slot, int newlen);  /* shrink: truncate; extend: clone the original loop */
 void ml_set_sp(ml_t *m, int slot, int idx, float v);   /* ML_SP_* */

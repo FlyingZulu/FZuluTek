@@ -133,23 +133,92 @@ class MainActivity : Activity(), SurfaceListener {
                         (if (ZtekAudio.presetUsed(st.psPart, st.psSlot)) ZtekAudio.presetSlotName(st.psPart, st.psSlot) else "")
                 }
             }
-            if (st.page == 11) {  // MIX : niveaux/aux/gain (page 11 après agglomération seq-plus + looper)
-                st.mixGain = ZtekAudio.mixGetGain()
-                for (i in 0 until 16) {
-                    st.slotVol[i] = ZtekAudio.loopGetSp(i, ZtekAudio.ML_SP_VOL)
-                    st.slotAux[i] = ZtekAudio.loopGetSp(i, 5) > 0.5f   // ML_SP_FX
+            if (st.page == 15) {   // page DRUMS : grille 16 steps + step courant du séquenceur
+                for (p in 0 until ZtekAudio.DR_NPADS)
+                    for (s2 in 0 until 16) st.drumPat[p * 16 + s2] = ZtekAudio.drumGetPat(p, s2) == 1
+                st.drumStep = ZtekAudio.drumStep()
+            }
+            if (st.page == 1 || st.page == 15 || st.page == 16) {   // choke des séquenceurs (LOOP + DRUMS) + OPTIONS
+                for (i in 0 until 16) st.loopChoke[i] = ZtekAudio.loopGetChoke(i)
+                st.loopLeader = ZtekAudio.loopGetLeader()
+                for (p in 0 until ZtekAudio.DR_NPADS) st.drumChoke[p] = ZtekAudio.drumGetChoke(p)
+                st.drumLeader = ZtekAudio.drumGetLeader()
+                java.util.Arrays.fill(st.loopMaster, false)
+                java.util.Arrays.fill(st.drumMaster, false)
+                for (g in 1..6) {
+                    val ml = ZtekAudio.loopChokeMaster(g)
+                    if (ml >= 0) st.loopMaster[ml] = true
+                    val md = ZtekAudio.drumChokeMaster(g)
+                    if (md >= 0) st.drumMaster[md] = true
                 }
             }
-            if (st.page == 12) {  // PATCH : état des connexions + compatibilité depuis le moteur
-                for (r in 0 until 4) for (d in 0 until 3) {
-                    st.patchGrid[r * 3 + d] = ZtekAudio.patchGet(r, d) == 1
-                    st.patchOk[r * 3 + d] = ZtekAudio.patchCompat(r, d) == 1
+            if (st.chokeWin && now > st.chokeWinUntil) {   // 1,5 s sans action = la fenêtre choke se ferme
+                chokeWinClose()
+                lcd.invalidate()
+            }
+            if (st.page == 11) {   // MIX 4 tranches : rafraîchit l'état des tranches + câbles baie + VU master
+                st.mixGain = ZtekAudio.mixGetGain()
+                st.masterPeak = ZtekAudio.masterPeak()
+                val words = Array(ZtekAudio.NSRC_ACTIVE) { ZtekAudio.assignWords(ZtekAudio.SRC_IDX[it]) }
+                // départs aux libres du master (AUX1/AUX2, ports OUT 158/159) : nb de câbles
+                for (a in 0..1) {
+                    var n = 0
+                    for (k in words.indices) if (ZtekAudio.assignBit(words[k], ZtekAudio.MOD_OFF[6] + 3 + a)) n++
+                    st.auxN[a] = n
                 }
+                for (s in 0 until 4) {
+                    st.stripCut[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_CUT)
+                    st.stripFmode[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_FMODE).toInt().coerceIn(0, 2)
+                    st.stripVol[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_VOL)
+                    st.stripMut[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_MUT) > 0.5f
+                    st.stripAuxPow[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_AUX_POW)
+                    st.stripAuxLoop[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_AUX_LOOP)
+                }
+            }
+            if (st.page == 12) {   // PATCH v3 : rebâtit toutes les vues depuis les bitsets du moteur
+                val idx = ZtekAudio.SRC_IDX
+                val words = Array(idx.size) { ZtekAudio.assignWords(idx[it]) }
+                fun bit(k: Int, d: Int) = ZtekAudio.assignBit(words[k], d)   // k = position dans SRC_IDX
+                val srcPos = idx.indexOf(st.srcBox).coerceAtLeast(0)
+                for (k in idx.indices) {
+                    var n = 0
+                    for (d in 0 until ZtekAudio.NDST) if (bit(k, d)) n++
+                    st.srcOut[idx[k]] = n
+                }
+                for (m in 0 until ZtekAudio.NMOD) {
+                    var n = 0
+                    for (d in ZtekAudio.MOD_OFF[m] until ZtekAudio.MOD_OFF[m + 1]) {
+                        for (k in idx.indices) if (bit(k, d)) { n++; break }
+                    }
+                    st.modIn[m] = n
+                }
+                st.inList.clear(); st.inOk.clear(); st.inOn.clear()
+                for (m in 0 until ZtekAudio.NMOD) {
+                    st.inList.add(-1 - m); st.inOk.add(true); st.inOn.add(st.modIn[m] > 0)
+                    if (st.expanded[m] || st.modIn[m] > 0)   // module replié = un seul slot
+                        for (d in ZtekAudio.MOD_OFF[m] until ZtekAudio.MOD_OFF[m + 1]) {
+                            st.inList.add(d)
+                            st.inOk.add(ZtekAudio.patchCompat(st.srcBox, d) == 1)
+                            st.inOn.add(bit(srcPos, d))
+                        }
+                }
+                if (st.inList.isNotEmpty()) st.inSel = st.inSel.coerceIn(0, st.inList.size - 1)
+                st.srcCables.clear()
+                for (d in 0 until ZtekAudio.NDST) if (bit(srcPos, d)) st.srcCables.add(d)
+                st.modRows.clear()
+                for (d in ZtekAudio.MOD_OFF[st.modBox] until ZtekAudio.MOD_OFF[st.modBox + 1])
+                    for (k in idx.indices)
+                        if (bit(k, d)) st.modRows.add(idx[k] to d)
+                st.flatRows.clear()
+                for (k in idx.indices)
+                    for (d in 0 until ZtekAudio.NDST) if (bit(k, d)) st.flatRows.add(idx[k] to d)
+                st.rowSel = st.rowSel.coerceIn(0, ((if (st.patchView == 2) st.modRows.size else st.flatRows.size) - 1).coerceAtLeast(0))
+                st.listScroll = st.listScroll.coerceIn(0, (st.srcCables.size - 5).coerceAtLeast(0))
             }
             val peers = ZuluLink.peersSnapshot()
             st.linkPeers = peers.count { !it.lost }
             st.linkName = peers.firstOrNull { !it.lost }?.name?.take(6)?.let { ":$it" } ?: ""
-            lcd.invalidate()
+            if (!st.ecoOn || ++tickN % 4 == 0) lcd.invalidate()   // OPTIONS > ECO : LCD throttlé (~1 s)
             handler.postDelayed(this, 250)
         }
     }
@@ -168,6 +237,14 @@ class MainActivity : Activity(), SurfaceListener {
         super.onCreate(savedInstanceState)
         ZtekAudio.start()
         ZtekAudio.initPrefs(this)
+        // OPTIONS persistées (OBJ_OPTIONS côté FM-1) : ECO + CHOKE LDR
+        st.ecoOn = optsPrefs.getBoolean("eco", false)
+        ZtekAudio.setEco(if (st.ecoOn) 1 else 0)
+        val ldr = optsPrefs.getBoolean("ldr", true)
+        st.loopLeader = if (ldr) 1 else 0
+        st.drumLeader = if (ldr) 1 else 0
+        ZtekAudio.loopSetLeader(st.loopLeader)
+        ZtekAudio.drumSetLeader(st.drumLeader)
         ZtekAudio.setEngine(0)
         ZtekAudio.setBpm(bpm)
         ZtekAudio.setRoot(root)
@@ -206,15 +283,25 @@ class MainActivity : Activity(), SurfaceListener {
             val by = ev.y / s / LcdView.H
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    if (st.page == 12) {         // baie de patch : tap cellule = toggle connexion
-                        val r = ((by * LcdView.H - 52f) / 44f).toInt().coerceIn(0, 3)
-                        val d = ((bx * LcdView.W - 96f) / 46f).toInt().coerceIn(0, 2)
-                        if (by * LcdView.H >= 52f && by * LcdView.H <= 52f + 4 * 44f) {
-                            st.patchRow = r; st.patchCol = d
-                            togglePatch(r, d)
+                    if (st.page == 12) {          // baie v3 : tap = raccourci tactile (= PLAY sur la ligne)
+                        val py = by * LcdView.H
+                        when (st.patchView) {
+                            0 -> { val i = st.winFirst(st.boxSel, st.patchBoxes, 11) + ((py - 26f) / 17f).toInt()
+                                   if (i in 0 until st.patchBoxes) { st.boxSel = i; patchPlay() } }
+                            1 -> { if (py < 26f + 6 * 17f) {
+                                       val i = st.winFirst(st.inSel, st.inList.size, 6) + ((py - 26f) / 17f).toInt()
+                                       if (i in st.inList.indices) { st.inSel = i; patchPlay() }
+                                   } else {
+                                       val i = st.listScroll + ((py - 144f) / 17f).toInt()
+                                       if (i in st.srcCables.indices) ZtekAudio.assignSet(st.srcBox, st.srcCables[i], 0)
+                                   } }
+                            2 -> { val i = st.winFirst(st.rowSel, st.modRows.size, 11) + ((py - 26f) / 17f).toInt()
+                                   if (i in st.modRows.indices) { st.rowSel = i; patchPlay() } }
+                            else -> { val i = st.winFirst(st.rowSel, st.flatRows.size, 11) + ((py - 26f) / 17f).toInt()
+                                      if (i in st.flatRows.indices) { st.rowSel = i; patchPlay() } }
                         }
                         lcd.invalidate()
-                    } else if (st.page == 4) {   // page XY : le LCD tactile devient le pad
+                    } else if (st.page == 4) {   // page XY : le LCD tactile devient le pad   // page XY : le LCD tactile devient le pad
                         val now = System.currentTimeMillis()
                         if (now - lastLcdTap < 350) {   // double-tap = HOLD/MOM
                             st.xyHold = !st.xyHold
@@ -333,10 +420,15 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.xySet(0, 0f, 0f)
                 lcd.invalidate()
             }
-            "REC" -> when (st.page) { 1, in 6..14 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
+            "REC" -> when (st.page) { 1, in 6..16 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
             "DLY" -> {
                 val old = st.page
-                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 8; 8 -> 9; 9 -> 10; 10 -> 11; 11 -> 12; 12 -> 13; 13 -> 14; 14 -> 0; else -> old }
+                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 8; 8 -> 9; 9 -> 10; 10 -> 11; 11 -> 12; 12 -> 13; 13 -> 14; 14 -> 15; 15 -> 16; 16 -> 0; else -> old }
+                if (st.page == 12 && old == 11) {   // depuis MIX, la baie s'ouvre sur la boîte LOOP
+                    st.patchView = 2
+                    st.modBox = ZtekAudio.MOD_NAME.indexOf("LOOP")
+                    st.rowSel = 0
+                }
                 if (st.page != old) lcd.invalidate()
             }
             "REV" -> if (st.page == 1) {
@@ -351,12 +443,28 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.siren(if (st.sirenOn) 1 else 0, 0.3f, 0.5f, 0.0f)
                 lcd.invalidate()
             }
-        }
+            "ERS" -> {   // long-ERS : raccourci page DRUMS (réglages choke des pads) depuis MAIN
+                if (st.page == 0) { st.page = 15; lcd.invalidate() }
+                else if (st.page == 15) { st.page = 0; lcd.invalidate() }
+            }
+            "SCL" -> {   // long-SCL : page OPTIONS (9) depuis MAIN (ECO, CHOKE LDR)
+                if (st.page == 0) { st.page = 16; lcd.invalidate() }
+                else if (st.page == 16) { st.page = 0; lcd.invalidate() }
+            }        }
     }
 
     // ---- encoders ----
+    override fun onEncoderPress(i: Int) {
+        if (i == 0) {   // appui SEL = page MIX (bible : « page MIX (SEL) ») — raccourci dédié au mixage
+            st.page = if (st.page == 11) 0 else 11
+            if (st.page == 11) st.patchView = 0
+            lcd.invalidate()
+        }
+    }
     override fun onEncoder(i: Int, v: Float) {
         st.pop(i)
+        val dv = v - encPrev[i]
+        encPrev[i] = v
         if (st.page in 6..10) {
             when (st.page) {
                 6 -> when (i) {
@@ -479,20 +587,38 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
             return
         }
-        if (st.page == 12) {                    // baie de patch : SEL=rangée(source) ALG=colonne(dest)
-            when (i) {
-                0 -> st.patchRow = (v * 3.999f).toInt().coerceIn(0, 3)
-                2 -> st.patchCol = (v * 2.999f).toInt().coerceIn(0, 2)
+        if (st.page == 12) {                     // baie v3 hiérarchique, 100% encodeurs (FM-1)
+            when (st.patchView) {
+                0 -> if (i == 0 || i == 2)         // SELECT/ALGO = boîte
+                    st.boxSel = (v * (st.patchBoxes - 0.001f)).toInt().coerceIn(0, st.patchBoxes - 1)
+                1 -> when (i) {
+                    2 -> if (st.inList.isNotEmpty())   // ALGO = curseur IN (liste groupée par module)
+                        st.inSel = (v * (st.inList.size - 0.001f)).toInt().coerceIn(0, st.inList.size - 1)
+                    0 -> st.listScroll = (v * ((st.srcCables.size - 5).coerceAtLeast(0) + 0.001f)).toInt()
+                            .coerceIn(0, (st.srcCables.size - 5).coerceAtLeast(0))   // SELECT = scroll câbles
+                    3 -> if (kotlin.math.abs(dv) > 0.03f) patchToggleExpand()       // K1 = plier/déplier
+                }
+                2, 3 -> {
+                    val n = if (st.patchView == 2) st.modRows.size else st.flatRows.size
+                    if ((i == 0 || i == 2) && n > 0)
+                        st.rowSel = (v * (n - 0.001f)).toInt().coerceIn(0, n - 1)
+                }
             }
             lcd.invalidate()
             return
         }
-        if (st.page == 11) {                    // MIX : SEL=slot K1=vol PRE=aux>POW ALG=gain bus
+        if (st.page == 11) {                     // MIX 4 tranches : SEL=tranche(4=master) K1=vol/bus K2=mut K3=filtre K4=cut PRE=auxP ALG=auxL
             when (i) {
-                0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
-                3 -> { st.slotVol[st.selSlot] = v; ZtekAudio.mixSetVol(st.selSlot, v) }
-                1 -> { val on = if (v > 0.5f) 1 else 0; st.slotAux[st.selSlot] = on == 1; ZtekAudio.mixSetAux(st.selSlot, on) }
-                2 -> { st.mixGain = v * 2f; ZtekAudio.mixSetGain(st.mixGain) }
+                0 -> st.mixStrip = (v * 4.999f).toInt().coerceIn(0, 4)
+                3 -> if (st.mixStrip == 4) { st.mixGain = v * 2f; ZtekAudio.mixSetGain(st.mixGain) }
+                     else { st.stripVol[st.mixStrip] = v; ZtekAudio.mixSetStrip(st.mixStrip, ZtekAudio.MIX_VOL, v) }
+                4 -> if (st.mixStrip < 4) { val m = v > 0.5f; st.stripMut[st.mixStrip] = m
+                     ZtekAudio.mixSetStrip(st.mixStrip, ZtekAudio.MIX_MUT, if (m) 1f else 0f) }
+                5 -> if (st.mixStrip < 4) { val f = (v * 2.999f).toInt().coerceIn(0, 2); st.stripFmode[st.mixStrip] = f
+                     ZtekAudio.mixSetStrip(st.mixStrip, ZtekAudio.MIX_FMODE, f.toFloat()) }
+                6 -> if (st.mixStrip < 4) { st.stripCut[st.mixStrip] = v; ZtekAudio.mixSetStrip(st.mixStrip, ZtekAudio.MIX_CUT, v) }
+                1 -> if (st.mixStrip < 4) { st.stripAuxPow[st.mixStrip] = v; ZtekAudio.mixSetStrip(st.mixStrip, ZtekAudio.MIX_AUX_POW, v) }
+                2 -> if (st.mixStrip < 4) { st.stripAuxLoop[st.mixStrip] = v; ZtekAudio.mixSetStrip(st.mixStrip, ZtekAudio.MIX_AUX_LOOP, v) }
             }
             lcd.invalidate()
             return
@@ -509,6 +635,21 @@ class MainActivity : Activity(), SurfaceListener {
             return
         }
         if (st.page == 1) {                     // page LOOP : SEL=slot K1..K4=PITCH/POS/MODE/MUT PRE=VOL ALG=SRC
+            if (st.loopView == 1) {             // sous-vue CHK : fenêtre choke ouverte -> SEL = groupe du pad édité
+                if (st.chokeWin) {
+                    if (i == 0) chokeSetGroup((v * 6.999f).toInt().coerceIn(0, 6))
+                    else chokeWinClose()   // toute autre action quitte la fenêtre
+                    lcd.invalidate()
+                    return
+                }
+                when (i) {
+                    0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
+                    3 -> { val g = (v * 6.999f).toInt().coerceIn(0, 6)
+                           ZtekAudio.loopSetChoke(st.selSlot, g); st.loopChoke[st.selSlot] = g }
+                }
+                lcd.invalidate()
+                return
+            }
             when (i) {
                 0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
                 3 -> ZtekAudio.loopSetSp(st.selSlot, 0, v)   // PITCH (v*24-12 côté affichage)
@@ -517,6 +658,53 @@ class MainActivity : Activity(), SurfaceListener {
                 6 -> ZtekAudio.loopSetSp(st.selSlot, 3, v)   // MUT
                 1 -> ZtekAudio.loopSetSp(st.selSlot, 6, v)   // VOL
                 2 -> ZtekAudio.loopSetSp(st.selSlot, 4, (v * 6.999f).toInt().toFloat())  // SRC
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 15) {                     // page DRUMS : SEL=pad PRE=niveau ALG=step K1=step on/off K2=swing K3=clear K4=rand
+            if (st.chokeWin) {                  // fenêtre choke ouverte -> SEL = groupe du pad édité
+                if (i == 0) chokeSetGroup((v * 6.999f).toInt().coerceIn(0, 6))
+                else chokeWinClose()
+                lcd.invalidate()
+                return
+            }
+            when (i) {
+                0 -> st.drumPad = (v * (ZtekAudio.DR_NPADS - 0.001f)).toInt().coerceIn(0, ZtekAudio.DR_NPADS - 1)
+                1 -> { st.drumLvl[st.drumPad] = v; ZtekAudio.drumLevel(st.drumPad, v) }          // PRE = niveau pad
+                2 -> st.drumStepCur = (v * 15.999f).toInt().coerceIn(0, 15)                        // ALG = curseur step
+                3 -> {                                                                             // K1 = toggle step
+                    val s2 = st.drumStepCur
+                    val on = !st.drumPat[st.drumPad * 16 + s2]
+                    ZtekAudio.drumPat(st.drumPad, s2, if (on) 1 else 0)
+                    st.drumPat[st.drumPad * 16 + s2] = on
+                }
+                4 -> { st.drumSwing = v * 0.5f; ZtekAudio.drumSwing(st.drumSwing) }                 // K2 = swing
+                5 -> { ZtekAudio.drumClear(st.drumPad)                                             // K3 = clear pad
+                       for (s2 in 0 until 16) st.drumPat[st.drumPad * 16 + s2] = false }
+                6 -> { ZtekAudio.drumRand(st.drumPad, 0.4f, (Math.random() * 1e9).toInt())          // K4 = rand pad
+                       for (s2 in 0 until 16) st.drumPat[st.drumPad * 16 + s2] = ZtekAudio.drumGetPat(st.drumPad, s2) == 1 }
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 16) {                     // page OPTIONS : SEL=ligne K1=ON/OFF (ECO, CHOKE LDR)
+            when (i) {
+                0 -> st.optRow = (v * 1.999f).toInt().coerceIn(0, 1)
+                3 -> {
+                    if (st.optRow == 0) {
+                        st.ecoOn = !st.ecoOn
+                        ZtekAudio.setEco(if (st.ecoOn) 1 else 0)
+                        optsPrefs.edit().putBoolean("eco", st.ecoOn).apply()
+                    } else {
+                        val on = !(st.loopLeader == 1 && st.drumLeader == 1)
+                        ZtekAudio.loopSetLeader(if (on) 1 else 0)
+                        ZtekAudio.drumSetLeader(if (on) 1 else 0)
+                        st.loopLeader = if (on) 1 else 0
+                        st.drumLeader = if (on) 1 else 0
+                        optsPrefs.edit().putBoolean("ldr", on).apply()
+                    }
+                }
             }
             lcd.invalidate()
             return
@@ -560,6 +748,90 @@ class MainActivity : Activity(), SurfaceListener {
     private var lastSlotTapTime = 0L
     private var stLoopLen = 0
     private val xyT = intArrayOf(1, 2)   // cibles X/Y de la page XY
+    private val encPrev = FloatArray(7)     // delta encodeurs (K1 = plier/déplier en baie v3)
+    private var tickN = 0
+    private val optsPrefs by lazy { getSharedPreferences("ztek_opts", android.content.Context.MODE_PRIVATE) }
+    // touches noires MONO (9e) / POLY (10e, juste à côté) : manip choke des séquenceurs
+    private val KEY_MONO = SurfaceView.BLACK_NOTES[8]
+    private val KEY_POLY = SurfaceView.BLACK_NOTES[9]
+
+    private fun chokeCtx() = st.page == 15 || (st.page == 1 && st.loopView == 1)
+
+    private fun chokeToggleMono() {
+        val now = System.currentTimeMillis()
+        if (st.page == 15) {
+            val g = ZtekAudio.drumGetChoke(st.drumPad)
+            if (g == 0) {
+                ZtekAudio.drumSetChoke(st.drumPad, 1); st.drumChoke[st.drumPad] = 1
+                st.chokeWin = true; st.chokePad = st.drumPad; st.chokeWinUntil = now + 1500
+            } else {
+                ZtekAudio.drumSetChoke(st.drumPad, 0); st.drumChoke[st.drumPad] = 0
+                if (st.chokePad == st.drumPad) chokeWinClose()
+            }
+        } else {
+            val g = ZtekAudio.loopGetChoke(st.selSlot)
+            if (g == 0) {
+                ZtekAudio.loopSetChoke(st.selSlot, 1); st.loopChoke[st.selSlot] = 1
+                st.chokeWin = true; st.chokePad = st.selSlot; st.chokeWinUntil = now + 1500
+            } else {
+                ZtekAudio.loopSetChoke(st.selSlot, 0); st.loopChoke[st.selSlot] = 0
+                if (st.chokePad == st.selSlot) chokeWinClose()
+            }
+        }
+    }
+
+    private fun chokeSetGroup(g: Int) {
+        if (st.chokePad < 0) return
+        if (st.page == 15) { ZtekAudio.drumSetChoke(st.chokePad, g); st.drumChoke[st.chokePad] = g }
+        else { ZtekAudio.loopSetChoke(st.chokePad, g); st.loopChoke[st.chokePad] = g }
+        if (g == 0) chokeWinClose()
+        else st.chokeWinUntil = System.currentTimeMillis() + 1500
+    }
+
+    private fun chokeGroup(): Int =
+        if (st.page == 15) st.drumChoke[st.chokePad.coerceIn(0, ZtekAudio.DR_NPADS - 1)]
+        else st.loopChoke[st.chokePad.coerceIn(0, 15)]
+
+    // ferme la fenêtre choke ; si POLY était armé sans sélection de pad = mode leader désactivé
+    private fun chokeWinClose() {
+        if (!st.chokeWin) return
+        if (st.polyArmed) {
+            val g = chokeGroup()
+            if (st.page == 15) ZtekAudio.drumClearLeader(g) else ZtekAudio.loopClearLeader(g)
+            st.polyArmed = false
+        }
+        st.chokeWin = false
+    }
+
+    // POLY (noire 10) : arme la désignation du leader ; re-POLY = mode leader désactivé
+    private fun chokePoly() {
+        if (!st.chokeWin || st.chokePad < 0) return
+        if (st.polyArmed) {
+            st.polyArmed = false
+            val g = chokeGroup()
+            if (st.page == 15) ZtekAudio.drumClearLeader(g) else ZtekAudio.loopClearLeader(g)
+        } else {
+            st.polyArmed = true   // le prochain pad tapé deviendra leader (POLY + pad)
+            st.chokeWinUntil = System.currentTimeMillis() + 1500
+        }
+    }
+
+    // POLY armé + tap sur un pad : ce pad devient leader (re-tap sur le leader = plus leader)
+    private fun chokePickLeader(idx: Int) {
+        if (st.page == 15) {
+            val g2 = st.drumChoke[idx.coerceIn(0, ZtekAudio.DR_NPADS - 1)]
+            val isLead = ZtekAudio.drumChokeMaster(g2) == idx
+            ZtekAudio.drumSetLeaderPad(idx, if (isLead) 0 else 1)
+            st.drumPad = idx
+        } else {
+            val g2 = st.loopChoke[idx.coerceIn(0, 15)]
+            val isLead = ZtekAudio.loopChokeMaster(g2) == idx
+            ZtekAudio.loopSetLeaderSlot(idx, if (isLead) 0 else 1)
+            st.selSlot = idx
+        }
+        st.polyArmed = false
+        st.chokeWin = false   // la manip est terminée
+    }
 
     override fun onButton(i: Int, down: Boolean) {
         val label = SurfaceView.BTN_LABELS[i]
@@ -617,6 +889,7 @@ class MainActivity : Activity(), SurfaceListener {
                         val m = (ZtekAudio.loopGetSp(st.selSlot, ZtekAudio.ML_SP_MODE).toInt() + 1) % 4   // 0 NORM 1 REV 2 PING-PONG 3 RANDOM (pack SEQ+)
                         ZtekAudio.loopSetSp(st.selSlot, ZtekAudio.ML_SP_MODE, m.toFloat())
                     }
+                    "SCL" -> st.loopView = 1 - st.loopView   // sous-vue CHK (choke des slots)
                 }
                 syncSlots(); lcd.invalidate(); return
             }
@@ -632,9 +905,37 @@ class MainActivity : Activity(), SurfaceListener {
                 if (label == "REC") { st.page = 0; ZtekAudio.punch(0, 0, 0f, 0f, 0f); lcd.invalidate() }
                 return
             }
-            6, 7 -> { // MIX / PATCH : PLAY bascule la connexion au curseur (page 7)
-                if (label == "PLAY" && st.page == 12) togglePatch(st.patchRow, st.patchCol)
+            15 -> { // DRUMS : PLAY=auditionne le pad, REC=quitte
+                when (label) {
+                    "PLAY" -> ZtekAudio.drumHit(st.drumPad)
+                    "REC" -> { st.page = 0; lcd.invalidate() }
+                }
                 return
+            }
+            16 -> { // OPTIONS : REC=quitte
+                if (label == "REC") { st.page = 0; lcd.invalidate() }
+                return
+            }
+            11 -> { // MIX : PLAY=on/off slot, REC=rec arm, ERS=erase
+                when (label) {
+                    "PLAY" -> ZtekAudio.loopToggle(st.selSlot)
+                    "REC" -> {
+                        val s = st.selSlot
+                        if (ZtekAudio.loopSlotRec(s)) { ZtekAudio.loopRecStop(s); st.recArmed = false }
+                        else { ZtekAudio.loopRecStart(s, 1); st.recArmed = true }
+                    }
+                    "ERS" -> { ZtekAudio.loopErase(st.selSlot); st.recArmed = false }
+                }
+                syncSlots(); lcd.invalidate(); return
+            }
+            12 -> { // PATCH v3 : PLAY=action, REC=remonte, MUT=liste, ERS=plier
+                when (label) {
+                    "PLAY" -> patchPlay()
+                    "REC" -> if (st.patchView == 0) { st.page = 11 } else st.patchView = 0
+                    "MUT" -> st.patchView = if (st.patchView == 3) 0 else 3
+                    "ERS" -> patchToggleExpand()
+                }
+                lcd.invalidate(); return
             }
         }
         // double-taps en page MAIN : REC = undo, DRV = page SNAP
@@ -783,6 +1084,37 @@ class MainActivity : Activity(), SurfaceListener {
     // ---- white keys = looper slots (SNAP/KIT : load/store ; SMP : PLAY) ----
     override fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean) {
         if (st.smpPage && down && !longPress) { ZtekAudio.smpPlay(1); return }
+        if (st.chokeWin && chokeCtx() && down && !longPress) {
+            // fenêtre choke ouverte : POLY armé -> ce pad devient leader (manip terminée) ;
+            // sinon tap = assigne le pad/slot au groupe courant (multi-pads d'un coup)
+            if (st.polyArmed) { chokePickLeader(slot); lcd.invalidate(); surface.invalidate(); return }
+            val g = chokeGroup()
+            if (st.page == 15 && slot < ZtekAudio.DR_NPADS) {
+                if (st.drumChoke[slot] != g) {
+                    ZtekAudio.drumSetChoke(slot, g); st.drumChoke[slot] = g
+                    st.chokeWinUntil = System.currentTimeMillis() + 1500
+                }
+                st.drumPad = slot
+            } else if (st.page == 1) {
+                if (st.loopChoke[slot] != g) {
+                    ZtekAudio.loopSetChoke(slot, g); st.loopChoke[slot] = g
+                    st.chokeWinUntil = System.currentTimeMillis() + 1500
+                }
+                st.selSlot = slot
+            }
+            lcd.invalidate(); surface.invalidate()
+            return
+        }
+        if (st.chokeWin) chokeWinClose()   // touche blanche = quitte la fenêtre choke
+        st.selSlot = slot
+        if (st.page == 15) {                     // page DRUMS : touche blanche = pad (sélection + hit)
+            if (down && !longPress && slot < ZtekAudio.DR_NPADS) {
+                st.drumPad = slot
+                ZtekAudio.drumHit(slot)
+            }
+            lcd.invalidate()
+            return
+        }
         if (st.page == 14 && down && !longPress) { ZtekAudio.macroApply(slot); hint("MACRO ${slot + 1}"); return }
         st.selSlot = slot
         if (st.page == 5) {                     // PoW! momentané tant que la touche est maintenue
@@ -821,8 +1153,19 @@ class MainActivity : Activity(), SurfaceListener {
         surface.invalidate()
     }
 
-    // ---- black keys = notes ----
+    // ---- black keys = notes ; MONO (9e) / POLY (10e) = manip choke sur DRUMS / LOOP-CHK ----
     override fun onBlackKey(note: Int, down: Boolean) {
+        if (down && chokeCtx() && note == KEY_MONO) {   // MONO = bascule le pad/slot en mode choke
+            chokeToggleMono()
+            lcd.invalidate(); surface.invalidate()
+            return
+        }
+        if (down && chokeCtx() && note == KEY_POLY) {   // POLY arme la désignation du leader (POLY + pad)
+            chokePoly()
+            lcd.invalidate(); surface.invalidate()
+            return
+        }
+        if (down && st.chokeWin) chokeWinClose()        // toute autre touche noire quitte la fenêtre
         if (down) {
             st.curNote = note
             ZtekAudio.noteOn(note, 100, 0, 0)
@@ -833,6 +1176,7 @@ class MainActivity : Activity(), SurfaceListener {
         lcd.invalidate()
         surface.invalidate()
     }
+
 
     private fun tapTempo() {
         val now = System.currentTimeMillis()
@@ -861,6 +1205,50 @@ class MainActivity : Activity(), SurfaceListener {
         ZtekAudio.patchSet(r, d, on)
         st.patchGrid[r * 3 + d] = on == 1
         st.pop(9)
+    }
+
+    /* baie de patch v3 : action PLAY selon la vue (ouvrir boîte / connecter / débrancher) */
+    private fun patchPlay() {
+        when (st.patchView) {
+            0 -> {
+                if (st.boxSel < ZtekAudio.NSRC_ACTIVE) {
+                    st.srcBox = ZtekAudio.SRC_IDX[st.boxSel]; st.patchView = 1; st.inSel = 0; st.listScroll = 0
+                } else {
+                    st.modBox = st.boxSel - ZtekAudio.NSRC_ACTIVE; st.patchView = 2; st.rowSel = 0
+                }
+            }
+            1 -> {
+                if (st.inSel >= st.inList.size) return
+                val e = st.inList[st.inSel]
+                if (e < 0) { st.expanded[-1 - e] = !st.expanded[-1 - e]; return }  // header = plier/déplier
+                if (ZtekAudio.patchCompat(st.srcBox, e) == 0) { st.pop(9); return } // protégé : refusé (×)
+                ZtekAudio.assignSet(st.srcBox, e, 1 - ZtekAudio.assignGet(st.srcBox, e))
+            }
+            2 -> if (st.rowSel < st.modRows.size) {
+                val (s, d) = st.modRows[st.rowSel]; ZtekAudio.assignSet(s, d, 0)
+            }
+            else -> if (st.rowSel < st.flatRows.size) {
+                val (s, d) = st.flatRows[st.rowSel]; ZtekAudio.assignSet(s, d, 0)
+            }
+        }
+        st.pop(9)
+        lcd.invalidate()
+    }
+
+    /* ERS / K1 : plier-déplier le module concerné (boîte module, header IN, ou port sous curseur) */
+    private fun patchToggleExpand() {
+        when (st.patchView) {
+            0 -> if (st.boxSel >= ZtekAudio.NSRC_ACTIVE) {
+                val m = st.boxSel - ZtekAudio.NSRC_ACTIVE
+                st.expanded[m] = !st.expanded[m]
+            }
+            1 -> {
+                val e = st.inList.getOrElse(st.inSel) { -1 }
+                val m = if (e < 0) -1 - e else ZtekAudio.modOf(e)
+                if (m >= 0) st.expanded[m] = !st.expanded[m]
+            }
+            2 -> st.expanded[st.modBox] = !st.expanded[st.modBox]
+        }
     }
 
     private fun syncSlots() {

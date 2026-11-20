@@ -4,7 +4,7 @@
  * ztek_engine: the host-side ZuluTek engine for the Android preview APK. It runs the same
  * vendored DSP as the FM-1 firmware (dsp/, copied as-is from the zuluTek firmware tree):
  * the ATEK303 voice + the bass engines, the FX chain with PoW! punch-ins, the acid pattern
- * generator and the MIDI looper. One mono synth bus -> fx_process -> stereo out, plus the
+ * generator and the Loop (looper). One mono synth bus -> fx_process -> stereo out, plus the
  * looper's resample ring mixed in. The UI drives it through this small C API (see
  * jni_bridge.cpp); everything audio-thread-safe is a plain state setter, as on the device. */
 #pragma once
@@ -42,6 +42,9 @@ void ztek_set_root(ztek_t *z, int root);               /* MIDI note of the scale
 void ztek_set_scale(ztek_t *z, int scale);             /* index in ACID_SCALES */
 
 void ztek_fx_set(ztek_t *z, int param, float v);       /* the FX_ ids (see dsp/fx.h) */
+float ztek_fx_get(const ztek_t *z, int param);         /* readback (UI mixeur) */
+void ztek_set_eco(ztek_t *z, int on);                  /* OPTIONS > ECO : runtime DSP éco (fx/drum/loop) */
+int  ztek_get_eco(const ztek_t *z);
 void ztek_punch(ztek_t *z, int on, int type, float a, float b, float mix);
 void ztek_punch_tail(ztek_t *z, float t);
 
@@ -229,21 +232,96 @@ int  ztek_preset_import(ztek_t *z, int part, int slot, const uint8_t *buf, int l
  * MIX : niveaux des 16 slots + aux (send vers PoW!) + gain du bus LOOP. */
 void ztek_mix_set_vol(ztek_t *z, int slot, float v);      /* ML_SP_VOL */
 void ztek_mix_set_aux(ztek_t *z, int slot, int on);       /* ML_SP_FX : slot -> PoW! */
+
+/* ---- table de mixage principale : 4 tranches BASSE/LEAD/DRUMS/LOOP --------------------
+ * Par tranche : filtre traversant en tête (pré-fader : 0 LP, 1 neutre, 2 HP + cutoff),
+ * VOL, MUT, départs auxiliaires post-fader (PoW!, Loop, 2 slots libres AUX1/AUX2).
+ * BASSE et LEAD partagent le bus voix physique (engine 0 = LEAD, 1..4 = BASSE). */
+enum { ZTEK_STRIP_BASSE = 0, ZTEK_STRIP_LEAD, ZTEK_STRIP_DRUMS, ZTEK_STRIP_LOOP, ZTEK_NSTRIP };
+enum { ZTEK_MIX_CUT, ZTEK_MIX_FMODE, ZTEK_MIX_VOL, ZTEK_MIX_MUT,
+       ZTEK_MIX_AUX_POW, ZTEK_MIX_AUX_LOOP, ZTEK_MIX_AUX1, ZTEK_MIX_AUX2, ZTEK_MIX_N };
+void  ztek_mix_set_strip(ztek_t *z, int strip, int param, float v);
+float ztek_mix_get_strip(const ztek_t *z, int strip, int param);
 void ztek_mix_set_gain(ztek_t *z, float g);               /* loop_gain (page MIX) */
 float ztek_mix_get_gain(const ztek_t *z);
+float ztek_master_peak(const ztek_t *z);                  /* VU master (page MIX), 0..~1 */
+int   ztek_loop_slot_act(const ztek_t *z, int slot);       /* notes actives du slot (VU tranche) */
 
-/* baie de patch : src/dst en bitsets. src: 0 VOIX 1 SIREN 2 SMP/AIN 3 bus LOOP.
- * dst: 0 chaîne FX 1 MASTER (direct) 2 entrée anneau PoW! */
+/* ---- baie de patch v3 : sources x ports de destination, groupés par module ----------
+ * Sources (22) : 0 VOIX 1 SIREN 2 SMP/AIN 3 bus LOOP 4 axe X 5 axe Y, puis les 16 sources de
+ * modulation de la branche seq-plus (PR #3, même ordre que ZtekAudio.SRC_NAMES) :
+ * 6..9 LFO1..4, 10..13 LAB1..4, 14 ENV1 15 ENV2 16 EF 17 LOG 18 SLEW 19 CMP 20 QUANT 21 ATT.
+ * Source 22 = DRUMS (boîte à rythmes, dsp/drum_engine.c vendored de la PR #5), audio comme 0..3.
+ * Destinations : 158 ports aplatis, groupés par module. Les ports 0..34 sont identiques à la
+ * matrice ASSIGN de PR #3 (ZT_NDST=35) pour fusionner les deux baies au merge :
+ *   module 0 VOIX  : 8   params AT_ 0..7                          offset 0
+ *   module 1 FX    : 18  params FX_ 0..17                         offset 8
+ *   module 2 SEQ   : 9   dst seq 26..34 (mêmes cibles que PR #3)   offset 26
+ *   module 3 SIREN : 3   (lvl, t, fb)                             offset 35
+ *   module 4 SMP   : 5   (start,end,vol,pitch,mode)               offset 38
+ *   module 5 LOOP  : 112 = 16 slots x 7 params ML_SP_*            offset 43
+ *   module 6 OUT   : 5   (155 entrée chaîne FX, 156 MASTER, 157 anneau PoW!,
+ *                          158 AUX1, 159 AUX2 = départs auxiliaires LIBRES du master,
+ *                          vides par défaut et assignables dans la baie)          offset 155
+ *   module 7 AUX   : 8   = 2 slots aux libres x 4 tranches du main mix (BASSE/LEAD/DRUMS/LOOP),
+ *                          vides par défaut, assignables                          offset 160
+ * Compatibilité (protection façon VCV Rack/miRack) : sources audio (0..3, 22 DRUMS) -> OUT/AUX ;
+ * sources CV (X/Y + modulation, 4..21) -> modules paramètres 0..5 seulement. */
+#define ZTEK_NSRC 23
+#define ZTEK_PSRC_DRUMS 22
+#define ZTEK_NMOD 8
+#define ZTEK_NDST 168
+#define ZTEK_AWORDS 3                       /* bitset par source : 3 x uint64 = 192 bits */
+#define ZTEK_MOD_OUT 6
+#define ZTEK_MOD_AUX 7
+extern const int ZTEK_MOD_OFF[ZTEK_NMOD + 1];       /* offsets des modules dans les ports */
+extern const char *const ZTEK_MOD_NAME[ZTEK_NMOD];
+extern const int ZTEK_MOD_NPORT[ZTEK_NMOD];
+extern const char *const ZTEK_SRC_NAME[ZTEK_NSRC];
+
+int  ztek_mod_of(int dst);                           /* port -> module */
+int  ztek_patch_compat(int src, int dst);           /* 0 = impossible (estompé/refusé) */
+void ztek_assign_set(ztek_t *z, int src, int dst, int on);
+int  ztek_assign_get(const ztek_t *z, int src, int dst);
+void ztek_assign_words(const ztek_t *z, int src, uint64_t out[ZTEK_AWORDS]);  /* bitset brut */
+
+/* compatibilité avec l'API v1 (routage audio) : dst 0=FX 1=MASTER 2=POW! -> ports OUT 0..2 */
 #define ZTEK_PSRC_VOIX 0
 #define ZTEK_PSRC_SIREN 1
 #define ZTEK_PSRC_SMP 2
 #define ZTEK_PSRC_LOOP 3
+
+/* ---- boîte à rythmes (source DRUMS = 22) : vendored de la PR #5 (app-zulutek-drums) ---------- */
+void ztek_drum_play(ztek_t *z, int on);
+void ztek_drum_hit(ztek_t *z, int pad);                 /* DR_* 0..7 */
+void ztek_drum_pat(ztek_t *z, int pad, int step, int on);/* step 0..15 */
+int  ztek_drum_get_pat(const ztek_t *z, int pad, int step);
+void ztek_drum_clear(ztek_t *z, int pad);
+void ztek_drum_rand(ztek_t *z, int pad, float density, uint32_t seed);
+void ztek_drum_swing(ztek_t *z, float s);               /* 0..0.5 */
+void ztek_drum_level(ztek_t *z, int pad, float lvl);
+void ztek_drum_master(ztek_t *z, float m);
+int  ztek_drum_step(const ztek_t *z);
+/* choke des séquenceurs (style Koala, mode leader/hybride ou normal) */
+void ztek_drum_set_choke(ztek_t *z, int pad, int grp);   /* grp 0..6 ; 1er assigné = master */
+int  ztek_drum_get_choke(const ztek_t *z, int pad);
+int  ztek_drum_choke_master(const ztek_t *z, int grp);   /* -1 si aucun */
+void ztek_drum_set_leader(ztek_t *z, int on);            /* 1 = leader (hybride), 0 = normal (Koala) */
+int  ztek_drum_get_leader(const ztek_t *z);
+void ztek_drum_set_leader_pad(ztek_t *z, int pad, int on); /* POLY (noire 10) : on=1 leader, on=0 désassigne */
+void ztek_drum_clear_leader(ztek_t *z, int grp);         /* POLY sans pad : mode leader off pour le groupe */
+void ztek_loop_set_choke(ztek_t *z, int slot, int grp);
+int  ztek_loop_get_choke(const ztek_t *z, int slot);
+int  ztek_loop_choke_master(const ztek_t *z, int grp);
+void ztek_loop_set_leader(ztek_t *z, int on);
+int  ztek_loop_get_leader(const ztek_t *z);
+void ztek_loop_set_leader_slot(ztek_t *z, int slot, int on); /* POLY : on=1 leader, on=0 désassigne */
+void ztek_loop_clear_leader(ztek_t *z, int grp);         /* POLY sans pad : mode leader off */
 #define ZTEK_PDST_FX 0
 #define ZTEK_PDST_MASTER 1
 #define ZTEK_PDST_POW 2
 void ztek_patch_set(ztek_t *z, int src, int dst, int on);
 int  ztek_patch_get(const ztek_t *z, int src, int dst);
-int  ztek_patch_compat(int src, int dst);           /* 0 = connexion impossible (estompée dans la baie) */
 
 #ifdef __cplusplus
 }

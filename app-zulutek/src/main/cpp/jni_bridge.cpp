@@ -80,6 +80,20 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxSet(JNIEnv *, j
     ztek_fx_set(zte(NULL, h), p, v);
 }
 
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxGet(JNIEnv *, jclass, jlong h, jint p)
+{
+    return ztek_fx_get(zte(NULL, h), p);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSetEco(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_set_eco(zte(NULL, h), on);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeGetEco(JNIEnv *, jclass, jlong h)
+{
+    return ztek_get_eco(zte(NULL, h));
+}
+
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePunch(JNIEnv *, jclass, jlong h,
     jint on, jint type, jfloat a, jfloat b, jfloat mix)
 {
@@ -244,6 +258,104 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSiren(JNIEnv *, j
     jint on, jfloat lvl, jfloat t, jfloat fb)
 {
     ztek_siren(zte(NULL, h), on, lvl, t, fb);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumPlay(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_drum_play(zte(NULL, h), on);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumHit(JNIEnv *, jclass, jlong h, jint pad)
+{
+    ztek_drum_hit(zte(NULL, h), pad);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumPat(JNIEnv *, jclass, jlong h, jint pad, jint step, jint on)
+{
+    ztek_drum_pat(zte(NULL, h), pad, step, on);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumGetPat(JNIEnv *, jclass, jlong h, jint pad, jint step)
+{
+    return ztek_drum_get_pat(zte(NULL, h), pad, step);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumClear(JNIEnv *, jclass, jlong h, jint pad)
+{
+    ztek_drum_clear(zte(NULL, h), pad);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumRand(JNIEnv *, jclass, jlong h, jint pad, jfloat density, jint seed)
+{
+    ztek_drum_rand(zte(NULL, h), pad, density, (uint32_t)seed);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumSwing(JNIEnv *, jclass, jlong h, jfloat s)
+{
+    ztek_drum_swing(zte(NULL, h), s);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumLevel(JNIEnv *, jclass, jlong h, jint pad, jfloat lvl)
+{
+    ztek_drum_level(zte(NULL, h), pad, lvl);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumMaster(JNIEnv *, jclass, jlong h, jfloat m)
+{
+    ztek_drum_master(zte(NULL, h), m);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumStep(JNIEnv *, jclass, jlong h)
+{
+    return ztek_drum_step(zte(NULL, h));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumSetChoke(JNIEnv *, jclass, jlong h, jint pad, jint grp)
+{
+    ztek_drum_set_choke(zte(NULL, h), pad, grp);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumGetChoke(JNIEnv *, jclass, jlong h, jint pad)
+{
+    return ztek_drum_get_choke(zte(NULL, h), pad);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumChokeMaster(JNIEnv *, jclass, jlong h, jint grp)
+{
+    return ztek_drum_choke_master(zte(NULL, h), grp);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumSetLeader(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_drum_set_leader(zte(NULL, h), on);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumGetLeader(JNIEnv *, jclass, jlong h)
+{
+    return ztek_drum_get_leader(zte(NULL, h));
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumSetLeaderPad(JNIEnv *, jclass, jlong h, jint pad, jint on)
+{
+    ztek_drum_set_leader_pad(zte(NULL, h), pad, on);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumClearLeader(JNIEnv *, jclass, jlong h, jint grp)
+{
+    ztek_drum_clear_leader(zte(NULL, h), grp);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopSetChoke(JNIEnv *, jclass, jlong h, jint slot, jint grp)
+{
+    ztek_loop_set_choke(zte(NULL, h), slot, grp);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopGetChoke(JNIEnv *, jclass, jlong h, jint slot)
+{
+    return ztek_loop_get_choke(zte(NULL, h), slot);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopChokeMaster(JNIEnv *, jclass, jlong h, jint grp)
+{
+    return ztek_loop_choke_master(zte(NULL, h), grp);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopSetLeader(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_loop_set_leader(zte(NULL, h), on);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopGetLeader(JNIEnv *, jclass, jlong h)
+{
+    return ztek_loop_get_leader(zte(NULL, h));
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopSetLeaderSlot(JNIEnv *, jclass, jlong h, jint slot, jint on)
+{
+    ztek_loop_set_leader_slot(zte(NULL, h), slot, on);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopClearLeader(JNIEnv *, jclass, jlong h, jint grp)
+{
+    ztek_loop_clear_leader(zte(NULL, h), grp);
 }
 
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopRsStart(JNIEnv *, jclass, jlong h,
@@ -511,6 +623,25 @@ ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixGetGain(JNIE
     return ztek_mix_get_gain(zte(NULL, h));
 }
 
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixSetStrip(JNIEnv *, jclass, jlong h, jint strip, jint param, jfloat v)
+{
+    ztek_mix_set_strip(zte(NULL, h), strip, param, v);
+}
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixGetStrip(JNIEnv *, jclass, jlong h, jint strip, jint param)
+{
+    return ztek_mix_get_strip(zte(NULL, h), strip, param);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMasterPeak(JNIEnv *, jclass, jlong h)
+{
+    return ztek_master_peak(zte(NULL, h));
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopSlotAct(JNIEnv *, jclass, jlong h, jint slot)
+{
+    return ztek_loop_slot_act(zte(NULL, h), slot);
+}
+
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePatchSet(JNIEnv *, jclass, jlong h, jint src, jint dst, jint on)
 {
     ztek_patch_set(zte(NULL, h), src, dst, on);
@@ -525,4 +656,26 @@ ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativePatchCompat(JNIEn
 {
     return ztek_patch_compat(src, dst);
 
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssignSet(JNIEnv *, jclass, jlong h, jint src, jint dst, jint on)
+{
+    ztek_assign_set(zte(NULL, h), src, dst, on);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssignGet(JNIEnv *, jclass, jlong h, jint src, jint dst)
+{
+    return ztek_assign_get(zte(NULL, h), src, dst);
+}
+
+ZTEK_JNI jlongArray JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssignWords(JNIEnv *env, jclass, jlong h, jint src)
+{
+    uint64_t w[ZTEK_AWORDS];
+    jlong out[ZTEK_AWORDS];
+    int i;
+    ztek_assign_words(zte(NULL, h), src, w);
+    for (i = 0; i < ZTEK_AWORDS; i++) out[i] = (jlong)w[i];
+    jlongArray arr = env->NewLongArray(ZTEK_AWORDS);
+    if (arr) env->SetLongArrayRegion(arr, 0, ZTEK_AWORDS, out);
+    return arr;
 }

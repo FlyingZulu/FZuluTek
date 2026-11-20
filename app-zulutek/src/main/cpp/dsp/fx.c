@@ -18,6 +18,7 @@ const char *const FX_MOD_NAME[FX_MOD_TYPES] = {"CHORUS", "FLANGER"};
 static float sr = 44100.0f;
 static float par[FX_NPARAMS];
 static float sixteenth = 0.12f;
+static int fx_eco = 0;                            /* MODE ECO (OPTIONS > ECO) : voir fx_set_eco */
 
 static inline float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
 static inline float flush(float x) { return fm_fabsf(x) < 1e-15f ? 0.0f : x; }
@@ -457,6 +458,12 @@ void fx_set(int p, float v)
         par[p] = v;
 }
 
+float fx_get(int p)                 /* lecture des knobs (UI mixeur: niveaux d'aux master) */
+{
+    if (p < 0 || p >= FX_NPARAMS) return 0.0f;
+    return par[p];
+}
+
 void fx_tempo(float s) { sixteenth = clampf(s, 0.02f, 2.0f); }
 
 void fx_process(const float *in, float *outl, float *outr, uint32_t n)
@@ -479,6 +486,7 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
     float decay = 0.30f + 0.695f * par[FX_REV_DECAY];        /* up to 0.995: Black Hole long tails, never endless */
     float damp = onepole_c(700.0f * fm_exp2f(4.0f * (1.0f - par[FX_REV_DAMP])));   /* 700 Hz .. 11 kHz, darker */
     uint32_t pre = (uint32_t)(par[FX_REV_PRE] * (float)(PRE_MAX - 1u));
+    if (fx_eco && pre > PRE_MAX / 2u) pre = PRE_MAX / 2u;   /* eco: pre-delay max réduit de moitié */
     dr.gain_s = 1.0f + (dtype == 3 ? 120.0f : dtype == 2 ? 60.0f : dtype == 4 ? 3.0f : 12.0f) * par[FX_DRIVE] * par[FX_DRIVE];
     /* MOJO's bitcrusher, on its own two knobs: BIT the depth (11 -> 5 bits), HOLD the sample hold (1 -> 8) */
     if (dtype == 4) {
@@ -496,6 +504,10 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
 
     for (i = 0; i < n; i++) {
         float x = in[i], l, r;
+        if (fx_eco) {                             /* eco: bitrate réduit (96 pas) + loudness chaud, style Zulu v0.33 */
+            x = fm_floorf(x * 96.0f + 0.5f) / 96.0f;
+            x = fm_tanhf(x * 1.7f) * 0.72f;
+        }
         /* DRIVE */
         if (dtype)
             x = drive_sample(x, dtype) * level;
@@ -529,15 +541,17 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
                 dl.rng ^= dl.rng << 5;
                 hiss = ((float)(dl.rng >> 8) * (2.0f / 16777216.0f) - 1.0f) * 0.015f;
                 a = dly_read(dly_buf[0], qlen) + hiss;
-                b = dly_read(dly_buf[1], qlen) + hiss;
+                b = fx_eco ? a : dly_read(dly_buf[1], qlen) + hiss;   /* eco: BBD mono, une seule ligne */
             }
             /* the loop's tone: darker every pass, no mud */
             dl.lp[0] += dlp * (b - dl.lp[0]);
             dl.hp[0] += dhp * (dl.lp[0] - dl.hp[0]);
-            dl.lp[1] += dlp * (a - dl.lp[1]);
-            dl.hp[1] += dhp * (dl.lp[1] - dl.hp[1]);
             dly_buf[0][dl.w] = to16(mono + fb * (dl.lp[0] - dl.hp[0]));
-            dly_buf[1][dl.w] = to16(fb * (dl.lp[1] - dl.hp[1]));
+            if (!fx_eco) {
+                dl.lp[1] += dlp * (a - dl.lp[1]);
+                dl.hp[1] += dhp * (dl.lp[1] - dl.hp[1]);
+                dly_buf[1][dl.w] = to16(fb * (dl.lp[1] - dl.hp[1]));
+            }
             if (++dl.w >= DLY_N)
                 dl.w = 0;
             l += dmix * a;
@@ -556,10 +570,14 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
             t = rap(R_IN4, t, 0.625f);
             t = rap(R_IN5, t, 0.5f);                /* extra diffusion, Black Hole style */
             t = rap(R_IN6, t, 0.5f);
-            ex = (float)EXC * 0.5f * (1.0f + fm_sin_turns(rv.ph));
-            rv.ph += 2.5f / sr;                        /* 2.5 Hz swirl */
-            if (rv.ph >= 1.0f)
-                rv.ph -= 1.0f;
+            if (fx_eco) {
+                ex = (float)EXC * 0.5f;                /* eco: swirl de la tank off */
+            } else {
+                ex = (float)EXC * 0.5f * (1.0f + fm_sin_turns(rv.ph));
+                rv.ph += 2.5f / sr;                    /* 2.5 Hz swirl */
+                if (rv.ph >= 1.0f)
+                    rv.ph -= 1.0f;
+            }
             /* left half of the tank */
             xl = rap_mod(R_AP1L, t + decay * rv.fb_r, -0.70f, (float)RS(672) + ex);
             rput(R_D1L, xl);
@@ -604,3 +622,7 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
         outr[i] = r;
     }
 }
+
+/* MODE ECO (OPTIONS > ECO, append-only : les patches restent applicables) */
+void fx_set_eco(int on) { fx_eco = on ? 1 : 0; }
+int  fx_get_eco(void)   { return fx_eco; }
