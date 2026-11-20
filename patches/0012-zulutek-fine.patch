@@ -1,0 +1,420 @@
+From 6a044477c96d5ae020ffdad6c0dd03f4e8d12a91 Mon Sep 17 00:00:00 2001
+From: Vibe Nuage Agent <vibe@mistral.ai>
+Date: Fri, 20 Nov 2026 17:33:46 +0000
+Subject: [PATCH] =?UTF-8?q?feat(atek303):=20patch=200012=20zuluTek=20?=
+ =?UTF-8?q?=E2=80=94=20page=20FINE=20(14),=204=20knobs=20fa=C3=A7on=20Shru?=
+ =?UTF-8?q?thi=20sur=20les=20r=C3=A9glages=20fins=20voix=20(AT=5FOPT=5F*?=
+ =?UTF-8?q?=20+=20filtre=20MODEL/MORPH),=20REC+EDIT,=20CC=2084..96,=20LCD?=
+ =?UTF-8?q?=204=20colonnes,=20persistance=20OBJ=5FOPTIONS=20(OPT5)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-authored-by: FlyingZulu <FlyingZulu@users.noreply.github.com>
+---
+ atek303/app/app.c       | 135 +++++++++++++++++++++++++++++++++++-----
+ atek303/app/fm1.toml    |   2 +-
+ atek303/app/ztek_fine.c |  61 ++++++++++++++++++
+ atek303/app/ztek_fine.h |  34 ++++++++++
+ 4 files changed, 216 insertions(+), 16 deletions(-)
+ create mode 100644 atek303/app/ztek_fine.c
+ create mode 100644 atek303/app/ztek_fine.h
+
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index fcc477c..d4817b1 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -64,6 +64,7 @@
+ #include "ztek_loop.h"     /* patch 0008: MIDI looper, page LOOP (12) */
+ #include "ztek_macro.h"    /* patch 0008: macros 16 slots, page MACRO (13) */
+ #include "ztek_link.h"     /* patch 0009: liaison APK <-> FM-1 ZTF (companion files/params + SysEx) */
++#include "ztek_fine.h"     /* patch 0012: page FINE (14) — 4 knobs façon Shruthi sur les réglages fins voix */
+ 
+ /* the Animatek palette, as on the VCV Rack modules (UZZ-VCV-RACK src/ui/CommonWidgets.hpp, AcidEditor.hpp):
+  * the screens are slate, the values in the displays' blue, the selection in the logo's blue */
+@@ -159,8 +160,8 @@ static int8_t cur_preset = -1;                 /* the one loaded (or saved) last
+ 
+ /* the OPTIONS menu (OCT- + HOME): the unit's own choices, apart from the settings so no preset carries them (OBJ_OPTIONS,
+  * saved as the menu closes). Each an index into its choices */
+-#define OPT_MAGIC 0x4F505434u                  /* "OPT4": patch 0009 adds OP_ECO, OP_CHOKE_LDR */                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
+-enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_ECO, OP_CHOKE_LDR, OP_FINE,   /* patch 0009 */ OP_N = OP_FINE + AT_NOPTS };   /* patch 0005: OP_LUDIQUE */
++#define OPT_MAGIC 0x4F505435u                  /* "OPT5": patch 0012 ajoute FILTER MODEL + FILTER MORPH après les AT_OPT_* */                  /* "OPT4": patch 0009 adds OP_ECO, OP_CHOKE_LDR */                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
++enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_ECO, OP_CHOKE_LDR, OP_FINE,   /* patch 0009 */ OP_N = OP_FINE + AT_NOPTS + 2 };   /* patch 0012: +2 (MODEL/MORPH) */   /* patch 0005: OP_LUDIQUE */
+ #define CLK_OFS_MAX 40                         /* OPTIONS > CLK OFFSET: -40 .. +40 ms, stored + 40 */
+ typedef struct {
+     uint32_t magic;
+@@ -182,11 +183,14 @@ static void options_defaults(void)
+     opt.v[OP_CHOKE_LDR] = 1;            /* patch 0009: OPTIONS > CHOKE LDR = ON (mode leader hybride) */                   /* patch 0005: educational pops ON by default */      /* -16 ms: a Digitakt on the TRS jack, by ear in fm1-dock (14/11) */
+     for (i = 0; i < AT_NOPTS; i++)
+         opt.v[OP_FINE + i] = AT_OPT_DEFAULT[i];
++    opt.v[OP_FINE + AT_NOPTS] = 0;           /* patch 0012: filtre ORG */
++    opt.v[OP_FINE + AT_NOPTS + 1] = 0;       /* patch 0012: morph LP */
+ }
+ static int opt_count(int i)                    /* how many choices item i has */
+ {
+     static const uint8_t N[OP_FINE] = {0, 17, 16, 2, 2, 2 * CLK_OFS_MAX + 1, 2, 2, 2};   /* patch 0009: + ECO on/off, CHOKE LDR on/off */   /* patch 0005: + LUDIQUE on/off */
+-    return i == OP_COLOR ? NTHEMES : i < OP_FINE ? N[i] : AT_OPT_N[i - OP_FINE];
++    return i == OP_COLOR ? NTHEMES : i < OP_FINE ? N[i] : i < OP_FINE + AT_NOPTS ? AT_OPT_N[i - OP_FINE]
++           : i == OP_FINE + AT_NOPTS ? 2 : 256;   /* patch 0012: FILTER MODEL ORG/NEW (2), MORPH 0..255 */
+ }
+ static void options_load(void)
+ {
+@@ -745,6 +749,18 @@ static void midi_in(void)                      /* render: the packets that came
+                     at_set(&voice, CC_PARAM[i][1], (float)d2 / 127.0f);
+                     set.param[CC_PARAM[i][1]] = (float)d2 / 127.0f;
+                 }
++            if (d1 >= 84u && d1 < 84u + (uint32_t)ZFINE_NOPT) {   /* patch 0012: page FINE, CC 84..96 (thread render: direct) */
++                int idx = (int)(d1 - 84u);
++                int n = idx == ZFINE_OPT_MODEL ? 2 : idx == ZFINE_OPT_MORPH ? 256 : AT_OPT_N[idx];
++                int v = (int)(d2 * (uint32_t)(n - 1) / 127u);
++                opt.v[OP_FINE + idx] = (uint8_t)v;
++                if (idx < AT_NOPTS)
++                    at_option(&voice, idx, v);
++                else if (idx == ZFINE_OPT_MODEL)
++                    voice.f_model = v;
++                else
++                    voice.f_morph = (float)v / 255.0f;
++            }
+         }
+     }
+ }
+@@ -840,8 +856,14 @@ static void app_render_events(void)
+             acid_sanitize(&set.pattern, set.scale);
+             sq.has_undo = 0;
+             seq_render_grid();
+-        } else if (kind == EV_OPTION)            /* OPTIONS: a fine-tuning choice into the voice */
+-            at_option(&voice, (int)a, (int)b);
++        } else if (kind == EV_OPTION) {        /* OPTIONS / page FINE: a fine-tuning choice into the voice */
++            if ((int)a < AT_NOPTS)             /* patch 0012: au-delà, filtre zuluTek MODEL/MORPH */
++                at_option(&voice, (int)a, (int)b);
++            else if ((int)a == AT_NOPTS)
++                voice.f_model = (int)b;
++            else
++                voice.f_morph = (float)b / 255.0f;
++        }
+         else if (kind == EV_LOAD && a < NPRESETS && presets[a].used) {
+             if (b)                             /* SEL or a key in the list: at once, running or not */
+                 pend_preset = -1;
+@@ -1115,6 +1137,8 @@ void app_init(void)
+     zdr_set_leader(opt.v[OP_CHOKE_LDR]); zml_set_leader(opt.v[OP_CHOKE_LDR]);   /* patch 0009: OPTIONS > CHOKE LDR */   /* patch 0005: LUDIQUE option -> SEQ+ flash */
+     for (i = 0; i < AT_NOPTS; i++)
+         at_option(&voice, i, opt.v[OP_FINE + i]);
++    voice.f_model = (int)opt.v[OP_FINE + AT_NOPTS];              /* patch 0012: page FINE */
++    voice.f_morph = (float)opt.v[OP_FINE + AT_NOPTS + 1] / 255.0f;
+     store_load();
+     acid_sanitize(&set.pattern, set.scale);
+     for (i = 0; i < AT_NPARAMS; i++)
+@@ -1131,8 +1155,8 @@ void app_init(void)
+ /* --------------------------------------------------------------------- UI --- */
+ /* a knob of a page: a voice parameter (0..), or a sequencer control */
+ enum { K_NONE = -1, K_SQ = 100, K_STEPS = 200, K_SCALE, K_TEMPO, K_ROOT, K_FX = 300 };
+-#define NPAGES 14                          /* patch 0005: + LFO(8) ENV(9) ASSIGN(10); patch 0007: + DRUM(11); patch 0008: + LOOP(12) MACRO(13) */
+-static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB", "LFO", "ENV", "ASSIGN", "DRUM", "LOOP", "MACRO"};   /* patch 0005 + 0007 + 0008 */
++#define NPAGES 15                          /* patch 0012: + FINE(14); patch 0008: + LOOP(12) MACRO(13); patch 0007: + DRUM(11); patch 0005: + LFO(8) ENV(9) ASSIGN(10) */
++static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB", "LFO", "ENV", "ASSIGN", "DRUM", "LOOP", "MACRO", "FINE"};   /* patch 0005 + 0007 + 0008 + 0012 */
+ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "DECAY"},
+                                             {"ACCENT", "TUNE", "WAVE", "GATE"},
+                                             {"DENSITY", "RANGE", "ACCENTS", "SLIDES"},
+@@ -1145,7 +1169,8 @@ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "
+                                             {"A", "D", "S", "R"},                 /* patch 0005: page ENV */
+                                             {"DST", "SRC", "LUD", "DEPTH"},      /* patch 0005: page ASSIGN */
+                                             {"-", "-", "-", "-"},              /* patch 0008: page LOOP, via zml_encoder */
+-                                            {"-", "-", "-", "-"}};             /* patch 0008: page MACRO, via zmac_encoder */
++                                            {"-", "-", "-", "-"},              /* patch 0008: page MACRO, via zmac_encoder */
++                                            {"-", "-", "-", "-"}};             /* patch 0012: page FINE (14), via zfine_encoder + zfine_draw */
+ static const int PAGE_KNOB[NPAGES][4] = {{AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT_DECAY},
+                                     {AT_ACCENT, AT_TUNING, AT_WAVE, K_SQ + SQ_GATE},
+                                     {K_SQ + SQ_DENSITY, K_SQ + SQ_RANGE, K_SQ + SQ_ACCENT, K_SQ + SQ_SLIDE},
+@@ -1159,7 +1184,8 @@ static const int PAGE_KNOB[NPAGES][4] = {{AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT
+                                     {K_NONE, K_NONE, K_NONE, K_NONE},  /* patch 0005: page ASSIGN */
+                                     {K_NONE, K_NONE, K_NONE, K_NONE}, /* patch 0007: page DRUM, via zdr_encoder */
+                                     {K_NONE, K_NONE, K_NONE, K_NONE}, /* patch 0008: page LOOP */
+-                                    {K_NONE, K_NONE, K_NONE, K_NONE}}; /* patch 0008: page MACRO */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE}, /* patch 0008: page MACRO */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE}}; /* patch 0012: page FINE (14), via zfine_encoder */
+ 
+ static struct {
+     char msg[2][24];
+@@ -1596,15 +1622,27 @@ static void edit_move(int32_t d)
+ /* ------------------------------------------------------------ OPTIONS --- */
+ static const char *const OPT_LABEL[OP_N] = {"COLOR", "MIDI IN CH", "MIDI OUT CH", "SEQ NOTES OUT", "CLOCK OUT",
+     "CLK OFFSET", "LUDIQUE", "ECO", "CHOKE LDR",   /* patch 0009 */   /* patch 0005 */ "PULSE WIDTH", "SQUARE DROOP", "SAW RESET", "SAW DROOP", "FILTER DRIVE", "SLIDE TIME", "AUTO LEGATO",
+-    "OTA SATURATION", "OUT SATURATION", "ANALOG DRIFT", "UNIT"};
+-static const char *const OPT_SECTION[OP_N] = {"DISPLAY", "MIDI", 0, 0, 0, 0, "FINE TUNING", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+-static void opt_value_text(int i, char *t)
++    "OTA SATURATION", "OUT SATURATION", "ANALOG DRIFT", "UNIT",   /* patch 0012 */ "FILTER MODEL", "FILTER MORPH"};
++static const char *const OPT_SECTION[OP_N] = {"DISPLAY", "MIDI", 0, 0, 0, 0, "FINE TUNING", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};   /* patch 0012: +2 (MODEL/MORPH, même section) */
++static void fine_value_text(int idx, int v, char *t)   /* patch 0012: table FINE extraite ; idx AT_NOPTS = MODEL, AT_NOPTS+1 = MORPH */
+ {
+     static const char *const FINE[AT_NOPTS][5] = {
+         {"44 %", "47 %", "50 %", "53 %", "56 %"}, {"NONE", "8 HZ", "15 HZ", "30 HZ", "60 HZ"},
+         {"1 US", "3 US", "8 US", "20 US"}, {"0.7 HZ", "3 HZ", "8 HZ", "15 HZ"}, {"0 DB", "+6 DB", "+12 DB"},
+         {"60 MS", "120 MS", "220 MS"}, {"OFF", "ON"}, {"NONE", "SOFT", "HARD"}, {"NONE", "SOFT", "HARD"},
+         {"NONE", "SUBTLE", "MARKED", "HEAVY"}, {"1", "2", "3", "4"}};
++    t[0] = 0;
++    if (idx < AT_NOPTS)
++        text_cat(t, FINE[idx][v]);
++    else if (idx == AT_NOPTS)                 /* patch 0012: filtre zuluTek ORG/NEW */
++        text_cat(t, v ? "NEW" : "ORG");
++    else {                                    /* patch 0012: morph LP->HP en % */
++        int_text(v * 100 / 255, t);
++        text_cat(t, " %");
++    }
++}
++static void opt_value_text(int i, char *t)
++{
+     int v = opt.v[i];
+     t[0] = 0;
+     if (i == OP_COLOR)
+@@ -1622,7 +1660,7 @@ static void opt_value_text(int i, char *t)
+     else if (i < OP_FINE)
+         text_cat(t, v ? "ON" : "OFF");
+     else
+-        text_cat(t, FINE[i - OP_FINE][v]);
++        fine_value_text(i - OP_FINE, v, t);
+ }
+ static void opt_change(int i, int32_t e)       /* a step through item i's choices (no wrap) */
+ {
+@@ -1657,6 +1695,31 @@ static void opt_close(void)
+     }
+     ui.redraw = 1;
+ }
++/* ---- patch 0012: accesseurs pour ztek_fine.c (page FINE 14) ---- */
++void app_say(const char *a, const char *b);   /* app.h (app.c ne l'inclut pas: prototype local) */
++int  zf_opt_get(int idx) { return idx >= 0 && idx < ZFINE_NOPT ? opt.v[OP_FINE + idx] : 0; }
++void zf_opt_set(int idx, int v)
++{
++    static uint32_t last_save;
++    if (idx < 0 || idx >= ZFINE_NOPT)
++        return;
++    opt.v[OP_FINE + idx] = (uint8_t)v;
++    ui.opt_dirty = 1;
++    post(EV_OPTION, (uint32_t)idx, (uint32_t)v);
++    if (plat_ms() - last_save > 1000u) {      /* flash: pas à chaque cran */
++        last_save = plat_ms();
++        if (plat_store_save(OBJ_OPTIONS, &opt, sizeof opt) != 0)
++            app_say("OPTIONS", "NOT SAVED");
++    }
++}
++const char *zf_opt_value(int idx, int v)
++{
++    static char t[24];
++    fine_value_text(idx, v, t);
++    return t;
++}
++void zf_say(const char *a, const char *b) { app_say(a, b); }
++
+ static void home_pages(void)                   /* HOME: the four sound pages in turn (VCF, VOICE, PATT, SEQ); from the
+                                                   editor, the list or an effect page, straight to VCF */
+ {
+@@ -1818,7 +1881,7 @@ static void input(void)
+             ui.redraw = 1;
+             continue;
+         }
+-        if ((set.page == 12u || set.page == 13u) && k == B_GLO) {  /* patch 0008: GLO quitte LOOP/MACRO */
++        if ((set.page == 12u || set.page == 13u || set.page == ZFINE_PAGE) && k == B_GLO) {  /* patch 0008 + 0012: GLO quitte LOOP/MACRO/FINE */
+             set.page = 0u;
+             ui.redraw = 1;
+             continue;
+@@ -1888,6 +1951,12 @@ static void input(void)
+                 post(EV_GENERATE, 0, 0);
+             }
+             set_dirty = 1;
++        } else if (k == B_EDIT && ui.rec_hold) {   /* patch 0012: REC maintenu + EDIT = page FINE (14) */
++            ui.rec_used = 1;
++            set.page = ZFINE_PAGE;
++            ui.edit = ui.list = 0;
++            app_say("FINE", "PAGE 14");
++            ui.redraw = 1;
+         } else if (k == B_EDIT) {              /* the sequence's three: the editor -> SEQ -> PATT -> the editor */
+             if (ui.edit) {
+                 ui.edit = 0;
+@@ -2017,6 +2086,9 @@ static void input(void)
+         } else if (set.page == 13u) {          /* patch 0008: page MACRO */
+             zmac_encoder(k, e);
+             ui.redraw = 1;
++        } else if (set.page == ZFINE_PAGE) {   /* patch 0012: page FINE (14) — SEL=banc, K1..K4=réglages du banc */
++            zfine_encoder(k, e);
++            ui.redraw = 1;
+         } else if (k == EN_ALGO) {             /* ALGO: the wave, wherever you are (the VOICE page's WAVE) */
+             char t[24];
+             knob_turn(AT_WAVE, e > 0 ? 1 : -1);
+@@ -2104,6 +2176,7 @@ static int32_t view_base(void)
+     int32_t s = ui.edit ? ui.cursor : sq.running ? sq.step : 0;
+     return s / 16 * 16;
+ }
++static void zfine_draw(void);   /* patch 0012: page FINE (définie avant app_frame) */
+ static void draw_pages(int32_t x, int32_t y)   /* the four pages: the one on view lit, the ones beyond the steps dark */
+ {
+     int32_t k, len = seq_len(), on = view_base() / 16;
+@@ -2464,7 +2537,9 @@ static void draw(void)
+         return;
+     }
+     cv_begin(240, 138, C_BLACK);               /* 32 .. 170: no gap under the header */
+-    for (i = 0; i < 4; i++) {
++    if (set.page == ZFINE_PAGE)                /* patch 0012: page FINE — 4 colonnes façon Shruthi */
++        zfine_draw();
++    else for (i = 0; i < 4; i++) {
+         int kn = PAGE_KNOB[set.page][i];
+         int32_t x = (i & 1) * 120, y = (i >> 1) * 68 + 2, w;
+         if (kn == K_NONE)
+@@ -2535,6 +2610,36 @@ void app_ui_init(void)
+     ui.redraw = 1;
+ }
+ 
++/* patch 0012: page FINE — 4 colonnes, une par knob du banc courant (SEL = banc) */
++static void zfine_draw(void)
++{
++    char t[24], n[4];
++    int b = zfine_bank(), i;
++    t[0] = 0;
++    text_cat(t, "FINE ");
++    int_text(b + 1, n);
++    text_cat(t, n);
++    text_cat(t, "/3 ");
++    text_cat(t, ZFINE_BANK_NAME[b]);
++    cv_text(120 - text_w(&FONT_B, t) / 2, 4, &FONT_B, t, C_WHITE);
++    cv_text(120 + text_w(&FONT_B, t) / 2 + 8, 6, &FONT_XS, "<SEL>", C_GRAY);
++    for (i = 0; i < 4; i++) {
++        int idx = ZFINE_BANK_OPT[b][i];
++        int v = zf_opt_get(idx);
++        int mx = idx == ZFINE_OPT_MODEL ? 1 : idx == ZFINE_OPT_MORPH ? 255 : AT_OPT_N[idx] - 1;
++        int32_t cx = i * 60, w;
++        cv_text(cx + 4, 26, &FONT_XS, ZFINE_KN[b][i], C_GRAY);
++        cv_text(cx + 4, 42, &FONT_B, zf_opt_value(idx, v), C_HI);
++        cv_rect(cx + 4, 68, 52, 6, C_LINE);
++        w = mx > 0 ? (int32_t)(52.0f * v / (float)mx + 0.5f) : 52;
++        cv_rect(cx + 4, 68, w, 6, C_LOGO);
++        n[0] = 'K';
++        n[1] = (char)('1' + i);
++        n[2] = 0;
++        cv_text(cx + 4, 82, &FONT_XS, n, C_GRAY);
++    }
++}
++
+ void app_frame(void)
+ {
+     static int32_t last_note = -2;
+diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+index 58cdf9d..c65bdce 100644
+--- a/atek303/app/fm1.toml
++++ b/atek303/app/fm1.toml
+@@ -11,7 +11,7 @@ backup = true
+ companion = true               # patch 0009: services companion (files/params) + ZTF, liaison APK <-> FM-1
+ words = "words.tsv"
+ include = ["dsp"]
+-o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c", "ztek_link.c"]   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper ; patch 0009: + ztek_link (ZTF/companion) (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
++o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c", "ztek_link.c", "ztek_fine.c"]   /* patch 0012: + page FINE */   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper ; patch 0009: + ztek_link (ZTF/companion) (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
+ # el sitio
+ title = "ATEK303"              # el nombre que ve la gente (si no, firmware.json saldría como «Animatek»)
+ tagline = "The ATEK303 acid voice on the M-VAVE FM-1"
+diff --git a/atek303/app/ztek_fine.c b/atek303/app/ztek_fine.c
+new file mode 100644
+index 0000000..63a2402
+--- /dev/null
++++ b/atek303/app/ztek_fine.c
+@@ -0,0 +1,61 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * patch 0012: page FINE — voir ztek_fine.h. Logique seule ici (pas de gfx) : le dessin est
++ * zfine_draw() dans app.c. Les options sont des choix discrets (AT_OPT_N[idx] valeurs), sauf
++ * le morph LP->HP continu 0..255. Un cran d'encodeur = un pas (comme le menu OPTIONS).
++ */
++#include "ztek_fine.h"
++#include "app.h"                 /* plat.h (fm1-base) : EN_SELECT, EN_K1..EN_K4 */
++
++const char *const ZFINE_BANK_NAME[ZFINE_NBANK] = {"OSC", "FILTRE", "AMP"};
++const char *const ZFINE_KN[ZFINE_NBANK][4] = {
++    {"PW", "SQ DRP", "SAW RS", "SAW DRP"},
++    {"MODEL", "MORPH", "DRIVE", "OTA"},
++    {"SLIDE", "LEGATO", "SAT", "DRIFT"},
++};
++/* banc 0 OSC : PW / SQ_DROOP / SAW_RESET / SAW_DROOP
++ * banc 1 FILTRE : modèle ORG/NEW / morph LP->HP / DRIVE / OTA
++ * banc 2 AMP : SLIDE tau / LEGATO / SAT out / DRIFT */
++const int ZFINE_BANK_OPT[ZFINE_NBANK][4] = {
++    {AT_OPT_PW, AT_OPT_SQ_DROOP, AT_OPT_SAW_RESET, AT_OPT_SAW_DROOP},
++    {ZFINE_OPT_MODEL, ZFINE_OPT_MORPH, AT_OPT_DRIVE, AT_OPT_OTA},
++    {AT_OPT_SLIDE, AT_OPT_LEGATO, AT_OPT_SAT, AT_OPT_DRIFT},
++};
++
++static int bank;
++
++int zfine_bank(void) { return bank; }
++
++static int opt_max(int idx)               /* nb de valeurs - 1 */
++{
++    if (idx == ZFINE_OPT_MODEL)
++        return 1;
++    if (idx == ZFINE_OPT_MORPH)
++        return 255;
++    return AT_OPT_N[idx] - 1;
++}
++
++void zfine_encoder(int k, int32_t det)
++{
++    if (k == EN_SELECT) {                 /* SEL = banc (Shruthi : la "page" interne) */
++        int b = bank + (det > 0 ? 1 : -1);
++        bank = (b % ZFINE_NBANK + ZFINE_NBANK) % ZFINE_NBANK;
++        zf_say("FINE", ZFINE_BANK_NAME[bank]);
++        return;
++    }
++    if (k >= EN_K1 && k <= EN_K4) {
++        int i = k - EN_K1;
++        int idx = ZFINE_BANK_OPT[bank][i];
++        int v = zf_opt_get(idx) + (det > 0 ? 1 : -1);
++        int mx = opt_max(idx);
++        if (v < 0)
++            v = 0;
++        if (v > mx)
++            v = mx;
++        if (v == zf_opt_get(idx))
++            return;
++        zf_opt_set(idx, v);
++        zf_say(ZFINE_KN[bank][i], zf_opt_value(idx, v));
++    }
++}
+diff --git a/atek303/app/ztek_fine.h b/atek303/app/ztek_fine.h
+new file mode 100644
+index 0000000..0079302
+--- /dev/null
++++ b/atek303/app/ztek_fine.h
+@@ -0,0 +1,34 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * patch 0012: page FINE (14) — 4 knobs façon Shruthi-1 pour les réglages fins de la voix.
++ * Les options AT_OPT_* vivent déjà dans OPTIONS > FINE TUNING (opt.v[OP_FINE..], appliquées
++ * par EV_OPTION) ; la page en donne un accès direct : SEL = banc, K1..K4 = les 4 réglages
++ * du banc. S'y ajoutent le modèle de filtre zuluTek (f_model ORG/NEW) et le morph LP->HP
++ * (f_morph), stockés comme deux "options" de plus (ZFINE_OPT_MODEL / ZFINE_OPT_MORPH).
++ *
++ * Navigation : REC maintenu + EDIT = page 14 ; GLO la quitte. MIDI : CC 84..96.
++ * Le dessin (zfine_draw) est dans app.c, qui a le canvas en scope.
++ */
++#pragma once
++#include <stdint.h>
++#include "dsp/atek_voice.h"
++
++#define ZFINE_PAGE    14u
++#define ZFINE_NBANK   3
++#define ZFINE_OPT_MODEL (AT_NOPTS)        /* indices "fine" au-delà des AT_OPT_* */
++#define ZFINE_OPT_MORPH (AT_NOPTS + 1)
++#define ZFINE_NOPT    (AT_NOPTS + 2)
++
++extern const char *const ZFINE_BANK_NAME[ZFINE_NBANK];   /* "OSC" "FILTRE" "AMP" */
++extern const char *const ZFINE_KN[ZFINE_NBANK][4];        /* labels des knobs par banc */
++extern const int ZFINE_BANK_OPT[ZFINE_NBANK][4];          /* option par knob (K1..K4) */
++
++int  zfine_bank(void);
++void zfine_encoder(int k, int32_t det);   /* EN_* sur la page FINE : SEL=banc, K1..K4 */
++
++/* ---- provided by app.c (patch 0012) ---- */
++int  zf_opt_get(int idx);                 /* idx 0..ZFINE_NOPT-1 -> opt.v[OP_FINE+idx] */
++void zf_opt_set(int idx, int v);          /* opt.v + EV_OPTION + save OBJ_OPTIONS (throttlé) */
++const char *zf_opt_value(int idx, int v); /* nom de la valeur (table FINE / MODEL / MORPH) */
++void zf_say(const char *a, const char *b);
+-- 
+2.47.3
+
