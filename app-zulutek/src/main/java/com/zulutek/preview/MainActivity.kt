@@ -329,6 +329,7 @@ class MainActivity : Activity(), SurfaceListener {
     // ---- 14 buttons ----
     private var lastRecTap = 0L
     private var lastDrvTap = 0L
+    private var lastPlayTap = 0L
     private var lastSlotTap = -1
     private var lastSlotTapTime = 0L
     private var stLoopLen = 0
@@ -397,8 +398,17 @@ class MainActivity : Activity(), SurfaceListener {
             val now = System.currentTimeMillis()
             if (label == "REC" && now - lastRecTap < 350) { ZtekAudio.undo(); lastRecTap = 0; return }
             if (label == "DRV" && now - lastDrvTap < 350) { st.page = 2; lastDrvTap = 0; lcd.invalidate(); return }
+            if (label == "PLAY" && now - lastPlayTap < 350) {   // REC+PLAY (dbl-tap PLAY) = capture SNAP + flash
+                ZtekAudio.snapStore(st.selSlot)
+                st.snapFilled[st.selSlot] = true
+                st.flashUntil = now + 120
+                lastPlayTap = 0
+                lcd.invalidate()
+                return
+            }
             if (label == "REC") lastRecTap = now
             if (label == "DRV") lastDrvTap = now
+            if (label == "PLAY") lastPlayTap = now
         }
         if (st.smpPage) {
             when (SurfaceView.BTN_LABELS[i]) {

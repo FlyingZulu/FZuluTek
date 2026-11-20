@@ -66,6 +66,7 @@ class LcdState {
     // ZuluLink : pairs vus sur le réseau local
     var linkPeers = 0
     var linkName = ""
+    var flashUntil = 0L                  // flash blanc 120 ms à la capture SNAP (REC+PLAY)
 
     // pages : 0 MAIN, 1 LOOP (édition slot), 2 SNAP, 3 KIT, 4 XY
     var page = 0
@@ -175,6 +176,13 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         val now = System.currentTimeMillis()
         val blink = (now / 260) % 2 == 0L
+
+        // flash de capture SNAP (REC+PLAY) : inversion blanc/noir 120 ms
+        if (now < st.flashUntil) {
+            c.drawColor(INK)
+            c.restore()
+            return
+        }
 
         // ---- veille auto : décor PCB + Nyan Cat, puis écran éteint + lampe torche ----
         if (st.veillePhase > 0) {
