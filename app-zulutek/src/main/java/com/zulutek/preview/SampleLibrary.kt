@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later — Copyright (C) 2026 FlyingZulu
  *
  * SampleLibrary — bibliothèque de samples côté téléphone (mode B « extension » du FM-1) :
- *  - import WAV (ex. export Koala Sampler) via SAF ACTION_OPEN_DOCUMENT audio/*,
+ *  - import WAV (ex. export Koala Sampler) via SAF ACTION_OPEN_DOCUMENT, type « audio » + wildcard,
  *  - stockage sous filesDir/ztek/samples/,
  *  - décodage WAV (PCM 8/16/24/32 bits + float32), resample mono 44,1 kHz,
  *  - encodage ZSM1 (fmt 0 int16 / fmt 1 µ-law) pour push vers un slot ZSMPxx du FM-1,

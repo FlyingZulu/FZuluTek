@@ -53,7 +53,10 @@ object Fm1UsbAudio {
             it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
                 it.type == AudioDeviceInfo.TYPE_USB_ACCESSORY ||
                 it.type == AudioDeviceInfo.TYPE_USB_HEADSET
-        }?.also { usbDeviceName = it.productName.ifEmpty { "USB audio" } }
+        }?.also {
+            val pn = it.productName?.toString() ?: ""
+            usbDeviceName = if (pn.isEmpty()) "USB audio" else pn
+        }
     }
 
     private fun chanConfig(ch: Int) = if (ch == 1) AudioFormat.CHANNEL_IN_MONO else AudioFormat.CHANNEL_IN_STEREO
