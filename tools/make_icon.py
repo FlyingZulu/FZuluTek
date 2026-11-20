@@ -196,3 +196,45 @@ draw_pcb(pcb)
 px = pcb.nearest(480)
 write_png(os.path.join(ROOT, "drawable-nodpi", "pcb_scene.png"), 480, 480, px)
 print("wrote drawable-nodpi/pcb_scene.png (480 px, art 240x240)")
+
+# ---- icône du module drums (app-zulutek-drums) : tambour pixel art sur fond sombre ----
+ROOT_DRUMS = os.path.join(os.path.dirname(__file__), "..", "app-zulutek-drums", "src", "main", "res")
+
+def draw_drum(cv):
+    s = cv.s
+    cv.rect(0, 0, s, s, (10, 10, 16, 255), r=int(s * 0.075))
+    k = s / 120.0
+    def X(v):
+        return v * k
+    RED = (255, 70, 70, 255)
+    RED_D = (200, 40, 45, 255)
+    SKIN = (255, 240, 210, 255)
+    WOOD = (200, 150, 80, 255)
+    # baguettes
+    cv.line(X(38), X(30), X(56), X(62), 2.4 * k, WOOD)
+    cv.line(X(82), X(30), X(64), X(62), 2.4 * k, WOOD)
+    cv.circle(X(56), X(62), 2.6 * k, WOOD)
+    cv.circle(X(64), X(62), 2.6 * k, WOOD)
+    # corps du tambour (cylindre vu de face légèrement de biais)
+    cv.rect(X(30), X(58), X(90), X(102), RED_D)                       # ombre bas
+    cv.rect(X(28), X(52), X(92), X(98), RED)                          # fût
+    for x in (40, 60, 80):                                            # cerclages
+        cv.line(X(x), X(52), X(x), X(98), 1.6 * k, RED_D)
+    cv.rect(X(28), X(52), X(92), X(60), RED_D)                        # cerclage haut
+    cv.rect(X(28), X(94), X(92), X(98), RED_D)                        # cerclage bas
+    # peau : ellipse aplatie (on écrase verticalement)
+    for yy in range(int(X(30)), int(X(82))):
+        for xx in range(int(X(28)), int(X(92))):
+            dy = (yy - X(56)) / (26 * k)
+            if (xx - X(60)) ** 2 / (32 * k) ** 2 + dy * dy <= 1.0:
+                cv.set(xx, yy, SKIN)
+    # reflet sur la peau + ombre portée
+    cv.line(X(42), X(44), X(54), X(38), 2 * k, (255, 255, 255, 255))
+    cv.rect(X(34), X(102), X(86), X(106), (0, 0, 0, 120))
+
+drum = Px(240)
+draw_drum(drum)
+for name, s in [("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)]:
+    px = drum.nearest(s)
+    write_png(os.path.join(ROOT_DRUMS, "mipmap-" + name, "ic_launcher.png"), s, s, px)
+    print("wrote [drums] mipmap-%s/ic_launcher.png (%d px)" % (name, s))
