@@ -163,10 +163,10 @@ class DrumsActivity : Activity() {
                 tv.text = "${DrumsAudio.PARAM_NAMES[grid.selPad][paramPage * 4 + k]} ${(p / 100f).let { "%.2f".format(it) }}"
             }
         }
-        val pageBtn = mk2(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also { root.addView(it) },
-            "PAGE 1/3 (P0-P3)") { _ ->
+        mk2(LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also { root.addView(it) },
+            "PAGE 1/3 (P0-P3)") { b ->
             paramPage = (paramPage + 1) % 3
-            pageBtn.text = arrayOf("PAGE 1/3 (P0-P3)", "PAGE 2/3 (P4-P7)", "PAGE 3/3 (PAN/SEND)")[paramPage]
+            b.text = arrayOf("PAGE 1/3 (P0-P3)", "PAGE 2/3 (P4-P7)", "PAGE 3/3 (PAN/SEND)")[paramPage]
             refreshParams()
         }
 
@@ -195,9 +195,9 @@ class DrumsActivity : Activity() {
         var compOn = true
         var compThr = 0.65f; var compRatio = 4f; var compMk = 1.3f
         val compRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val compBtn = mk2(compRow, "COMP ON") { _ ->
+        mk2(compRow, "COMP ON") { b ->
             compOn = !compOn
-            compBtn.text = if (compOn) "COMP ON" else "COMP OFF"
+            b.text = if (compOn) "COMP ON" else "COMP OFF"
             DrumsAudio.setComp(compOn, compThr, compRatio, compMk)
         }
         root.addView(compRow)
