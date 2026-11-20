@@ -685,7 +685,7 @@ class MainActivity : Activity(), SurfaceListener {
                 when {
                     msg.cc in 74..80 -> {
                         if (msg.cc == 80) {
-                            ZtekAudio.setEngine((v * 4.999f).toInt().coerceIn(0, 4))
+                            curEngine = (v * 4.999f).toInt().coerceIn(0, 4); ZtekAudio.setEngine(curEngine)
                             st.engine = (v * 4.999f).toInt().coerceIn(0, 4)
                         } else {
                             ZtekAudio.setParam(msg.cc - 74, v)
@@ -1148,6 +1148,30 @@ class MainActivity : Activity(), SurfaceListener {
     private val KEY_SHIFT = SurfaceView.BLACK_NOTES[10]    // dernière noire = Shift
     // états de modifieurs pour la page MIX (11) et la sirène
     private var recHeld = false
+    private var homeDownAt = 0L
+    private var curEngine = 0
+    private val workPages = intArrayOf(5, 11, 2, 3)   // HOME+Shift : cycle FX -> MIX -> SNAP -> KIT
+
+    private fun cycleWorkPage() {
+        val i = workPages.indexOf(st.page)
+        st.page = workPages[(i + 1) % workPages.size]
+        if (st.page == 5) { st.fxView = 0; st.fxSub = 0 }
+        if (st.page == 11) st.mixSub = 0
+        hint("PAGE " + (st.pageNames2[st.page] ?: "?"))
+        lcd.invalidate()
+    }
+
+    private fun cyclePart() {   // HOME court : BASSE -> LEAD -> DRUMS(page 15) -> LOOP(page 1)
+        st.curPart = (st.curPart + 1) % 4
+        when (st.curPart) {
+            0 -> { if (curEngine == 0) { curEngine = 1; ZtekAudio.setEngine(1) }; st.page = 0 }  // BASSE (engines 1..4)
+            1 -> { curEngine = 0; ZtekAudio.setEngine(0); st.page = 0 }                          // LEAD (engine 0)
+            2 -> st.page = 15                                                                    // DRUMS
+            else -> st.page = 1                                                                  // LOOP
+        }
+        hint(st.partNames[st.curPart])
+        lcd.invalidate(); surface.invalidate()
+    }
     private var shiftHeld = false
     private var op5Held = false
     private var op5ShiftAt = 0L         // appui long OP5+Shift = sous-menu master
@@ -1240,9 +1264,17 @@ class MainActivity : Activity(), SurfaceListener {
         val label = SurfaceView.BTN_LABELS[i]
         if (!down) {
             if (label == "REC") recHeld = false
+            if (label == "HOME" && homeDownAt > 0) {
+                if (System.currentTimeMillis() - homeDownAt < 600) cyclePart()
+                homeDownAt = 0
+            }
             return
         }
         if (label == "REC") recHeld = true
+        if (down && label == "HOME") {
+            if (shiftHeld) { cycleWorkPage(); return }
+            homeDownAt = System.currentTimeMillis()
+        }
         // REC+FX (ancien process PoW!, slot 5 récupéré) = page SIREN
         if (label == "FX" && recHeld) {
             st.page = if (st.page == 5) 0 else 5
@@ -1535,6 +1567,7 @@ class MainActivity : Activity(), SurfaceListener {
             return
         }
         val bi = SurfaceView.BLACK_NOTES.indexOf(note)
+        if (bi == 10) shiftHeld = down   // Shift (noire 10) global
         if (down && chokeCtx() && note == KEY_MONO) {   // MONO = bascule le pad/slot en mode choke
             chokeToggleMono()
             lcd.invalidate(); surface.invalidate()
