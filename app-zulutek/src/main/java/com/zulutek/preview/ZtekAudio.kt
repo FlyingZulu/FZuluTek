@@ -482,4 +482,38 @@ object ZtekAudio {
     fun eco(): Int = if (handle != 0L) nativeGetEco(handle) else 0
     private external fun nativeSetEco(handle: Long, on: Int)
     private external fun nativeGetEco(handle: Long): Int
+
+    /* ---- pedalboard FX (menu FX, REC+FX) : 4 chaînes x 3 slots = 12 ---- */
+    const val NCHAIN = 4
+    const val SPC = 3
+    const val NSLOT = 12
+    const val NCAT = 20
+    const val NBLOCK = 8
+    val FXT_NAMES = arrayOf("OFF", "DRIVE", "CHORUS", "FLANGER", "VIBRATO", "SVF", "WAH",
+        "SLAP", "ECHO", "DOTTED", "BBD", "TAPE", "GATE", "OCT",
+        "AUTOPAN", "RINGMOD", "TREM", "REV PLATE", "REV SPRING", "ROOM")
+    fun fxslotSet(slot: Int, type: Int, p0: Float, p1: Float, p2: Float, p3: Float, mix: Float) {
+        if (handle != 0L) nativeFxslotSet(handle, slot, type, p0, p1, p2, p3, mix)
+    }
+    fun fxslotType(slot: Int): Int = if (handle != 0L) nativeFxslotType(handle, slot) else 0
+    fun fxslotPar(slot: Int, k: Int): Float = if (handle != 0L) nativeFxslotPar(handle, slot, k) else 0f
+    fun fxslotMix(slot: Int): Float = if (handle != 0L) nativeFxslotMix(handle, slot) else 0f
+    fun fxchainOrder(order: IntArray) { if (handle != 0L) nativeFxchainOrder(handle, order) }
+    fun fxchainOrderGet(): IntArray = if (handle != 0L) nativeFxchainOrderGet(handle) else intArrayOf(0, 1, 2, 3)
+    fun fxchainMix(chain: Int, m: Float) { if (handle != 0L) nativeFxchainMix(handle, chain, m) }
+    fun fxchainMixGet(chain: Int): Float = if (handle != 0L) nativeFxchainMixGet(handle, chain) else 1f
+    fun fxblockSave(blk: Int) { if (handle != 0L) nativeFxblockSave(handle, blk) }
+    fun fxblockLoad(blk: Int) { if (handle != 0L) nativeFxblockLoad(handle, blk) }
+    fun fxblockUsed(blk: Int): Int = if (handle != 0L) nativeFxblockUsed(handle, blk) else 0
+    private external fun nativeFxslotSet(handle: Long, slot: Int, type: Int, p0: Float, p1: Float, p2: Float, p3: Float, mix: Float)
+    private external fun nativeFxslotType(handle: Long, slot: Int): Int
+    private external fun nativeFxslotPar(handle: Long, slot: Int, k: Int): Float
+    private external fun nativeFxslotMix(handle: Long, slot: Int): Float
+    private external fun nativeFxchainOrder(handle: Long, order: IntArray)
+    private external fun nativeFxchainOrderGet(handle: Long): IntArray
+    private external fun nativeFxchainMix(handle: Long, chain: Int, m: Float)
+    private external fun nativeFxchainMixGet(handle: Long, chain: Int): Float
+    private external fun nativeFxblockSave(handle: Long, blk: Int)
+    private external fun nativeFxblockLoad(handle: Long, blk: Int)
+    private external fun nativeFxblockUsed(handle: Long, blk: Int): Int
 }

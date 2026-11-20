@@ -155,6 +155,12 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
         /* table de mixage 4 tranches (snapshot) */
         float strip_par[ZTEK_NSTRIP][ZTEK_MIX_N];   /* base manuelle de chaque param */
         float master_par[ZTEK_MIXM_N];
+        /* pedalboard (menu FX) */
+        int   fxslot_type[ZTEK_NSLOT];
+        float fxslot_p[ZTEK_NSLOT][4];
+        float fxslot_mix[ZTEK_NSLOT];
+        int   chain_order[ZTEK_NCHAIN];
+        float chain_mix[ZTEK_NCHAIN];
     } snap[16], kit[16], undo_st[3], redo_st[3];
     int undo_n, redo_n;
 
@@ -199,6 +205,29 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     /* baie de patch v3 : assign[src] = bitset ZTEK_AWORDS x uint64 des ZTEK_NDST ports */
     uint64_t assign[ZTEK_NSRC][ZTEK_AWORDS];
     uint64_t xy_assign[2][ZTEK_AWORDS]; /* cibles des axes X/Y (sous-ensemble des ports params) */
+
+    /* ---- pedalboard FX (menu FX) : 4 chaînes x 3 slots ---- */
+    struct fxslot_t {
+        int   type;                 /* FXT_* */
+        float p[4];                 /* 4 réglages fins du module */
+        float mix;                  /* dry/wet du slot (K4 dans le sous-menu slot) */
+        /* état DSP des modules légers (par slot) */
+        float st[4];                /* ex. SVF lp/bp, env, lfo ph, delay pos... */
+        float buf[64];              /* petit buffer par slot si besoin (ring mod, gate...) */
+        float dbuf[2048];           /* ligne délai par slot (slap/echo/chorus) 8 Ko */
+        int16_t rvb[2048];          /* mini-FDN spring/room par slot (4 Ko) */
+    } fxslot[ZTEK_NSLOT];
+    int   chain_order[ZTEK_NCHAIN]; /* permutation des chaînes 0..3 */
+    float chain_mix[ZTEK_NCHAIN];   /* dry/wet par pédale (SEL sur la pédale active) */
+    struct { int used; char name[12]; } fxblock[ZTEK_NBLOCK];
+    struct {
+        int   type[ZTEK_NSLOT];
+        float p[ZTEK_NSLOT][4];
+        float mix[ZTEK_NSLOT];
+        int   order[ZTEK_NCHAIN];
+        float cmix[ZTEK_NCHAIN];
+    } fxblock_st[ZTEK_NBLOCK];
+    float *pwL, *pwR, *pwCI, *pwCO, *pwW, *pwW2;   /* pedalboard: cur(L/R), chainIn(L/R), wet(L/R) */
 
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) override
     {
@@ -406,11 +435,18 @@ ztek_t *ztek_create(float sr)
     z->sendbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->rsbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->sirenbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->pwL = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->pwR = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->pwCI = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->pwCO = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->pwW = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->pwW2 = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->smp_cap = (uint32_t)(ZTEK_SMP_SECONDS * sr);
     z->smp = (float *)malloc(z->smp_cap * sizeof(float));
-    if (!z->mono || !z->smp || !z->drumbuf || !z->mixbuf || !z->mixbufL || !z->mixbufR || !z->loopbuf || !z->sendbuf || !z->rsbuf || !z->sirenbuf) {
+    if (!z->mono || !z->smp || !z->drumbuf || !z->mixbuf || !z->mixbufL || !z->mixbufR || !z->loopbuf || !z->sendbuf || !z->rsbuf || !z->sirenbuf || !z->pwL || !z->pwR || !z->pwCI || !z->pwCO || !z->pwW || !z->pwW2) {
         free(z->mono); free(z->smp); free(z->drumbuf);
         free(z->mixbuf); free(z->mixbufL); free(z->mixbufR); free(z->loopbuf); free(z->sendbuf); free(z->rsbuf); free(z->sirenbuf);
+        free(z->pwL); free(z->pwR); free(z->pwCI); free(z->pwCO); free(z->pwW); free(z->pwW2);
         delete z; return NULL;
     }
     drum_init(&z->drum, sr);
@@ -443,6 +479,12 @@ ztek_t *ztek_create(float sr)
     z->undo_n = 0; z->redo_n = 0;
     memset(z->assign, 0, sizeof z->assign);
     memset(z->xy_assign, 0, sizeof z->xy_assign);
+    /* pedalboard par défaut : tout OFF, ordre identité, dry/wet pédales à 1 (full wet) */
+    memset(z->fxslot, 0, sizeof z->fxslot);
+    for (int s = 0; s < ZTEK_NSLOT; s++) z->fxslot[s].type = FXT_OFF;
+    for (int c = 0; c < ZTEK_NCHAIN; c++) { z->chain_order[c] = c; z->chain_mix[c] = 1.0f; }
+    memset(z->fxblock, 0, sizeof z->fxblock);
+    memset(z->fxblock_st, 0, sizeof z->fxblock_st);
     ztek_bit_set(z->assign[ZTEK_PSRC_VOIX], ZTEK_MOD_OFF[ZTEK_MOD_OUT] + 0, 1);   /* VOIX -> FX */
     ztek_bit_set(z->assign[ZTEK_PSRC_SIREN], ZTEK_MOD_OFF[ZTEK_MOD_OUT] + 0, 1);  /* SIREN -> FX */
     ztek_bit_set(z->assign[ZTEK_PSRC_SMP], ZTEK_MOD_OFF[ZTEK_MOD_OUT] + 1, 1);    /* SMP/AIN -> MASTER */
@@ -471,6 +513,7 @@ void ztek_destroy(ztek_t *z)
     free(z->sendbuf);
     free(z->rsbuf);
     free(z->sirenbuf);
+    free(z->pwL); free(z->pwR); free(z->pwCI); free(z->pwCO); free(z->pwW); free(z->pwW2);
     delete z;
 }
 
@@ -912,6 +955,14 @@ static void ztek_capture(ztek_t *z, ztek_t::ztek_state_t *s)
         for (p = 0; p < ZTEK_MIX_N; p++) s->strip_par[i][p] = ztek_mix_get_strip(z, i, p);
     }
     for (i = 0; i < ZTEK_MIXM_N; i++) s->master_par[i] = ztek_mix_get_master(z, i);
+    /* pedalboard */
+    for (i = 0; i < ZTEK_NSLOT; i++) {
+        s->fxslot_type[i] = z->fxslot[i].type;
+        for (int p = 0; p < 4; p++) s->fxslot_p[i][p] = z->fxslot[i].p[p];
+        s->fxslot_mix[i] = z->fxslot[i].mix;
+    }
+    memcpy(s->chain_order, z->chain_order, sizeof s->chain_order);
+    memcpy(s->chain_mix, z->chain_mix, sizeof s->chain_mix);
 }
 
 static void ztek_apply(ztek_t *z, const ztek_t::ztek_state_t *s)
@@ -945,6 +996,11 @@ static void ztek_apply(ztek_t *z, const ztek_t::ztek_state_t *s)
         for (p = 0; p < ZTEK_MIX_N; p++) ztek_mix_set_strip(z, i, p, s->strip_par[i][p]);
     }
     for (i = 0; i < ZTEK_MIXM_N; i++) ztek_mix_set_master(z, i, s->master_par[i]);
+    for (i = 0; i < ZTEK_NSLOT; i++)
+        ztek_fxslot_set(z, i, s->fxslot_type[i], s->fxslot_p[i][0], s->fxslot_p[i][1],
+                       s->fxslot_p[i][2], s->fxslot_p[i][3], s->fxslot_mix[i]);
+    ztek_fxchain_order(z, s->chain_order);
+    for (i = 0; i < ZTEK_NCHAIN; i++) ztek_fxchain_mix(z, i, s->chain_mix[i]);
     for (i = 0; i < ML_NSLOTS; i++) {
         int want = (s->slotmask >> i) & 1u;
         if (want != z->loop.slot[i].on) ml_toggle(&z->loop, i);
@@ -2212,6 +2268,357 @@ float ztek_arp_knob_get(const ztek_t *z, int k)
 
 int ztek_arp_held(const ztek_t *z) { return z->arp_n; }
 
+/* ---- pedalboard FX (menu FX, REC+FX) -------------------------------------------------- */
+
+const char *const ZTEK_FXT_NAME[FXT_NCAT] = {
+    "OFF", "DRIVE", "CHORUS", "FLANGER", "VIBRATO", "SVF", "WAH",
+    "SLAP", "ECHO", "DOTTED", "BBD", "TAPE", "GATE", "OCT",
+    "AUTOPAN", "RINGMOD", "TREM", "REV PLATE", "REV SPRING", "ROOM"
+};
+
+static int ztek_fxt_heavy(int t) { return t == FXT_REV_PLATE || t == FXT_BBD || t == FXT_TAPE; }
+
+void ztek_fxslot_set(ztek_t *z, int slot, int type, float p0, float p1, float p2, float p3, float mix)
+{
+    if (slot < 0 || slot >= ZTEK_NSLOT) return;
+    if (type < 0 || type >= FXT_NCAT) type = FXT_OFF;
+    ztek_s::fxslot_t *s = &z->fxslot[slot];
+    if (s->type != type) { memset(s->st, 0, sizeof s->st); memset(s->dbuf, 0, sizeof s->dbuf); memset(s->rvb, 0, sizeof s->rvb); }
+    s->type = type;
+    s->p[0] = p0; s->p[1] = p1; s->p[2] = p2; s->p[3] = p3;
+    s->mix = mix < 0.0f ? 0.0f : mix > 1.0f ? 1.0f : mix;
+}
+
+int   ztek_fxslot_type(const ztek_t *z, int slot) { return (slot >= 0 && slot < ZTEK_NSLOT) ? z->fxslot[slot].type : FXT_OFF; }
+float ztek_fxslot_par(const ztek_t *z, int slot, int k)
+{
+    if (slot < 0 || slot >= ZTEK_NSLOT || k < 0 || k > 3) return 0.0f;
+    return z->fxslot[slot].p[k];
+}
+float ztek_fxslot_mix(const ztek_t *z, int slot) { return (slot >= 0 && slot < ZTEK_NSLOT) ? z->fxslot[slot].mix : 0.0f; }
+
+void ztek_fxchain_order(ztek_t *z, const int order[ZTEK_NCHAIN])
+{
+    int seen[ZTEK_NCHAIN] = {0,0,0,0};
+    for (int i = 0; i < ZTEK_NCHAIN; i++) {
+        int c = order[i];
+        if (c < 0 || c >= ZTEK_NCHAIN || seen[c]) c = i;
+        seen[c] = 1;
+        z->chain_order[i] = c;
+    }
+}
+
+void ztek_fxchain_order_get(const ztek_t *z, int out[ZTEK_NCHAIN])
+{
+    for (int i = 0; i < ZTEK_NCHAIN; i++) out[i] = z->chain_order[i];
+}
+
+void ztek_fxchain_mix(ztek_t *z, int chain, float m)
+{
+    if (chain < 0 || chain >= ZTEK_NCHAIN) return;
+    z->chain_mix[chain] = m < 0.0f ? 0.0f : m > 1.0f ? 1.0f : m;
+}
+
+float ztek_fxchain_mix_get(const ztek_t *z, int chain)
+{
+    return (chain >= 0 && chain < ZTEK_NCHAIN) ? z->chain_mix[chain] : 1.0f;
+}
+
+void ztek_fxblock_save(ztek_t *z, int blk)
+{
+    if (blk < 0 || blk >= ZTEK_NBLOCK) return;
+    z->fxblock[blk].used = 1;
+    snprintf(z->fxblock[blk].name, sizeof z->fxblock[blk].name, "BLOC%d", blk + 1);
+    for (int s = 0; s < ZTEK_NSLOT; s++) {
+        z->fxblock_st[blk].type[s] = z->fxslot[s].type;
+        memcpy(z->fxblock_st[blk].p[s], z->fxslot[s].p, sizeof z->fxslot[s].p);
+        z->fxblock_st[blk].mix[s] = z->fxslot[s].mix;
+    }
+    memcpy(z->fxblock_st[blk].order, z->chain_order, sizeof z->chain_order);
+    memcpy(z->fxblock_st[blk].cmix, z->chain_mix, sizeof z->chain_mix);
+}
+
+void ztek_fxblock_load(ztek_t *z, int blk)
+{
+    if (blk < 0 || blk >= ZTEK_NBLOCK || !z->fxblock[blk].used) return;
+    for (int s = 0; s < ZTEK_NSLOT; s++) {
+        z->fxslot[s].type = z->fxblock_st[blk].type[s];
+        memcpy(z->fxslot[s].p, z->fxblock_st[blk].p[s], sizeof z->fxslot[s].p);
+        z->fxslot[s].mix = z->fxblock_st[blk].mix[s];
+        memset(z->fxslot[s].st, 0, sizeof z->fxslot[s].st);
+    }
+    memcpy(z->chain_order, z->fxblock_st[blk].order, sizeof z->chain_order);
+    memcpy(z->chain_mix, z->fxblock_st[blk].cmix, sizeof z->chain_mix);
+}
+
+int ztek_fxblock_used(const ztek_t *z, int blk)
+{
+    return (blk >= 0 && blk < ZTEK_NBLOCK) ? z->fxblock[blk].used : 0;
+}
+
+/* petit SVF (state-variable filter) 2 pôles, par slot. mode: 0 LP 1 HP 2 BP */
+static void ztek_svf(ztek_s::fxslot_t *s, float x, float sr, int mode, float *out)
+{
+    float f = 40.0f * fm_exp2f(7.0f * s->p[0]);
+    float q = 0.5f + 8.0f * s->p[1];
+    float a = FM_TWO_PI * f / sr;
+    if (a > 1.0f) a = 1.0f;
+    float lp = s->st[0] + a * s->st[1];
+    float hp = x - lp - s->st[1] / q;
+    float bp = s->st[1];
+    s->st[1] += a * hp;
+    s->st[0] = lp;
+    *out = mode == 0 ? lp : mode == 1 ? hp : bp;
+}
+
+/* module léger d'un slot, in-place sur l/r (n échantillons). Retourne 1 si traité ici. */
+static int ztek_slot_light(ztek_t *z, int slot, float *l, float *r, uint32_t n)
+{
+    ztek_s::fxslot_t *s = &z->fxslot[slot];
+    float sr = z->sr, fsr = 1.0f / sr;
+    uint32_t i;
+    switch (s->type) {
+    case FXT_DRIVE: {   /* p0 gain, p1 tone, p2 level, p3 variante 0 od/1 rat/2 fuzz/3 mojo+crush */
+        float g = fm_exp2f(6.0f * s->p[0]);
+        int var = (int)(s->p[3] * 3.99f);
+        for (i = 0; i < n; i++) {
+            float x = l[i] * g;
+            float y;
+            if (var == 1) y = x > 0.7f ? 0.7f : x < -0.7f ? -0.7f : x;            /* RAT hard */
+            else if (var == 2) y = fm_tanhf(x * 3.0f) * (x > 0 ? 1.2f : 0.6f);   /* FUZZ asymétrique */
+            else if (var == 3) { float b = 8.0f - s->p[1] * 6.0f; if (b < 1) b = 1;
+                                 float lv = fm_exp2f(b - 1); y = fm_floorf(fm_tanhf(x * 1.5f) * lv + 0.5f) / lv; } /* MOJO+crush */
+            else y = fm_tanhf(x * 1.2f);                                          /* OD soft */
+            s->st[2] += (1.0f - fm_expf(-FM_TWO_PI * (200.0f + 8000.0f * s->p[1]) / sr)) * (y - s->st[2]);
+            float o = s->st[2] * (0.3f + 1.4f * s->p[2]);
+            l[i] = o; r[i] = o;
+        }
+        return 1;
+    }
+    case FXT_TREM: {
+        float rate = 0.2f + 8.0f * s->p[0];
+        for (i = 0; i < n; i++) {
+            s->st[0] += rate * FM_TWO_PI * fsr;
+            if (s->st[0] > FM_TWO_PI) s->st[0] -= FM_TWO_PI;
+            float a = 0.5f + 0.5f * fm_sinf(s->st[0]);
+            a = a * a * (1.0f - s->p[1]) + s->p[1];   /* p1 = profondeur inverse (forme) */
+            l[i] *= a; r[i] *= a;
+        }
+        return 1;
+    }
+    case FXT_RINGMOD: {
+        float f = 5.0f * fm_exp2f(8.0f * s->p[0]);   /* 5 Hz .. 1.2 kHz */
+        for (i = 0; i < n; i++) {
+            s->st[0] += f * fsr;
+            if (s->st[0] >= 1.0f) s->st[0] -= 1.0f;
+            float m = fm_sin_turns(s->st[0]);
+            l[i] *= m; r[i] *= m;
+        }
+        return 1;
+    }
+    case FXT_AUTOPAN: {
+        float rate = 0.1f + 4.0f * s->p[0];
+        float depth = s->p[1];
+        for (i = 0; i < n; i++) {
+            s->st[0] += rate * FM_TWO_PI * fsr;
+            if (s->st[0] > FM_TWO_PI) s->st[0] -= FM_TWO_PI;
+            float p = 0.5f + 0.5f * depth * fm_sinf(s->st[0]);
+            float pl = p <= 0.5f ? 1.0f : (1.0f - p) * 2.0f;
+            float pr = p >= 0.5f ? 1.0f : p * 2.0f;
+            l[i] *= pl; r[i] *= pr;
+        }
+        return 1;
+    }
+    case FXT_GATE: {   /* p0 = seuil, p1 = hold (s), p2 = retrig rate pattern */
+        float thr = 0.02f + 0.5f * s->p[0];
+        float hold = (int32_t)(s->p[1] * sr);
+        for (i = 0; i < n; i++) {
+            float a = l[i] < 0 ? -l[i] : l[i];
+            if (a > s->st[1]) s->st[1] = a; else s->st[1] *= 0.999f;
+            int open = s->st[1] > thr || s->st[2] > 0;
+            if (open && s->st[2] > 0) s->st[2]--;
+            if (!open && s->st[1] > thr) s->st[2] = hold;
+            float g = (s->st[1] > thr || s->st[2] > 0) ? 1.0f : 0.0f;
+            l[i] *= g; r[i] *= g;
+        }
+        return 1;
+    }
+    case FXT_OCT: {    /* sub-octave : redressement + LP, p0 = amount */
+        float ca = 1.0f - fm_expf(-FM_TWO_PI * 300.0f / sr);
+        for (i = 0; i < n; i++) {
+            float x = l[i];
+            float sub = x > 0 ? x : -x;      /* redressement pleine onde ~ octave bas */
+            s->st[0] += ca * (sub - s->st[0]);
+            float o = x * (1.0f - s->p[0]) + s->st[0] * 2.0f * s->p[0];
+            l[i] = o; r[i] = o;
+        }
+        return 1;
+    }
+    case FXT_SVF: {    /* p0 cutoff, p1 reso, p2 mode (0 LP 1 HP 2 BP) */
+        int mode = (int)(s->p[2] * 2.99f);
+        for (i = 0; i < n; i++) {
+            float o;
+            ztek_svf(s, l[i], sr, mode, &o);
+            l[i] = o; r[i] = o;
+        }
+        return 1;
+    }
+    case FXT_WAH: {    /* auto-wah : enveloppe -> cutoff du SVF LP */
+        float peak = s->st[3];
+        float ca = 1.0f - fm_expf(-FM_TWO_PI * 2000.0f / sr);
+        for (i = 0; i < n; i++) {
+            float x = l[i]; float a = x < 0 ? -x : x;
+            if (a > peak) peak = a; else peak *= 0.9995f;
+            s->p[0] = 0.05f + 0.95f * (peak / (peak + 0.1f)) * (0.3f + 0.7f * s->p[1]);
+            float o;
+            ztek_svf(s, x, sr, 0, &o);
+            l[i] = o; r[i] = o;
+        }
+        s->st[3] = peak;
+        (void)ca;
+        return 1;
+    }
+    case FXT_SLAP: case FXT_ECHO: case FXT_DOTTED: case FXT_CHORUS: case FXT_FLANGER: case FXT_VIBRATO: {
+        /* ligne à retard par slot dans dbuf[2048] */
+        float *d = s->dbuf;
+        int dlen = 2048;
+        uint32_t pos = (uint32_t)s->st[3];
+        float ms, fb = 0.0f, lfoRate = 0.0f, lfoDepth = 0.0f, mod = 0.0f;
+        int isMod = (s->type == FXT_CHORUS || s->type == FXT_FLANGER || s->type == FXT_VIBRATO);
+        if (s->type == FXT_SLAP) ms = 30.0f + 90.0f * s->p[0];
+        else if (s->type == FXT_DOTTED) ms = 750.0f * (60.0f / (z->bpm > 20.0f ? z->bpm : 120.0f));  /* dotted 1/8 */
+        else if (s->type == FXT_ECHO) ms = 60.0f + 340.0f * s->p[0];
+        else ms = 8.0f;   /* mod: base 8 ms */
+        if (isMod) { lfoRate = 0.2f + 5.0f * s->p[0]; lfoDepth = s->p[1] * 8.0f; fb = s->type == FXT_FLANGER ? s->p[2] * 0.7f : 0.0f; mod = 1.0f; }
+        else if (s->type == FXT_ECHO) fb = s->p[1] * 0.8f;
+        int d0 = (int)(ms * 0.001f * sr);
+        if (d0 < 2) d0 = 2; if (d0 >= dlen - 16) d0 = dlen - 16;
+        float damp = 1.0f - fm_expf(-FM_TWO_PI * (400.0f + 6000.0f * s->p[2]) / sr);
+        for (i = 0; i < n; i++) {
+            float x = (l[i] + r[i]) * 0.5f;
+            float rd;
+            if (isMod) {
+                s->st[0] += lfoRate * FM_TWO_PI * fsr;
+                if (s->st[0] > FM_TWO_PI) s->st[0] -= FM_TWO_PI;
+                int dd = d0 + (int)(lfoDepth * fm_sinf(s->st[0]));
+                if (dd < 2) dd = 2; if (dd >= dlen) dd = dlen - 1;
+                uint32_t rp = pos - dd; if ((int)rp < 0) rp += dlen;
+                rd = d[rp];
+            } else {
+                uint32_t rp = pos - d0; if ((int)rp < 0) rp += dlen;
+                rd = d[rp];
+                s->st[1] += damp * (rd - s->st[1]);
+                rd = s->st[1];
+            }
+            d[pos] = x + rd * fb;
+            pos++; if (pos >= (uint32_t)dlen) pos = 0;
+            float wet = isMod ? (mod ? rd : rd) : rd;
+            if (s->type == FXT_VIBRATO) { l[i] = wet; r[i] = wet; }
+            else if (isMod) {
+                float w = s->p[2] * 0.5f + 0.5f;   /* p2 = amount du mod */
+                l[i] = x * (1.0f - w) + rd * w; r[i] = x * (1.0f - w) + rd * w;
+            } else {
+                l[i] += wet; r[i] += wet;         /* slap/echo: on ajoute (dry/wet géré par mix du slot) */
+            }
+        }
+        s->st[3] = (float)pos;
+        return 1;
+    }
+    case FXT_REV_SPRING: case FXT_ROOM: {
+        /* mini-FDN dans rvb[2048] int16 : spring = 2 combs, room = 4 combs */
+        int nc = (s->type == FXT_REV_SPRING) ? 2 : 4;
+        int clen = 2048 / nc;
+        static const int plen[4] = { 911, 1229, 1543, 1871 };  /* premiers, < clen */
+        float decay = 0.5f + 0.49f * s->p[0];
+        float damp = 1.0f - fm_expf(-FM_TWO_PI * (1500.0f + 5000.0f * s->p[1]) / sr);
+        for (i = 0; i < n; i++) {
+            float x = (l[i] + r[i]) * 0.5f;
+            float acc = 0.0f;
+            for (int c = 0; c < nc; c++) {
+                int off = c * clen;
+                int L = plen[c] % (clen - 8); if (L < 8) L = 8;
+                int rp = (int)s->st[c] - L; if (rp < 0) rp += clen;
+                float dv = (float)s->rvb[off + rp] * (1.0f / 32768.0f);
+                s->st[1] += damp * (dv - s->st[1]);
+                float wv = x * 0.25f + s->st[1] * decay;
+                s->rvb[off + (int)s->st[c]] = (int16_t)(wv * 32767.0f);
+                s->st[c] += 1.0f; if (s->st[c] >= clen) s->st[c] = 0.0f;
+                acc += dv;
+            }
+            float wet = acc * 2.0f;
+            l[i] += wet; r[i] += wet;
+        }
+        return 1;
+    }
+    default:
+        return 0;   /* OFF ou lourd -> géré ailleurs */
+    }
+}
+
+/* module lourd (REV_PLATE / BBD / TAPE) : délégué à la chaîne fx.c globale (exemplaire unique). */
+static void ztek_slot_heavy(ztek_t *z, int slot, const float *in, float *outL, float *outR, uint32_t n)
+{
+    ztek_s::fxslot_t *s = &z->fxslot[slot];
+    float saved[FX_NPARAMS];
+    for (int p = 0; p < FX_NPARAMS; p++) saved[p] = fx_get(p);
+    for (int p = 0; p < FX_NPARAMS; p++) fx_set(p, 0.0f);
+    if (s->type == FXT_REV_PLATE) {
+        fx_set(FX_REV_DECAY, s->p[0]); fx_set(FX_REV_DAMP, s->p[1]);
+        fx_set(FX_REV_PRE, s->p[2]);   fx_set(FX_REV_MIX, 1.0f);
+    } else {   /* BBD / TAPE */
+        fx_set(FX_DLY_TIME, s->p[0]); fx_set(FX_DLY_FEEDBACK, s->p[1]);
+        fx_set(FX_DLY_TONE, s->p[2]); fx_set(FX_DLY_MIX, 1.0f);
+    }
+    fx_process(in, outL, outR, n);
+    for (int p = 0; p < FX_NPARAMS; p++) fx_set(p, saved[p]);
+}
+
+/* le pedalboard complet : 4 chaînes dans l'ordre chain_order, 3 slots chacune,
+ * dry/wet par slot (dans la chaîne) puis dry/wet par chaîne (SEL de la pédale). */
+static void ztek_pedalboard(ztek_t *z, const float *inL, const float *inR, float *oL, float *oR, uint32_t n)
+{
+    /* pwL/pwR = signal courant ; pwCI/pwCO = entrée de la chaîne courante ; pwW/pwW2 = wet */
+    memcpy(z->pwL, inL, n * sizeof(float));
+    memcpy(z->pwR, inR, n * sizeof(float));
+    int heavy_used = 0;
+    for (int ci = 0; ci < ZTEK_NCHAIN; ci++) {
+        int c = z->chain_order[ci];
+        float cmix = z->chain_mix[c];
+        memcpy(z->pwCI, z->pwL, n * sizeof(float));
+        memcpy(z->pwCO, z->pwR, n * sizeof(float));
+        for (int k = 0; k < ZTEK_SPC; k++) {
+            int slot = c * ZTEK_SPC + k;
+            ztek_s::fxslot_t *s = &z->fxslot[slot];
+            if (s->type == FXT_OFF) continue;
+            float m = s->mix;
+            if (ztek_fxt_heavy(s->type)) {
+                if (heavy_used) continue;                    /* exemplaire unique */
+                heavy_used = 1;
+                for (uint32_t i = 0; i < n; i++) z->pwW[i] = (z->pwL[i] + z->pwR[i]) * 0.5f;
+                ztek_slot_heavy(z, slot, z->pwW, z->pwW, z->pwW2, n);
+                for (uint32_t i = 0; i < n; i++) {
+                    z->pwL[i] = z->pwL[i] * (1.0f - m) + z->pwW[i] * m;
+                    z->pwR[i] = z->pwR[i] * (1.0f - m) + z->pwW2[i] * m;
+                }
+            } else {
+                memcpy(z->pwW, z->pwL, n * sizeof(float));
+                memcpy(z->pwW2, z->pwR, n * sizeof(float));
+                ztek_slot_light(z, slot, z->pwW, z->pwW2, n);
+                for (uint32_t i = 0; i < n; i++) {
+                    z->pwL[i] = z->pwL[i] * (1.0f - m) + z->pwW[i] * m;
+                    z->pwR[i] = z->pwR[i] * (1.0f - m) + z->pwW2[i] * m;
+                }
+            }
+        }
+        for (uint32_t i = 0; i < n; i++) {                   /* dry/wet de la pédale (chaîne) */
+            z->pwL[i] = z->pwCI[i] * (1.0f - cmix) + z->pwL[i] * cmix;
+            z->pwR[i] = z->pwCO[i] * (1.0f - cmix) + z->pwR[i] * cmix;
+        }
+    }
+    memcpy(oL, z->pwL, n * sizeof(float));
+    memcpy(oR, z->pwR, n * sizeof(float));
+}
+
 void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
 {
     uint32_t done = 0;
@@ -2385,12 +2792,17 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
         }
         ml_rs_feed(&z->loop, z->sendbuf, blk);                        /* resample = ce qui est envoyé au Loop */
 
-        /* 5. FX chain partagée sur le bus master (mono in, stereo out) — baie : VOIX/DRUMS -> FXIN/AUX1 */
+        /* 5. FX sur le bus master — baie : VOIX/DRUMS -> FXIN/AUX1.
+         * Si le pedalboard (menu FX) a au moins un slot actif : 4 chaînes ordonnées, 12 slots.
+         * Sinon : chaîne fx.c globale historique (comportement d'avant, params CC 20..37). */
         if (ztek_bit_get(z->assign[ZTEK_PSRC_VOIX], ZTEK_PORT_FXIN) ||
             ztek_bit_get(z->assign[ZTEK_PSRC_VOIX], ZTEK_PORT_AUX1) ||
             ztek_bit_get(z->assign[ZTEK_PSRC_DRUMS], ZTEK_PORT_FXIN) ||
             ztek_bit_get(z->assign[ZTEK_PSRC_DRUMS], ZTEK_PORT_AUX1)) {
-            fx_process(z->mixbuf, outL + done, outR + done, blk);
+            int any = 0;
+            for (int s2 = 0; s2 < ZTEK_NSLOT; s2++) if (z->fxslot[s2].type != FXT_OFF) any = 1;
+            if (any) ztek_pedalboard(z, z->mixbufL, z->mixbufR, outL + done, outR + done, blk);
+            else fx_process(z->mixbuf, outL + done, outR + done, blk);
         } else {
             for (uint32_t i = 0; i < blk; i++) { outL[done + i] = z->mixbufL[i]; outR[done + i] = z->mixbufR[i]; }
         }

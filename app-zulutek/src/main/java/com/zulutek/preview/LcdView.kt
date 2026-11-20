@@ -174,6 +174,18 @@ class LcdState {
     var sirenRate = 0.5f
     var sirenFb = 0f
     var sirenMix = 0f
+
+    // menu FX (page 5, REC+FX) : fxView 0 = pedalboard, 1 = sirène (ALG bascule sur la vue principale)
+    var fxView = 0
+    var fxSub = 0            // 0 = vue d'ensemble, 1 = sous-menu chaîne, 2 = sous-menu slot
+    var fxChainSel = 0       // pédale sélectionnée (OP1..OP4)
+    var fxSlotSel = 0        // slot en édition (sous-menu slot)
+    var fxBlockSel = 0       // bloc (preset du board) sélectionné
+    val fxSlotType = IntArray(12)
+    val fxSlotP = Array(12) { FloatArray(4) }
+    val fxSlotMix = FloatArray(12)
+    val fxChainMix = FloatArray(4)
+    val fxChainOrder = IntArray(4)
     val drumPat = BooleanArray(ZtekAudio.DR_NPADS * 16)  // grille 16 steps par pad
     val drumLvl = FloatArray(ZtekAudio.DR_NPADS)     // niveau par pad
     var drumSwing = 0f                              // swing du séquenceur drums
@@ -526,8 +538,8 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             return
         }
 
-        // ---- page SIREN (5, ouverte par REC+FX = ancien process PoW!) ----
-        if (st.page == 5) {
+        // ---- menu FX (5, REC+FX) : vue 0 = PEDALBOARD, vue 1 = SIRENE (ALG bascule) ----
+        if (st.page == 5 && st.fxView == 1) {
             text(c, 6f, 15f, "SIREN", REC_RED, 12f)
             text(c, 70f, 15f, if (st.sirenOn) "ON" else "OFF", if (st.sirenOn) REC_RED else DIM, 9f)
             text(c, 6f, 40f, "TYPE", DIM, 9f)
@@ -542,7 +554,82 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 text(c, 200f, y0 + 15f, "${(bars[i].second * 100).toInt()}", INK, 9f)
             }
             text(c, 6f, 224f, "SEL=ON/OFF  ALG=type(4)  K1=RATE K2=DEPTH K3=FB K4=MIX", DIM, 8f)
-            text(c, 6f, 236f, "clavier chromatique  REC+FX=quitte  (hors page: triple-tap GLO, noires PIT/GLO/MONO/POLY)", DIM, 8f)
+            text(c, 6f, 236f, "clavier chromatique  ALG=retour pedalboard  REC=quitte", DIM, 8f)
+            c.restore()
+            return
+        }
+        if (st.page == 5) {   // vue PEDALBOARD
+            text(c, 6f, 15f, "FX", FLUO_TURQ, 12f)
+            text(c, 40f, 15f, "PEDALBOARD", FLUO_TURQ, 9f)
+            text(c, 190f, 15f, "ALG=SIREN", DIM, 8f)
+            if (st.fxSub == 0) {
+                // vue d'ensemble : 4 chaînes dans l'ordre d'exécution, 3 slots chacune
+                for (ci in 0 until 4) {
+                    val ch = st.fxChainOrder[ci]
+                    val x0 = 6f + ci * 59f
+                    val sel = ch == st.fxChainSel
+                    box(c, x0, 24f, x0 + 55f, 118f, if (sel) FLUO_TURQ else DIM)
+                    text(c, x0 + 3f, 36f, "CH${ch + 1}${if (ci < 3) "→" else ""}", if (sel) INK else DIM, 8f)
+                    for (k in 0 until 3) {
+                        val s = ch * 3 + k
+                        val t = st.fxSlotType[s].coerceIn(0, ZtekAudio.NCAT - 1)
+                        val y0 = 42f + k * 22f
+                        text(c, x0 + 3f, y0 + 9f, ZtekAudio.FXT_NAMES[t].take(7), if (t == 0) DIM else FLUO_YEL, 7f)
+                        frame.color = if (t == 0) Color.argb(255, 50, 50, 50) else FLUO_PINK
+                        c.drawLine(x0 + 3f, y0 + 14f, x0 + 3f + 46f * st.fxSlotMix[s].coerceIn(0f, 1f), y0 + 14f, frame)
+                    }
+                    // dry/wet de la pédale (SEL)
+                    frame.color = FLUO_TURQ
+                    c.drawLine(x0 + 3f, 112f, x0 + 3f + 46f * st.fxChainMix[ch].coerceIn(0f, 1f), 112f, frame)
+                    text(c, x0 + 3f, 118f, "DW${(st.fxChainMix[ch] * 9).toInt()}", DIM, 7f)
+                }
+                // blocs (presets du board)
+                text(c, 6f, 134f, "BLOCS", DIM, 8f)
+                for (b in 0 until 8) {
+                    val x0 = 50f + b * 24f
+                    val used = ZtekAudio.fxblockUsed(b) == 1
+                    box(c, x0, 128f, x0 + 20f, 144f, if (b == st.fxBlockSel) FLUO_TURQ else if (used) FLUO_YEL else DIM)
+                    text(c, x0 + 6f, 139f, "${b + 1}", if (b == st.fxBlockSel || used) INK else DIM, 8f)
+                }
+                text(c, 6f, 158f, "OP1..4=pédale  SEL=dry/wet pédale  K1..K3=dry/wet slots  PRE=bloc", DIM, 8f)
+                text(c, 6f, 170f, "Shift+OPx=sous-menu pédale  PLAY=bloc load/save  REC=quitte", DIM, 8f)
+            } else if (st.fxSub == 1) {
+                // sous-menu chaîne : la pédale et ses 3 slots
+                val ch = st.fxChainSel
+                text(c, 6f, 30f, "PÉDALE CH${ch + 1}   dry/wet SEL=${(st.fxChainMix[ch] * 100).toInt()}", FLUO_TURQ, 10f)
+                for (k in 0 until 3) {
+                    val s = ch * 3 + k
+                    val t = st.fxSlotType[s].coerceIn(0, ZtekAudio.NCAT - 1)
+                    val y0 = 44f + k * 44f
+                    val sel = st.fxSlotSel == s
+                    box(c, 6f, y0, 234f, y0 + 38f, if (sel) FLUO_TURQ else DIM)
+                    text(c, 12f, y0 + 14f, "SLOT ${k + 1}", DIM, 8f)
+                    text(c, 70f, y0 + 14f, ZtekAudio.FXT_NAMES[t], if (t == 0) DIM else FLUO_YEL, 10f)
+                    frame.color = FLUO_PINK
+                    c.drawLine(70f, y0 + 26f, 70f + 150f * st.fxSlotMix[s].coerceIn(0f, 1f), y0 + 26f, frame)
+                    text(c, 12f, y0 + 32f, "DW${(st.fxSlotMix[s] * 100).toInt()}", DIM, 8f)
+                }
+                text(c, 6f, 186f, "Shift+OP1/2/3 = sous-menu slot  ALG=échange ordre  SEL=chaîne", DIM, 8f)
+                text(c, 6f, 198f, "REC=retour", DIM, 8f)
+            } else {
+                // sous-menu slot : choix de l'effet (ALG) + réglages fins K1..K3, PRE=p3, K4=dry/wet
+                val s = st.fxSlotSel
+                val t = st.fxSlotType[s].coerceIn(0, ZtekAudio.NCAT - 1)
+                text(c, 6f, 30f, "SLOT ${s + 1} (CH${s / 3 + 1}.${s % 3 + 1})", FLUO_TURQ, 10f)
+                text(c, 6f, 52f, "EFFET", DIM, 9f)
+                text(c, 70f, 52f, ZtekAudio.FXT_NAMES[t], FLUO_YEL, 12f)
+                text(c, 200f, 52f, "ALG", DIM, 8f)
+                val kn = arrayOf("K1" to st.fxSlotP[s][0], "K2" to st.fxSlotP[s][1], "K3" to st.fxSlotP[s][2],
+                                 "PRE" to st.fxSlotP[s][3], "K4 DW" to st.fxSlotMix[s])
+                for (i in kn.indices) {
+                    val y0 = 66f + i * 30f
+                    text(c, 6f, y0 + 12f, kn[i].first, DIM, 9f)
+                    box(c, 60f, y0, 234f, y0 + 18f, DIM)
+                    frame.color = if (i == 4) FLUO_PINK else FLUO_TURQ
+                    c.drawLine(62f, y0 + 9f, 62f + 168f * kn[i].second.coerceIn(0f, 1f), y0 + 9f, frame)
+                }
+                text(c, 6f, 226f, "ALG=effet  K1..K3=réglages  PRE=p3  K4=dry/wet  REC=retour", DIM, 8f)
+            }
             c.restore()
             return
         }

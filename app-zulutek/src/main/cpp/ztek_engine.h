@@ -346,6 +346,35 @@ void ztek_loop_clear_leader(ztek_t *z, int grp);         /* POLY sans pad : mode
 void ztek_patch_set(ztek_t *z, int src, int dst, int on);
 int  ztek_patch_get(const ztek_t *z, int src, int dst);
 
+/* ---- pedalboard FX (menu FX, REC+FX) : 4 chaînes ordonnables x 3 slots = 12 ----------
+ * Chaque slot choisit un module dans le catalogue FXT_*. Modules légers = DSP propre
+ * par slot (clonables) ; modules lourds (FXT_REV_PLATE, FXT_BBD, FXT_TAPE) = délégués à
+ * la chaîne fx.c globale, exemplaire UNIQUE (un seul slot lourd actif à la fois).
+ * dry/wet par slot (mix) + dry/wet par chaîne (chain_mix, knob SEL sur la pédale active).
+ * Ordre des chaînes = permutation chain_order[]. Blocs = presets du board (8 slots). */
+#define ZTEK_NCHAIN 4
+#define ZTEK_SPC 3                          /* slots par chaîne ("agglomérer par trois") */
+#define ZTEK_NSLOT (ZTEK_NCHAIN * ZTEK_SPC) /* 12 */
+enum {
+    FXT_OFF = 0, FXT_DRIVE, FXT_CHORUS, FXT_FLANGER, FXT_VIBRATO, FXT_SVF, FXT_WAH,
+    FXT_SLAP, FXT_ECHO, FXT_DOTTED, FXT_BBD, FXT_TAPE, FXT_GATE, FXT_OCT,
+    FXT_AUTOPAN, FXT_RINGMOD, FXT_TREM, FXT_REV_PLATE, FXT_REV_SPRING, FXT_ROOM,
+    FXT_NCAT
+};
+#define ZTEK_NBLOCK 8
+extern const char *const ZTEK_FXT_NAME[FXT_NCAT];
+void  ztek_fxslot_set(ztek_t *z, int slot, int type, float p0, float p1, float p2, float p3, float mix);
+int   ztek_fxslot_type(const ztek_t *z, int slot);
+float ztek_fxslot_par(const ztek_t *z, int slot, int k);   /* k 0..3 */
+float ztek_fxslot_mix(const ztek_t *z, int slot);
+void  ztek_fxchain_order(ztek_t *z, const int order[ZTEK_NCHAIN]);  /* permutation 0..3 */
+void  ztek_fxchain_order_get(const ztek_t *z, int out[ZTEK_NCHAIN]);
+void  ztek_fxchain_mix(ztek_t *z, int chain, float m);             /* dry/wet pédale (SEL) */
+float ztek_fxchain_mix_get(const ztek_t *z, int chain);
+void  ztek_fxblock_save(ztek_t *z, int blk);
+void  ztek_fxblock_load(ztek_t *z, int blk);
+int   ztek_fxblock_used(const ztek_t *z, int blk);
+
 #ifdef __cplusplus
 }
 #endif

@@ -191,9 +191,18 @@ class MainActivity : Activity(), SurfaceListener {
                     hint("MASTER")
                 }
             }
-            if (st.page == 5) {   // page SIREN : rafraîchit depuis le moteur
+            if (st.page == 5) {   // menu FX : rafraîchit sirène + pedalboard depuis le moteur
                 st.sirenWave = ZtekAudio.sirenWaveGet()
                 st.sirenMix = ZtekAudio.sirenMixGet()
+                if (st.fxView == 0) {
+                    for (s in 0 until 12) {
+                        st.fxSlotType[s] = ZtekAudio.fxslotType(s)
+                        for (k in 0..3) st.fxSlotP[s][k] = ZtekAudio.fxslotPar(s, k)
+                        st.fxSlotMix[s] = ZtekAudio.fxslotMix(s)
+                    }
+                    for (c in 0..3) st.fxChainMix[c] = ZtekAudio.fxchainMixGet(c)
+                    st.fxChainOrder.copyFrom(ZtekAudio.fxchainOrderGet())
+                }
             }
             if (st.page == 12) {   // PATCH v3 : rebâtit toutes les vues depuis les bitsets du moteur
                 val idx = ZtekAudio.SRC_IDX
@@ -673,7 +682,7 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
             return
         }
-        if (st.page == 5) {                     // page SIREN (REC+FX) : SEL=ON/OFF ALG=type(4) K1=RATE K2=DEPTH K3=FB K4=MIX
+        if (st.page == 5 && st.fxView == 1) {   // vue SIRENE (ALG sur la vue principale) : SEL=ON/OFF ALG=type K1..K4
             when (i) {
                 0 -> { val on = v > 0.5f; st.sirenOn = on
                        ZtekAudio.siren(if (on) 1 else 0, st.sirenLvl, st.sirenRate, st.sirenFb) }
@@ -682,6 +691,44 @@ class MainActivity : Activity(), SurfaceListener {
                 4 -> { st.sirenLvl = v; if (st.sirenOn) ZtekAudio.siren(1, v, st.sirenRate, st.sirenFb) }
                 5 -> { st.sirenFb = v; if (st.sirenOn) ZtekAudio.siren(1, st.sirenLvl, st.sirenRate, v) }
                 6 -> { st.sirenMix = v; ZtekAudio.sirenMix(v) }
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 5 && st.fxView == 0) {   // menu FX, vue PEDALBOARD
+            when (st.fxSub) {
+                0 -> when (i) {   // vue d'ensemble : SEL=dry/wet pédale active, PRE=bloc, ALG=bascule sirène, K1..K3=dry/wet des 3 slots
+                    0 -> { st.fxChainMix[st.fxChainSel] = v; ZtekAudio.fxchainMix(st.fxChainSel, v) }
+                    1 -> st.fxBlockSel = (v * 7.999f).toInt().coerceIn(0, 7)
+                    2 -> { st.fxView = 1 - st.fxView; hint(if (st.fxView == 1) "SIRENE" else "PEDALBOARD") }
+                    3, 4, 5 -> { val k = i - 3; val s = st.fxChainSel * 3 + k
+                                  st.fxSlotMix[s] = v; ZtekAudio.fxslotSet(s, st.fxSlotType[s],
+                                      st.fxSlotP[s][0], st.fxSlotP[s][1], st.fxSlotP[s][2], st.fxSlotP[s][3], v) }
+                }
+                1 -> when (i) {   // sous-menu chaîne : SEL=chaîne, ALG=échange la chaîne dans l'ordre, PRE=bloc
+                    0 -> st.fxChainSel = (v * 3.999f).toInt().coerceIn(0, 3)
+                    1 -> st.fxBlockSel = (v * 7.999f).toInt().coerceIn(0, 7)
+                    2 -> {   // échange la chaîne sélectionnée avec la suivante dans l'ordre
+                        val ord = st.fxChainOrder.clone()
+                        val pos = ord.indexOf(st.fxChainSel)
+                        val np = (pos + 1) % 4
+                        val t = ord[pos]; ord[pos] = ord[np]; ord[np] = t
+                        st.fxChainOrder.copyFrom(ord)
+                        ZtekAudio.fxchainOrder(ord)
+                    }
+                }
+                else -> when (i) {   // sous-menu slot : SEL=slot(0..2) ALG=effet du catalogue PRE=p3 K1..K3=p0..p2 K4=dry/wet slot
+                    0 -> st.fxSlotSel = st.fxChainSel * 3 + (v * 2.999f).toInt().coerceIn(0, 2)
+                    1 -> { val s = st.fxSlotSel; st.fxSlotP[s][3] = v
+                           ZtekAudio.fxslotSet(s, st.fxSlotType[s], st.fxSlotP[s][0], st.fxSlotP[s][1], st.fxSlotP[s][2], v, st.fxSlotMix[s]) }
+                    2 -> { val s = st.fxSlotSel
+                           st.fxSlotType[s] = (v * (ZtekAudio.NCAT - 0.001f)).toInt().coerceIn(0, ZtekAudio.NCAT - 1)
+                           ZtekAudio.fxslotSet(s, st.fxSlotType[s], st.fxSlotP[s][0], st.fxSlotP[s][1], st.fxSlotP[s][2], st.fxSlotP[s][3], st.fxSlotMix[s]) }
+                    3, 4, 5 -> { val s = st.fxSlotSel; val k = i - 3; st.fxSlotP[s][k] = v
+                                  ZtekAudio.fxslotSet(s, st.fxSlotType[s], st.fxSlotP[s][0], st.fxSlotP[s][1], st.fxSlotP[s][2], st.fxSlotP[s][3], st.fxSlotMix[s]) }
+                    6 -> { val s = st.fxSlotSel; st.fxSlotMix[s] = v
+                           ZtekAudio.fxslotSet(s, st.fxSlotType[s], st.fxSlotP[s][0], st.fxSlotP[s][1], st.fxSlotP[s][2], st.fxSlotP[s][3], v) }
+                }
             }
             lcd.invalidate()
             return
@@ -902,6 +949,7 @@ class MainActivity : Activity(), SurfaceListener {
         if (label == "FX" && recHeld) {
             st.page = if (st.page == 5) 0 else 5
             if (st.page == 5) {
+                st.fxView = 0; st.fxSub = 0
                 st.sirenWave = ZtekAudio.sirenWaveGet()
                 st.sirenLvl = 0.3f; st.sirenRate = 0.5f; st.sirenFb = 0f; st.sirenMix = ZtekAudio.sirenMixGet()
             }
@@ -963,8 +1011,21 @@ class MainActivity : Activity(), SurfaceListener {
                 }
                 return
             }
-            5 -> { // page SIREN (slot 5 récupéré de PoW!, ouverte par REC+FX) : REC = quitter
-                if (label == "REC") { st.page = 0; lcd.invalidate() }
+            5 -> { // menu FX (REC+FX) : REC = remonte (slot->chaîne->vue d'ensemble->sirène->quitte), PLAY = bloc save/load
+                when (label) {
+                    "REC" -> {
+                        if (st.fxSub == 2) st.fxSub = 1
+                        else if (st.fxSub == 1) st.fxSub = 0
+                        else if (st.fxView == 1) st.fxView = 0
+                        else st.page = 0
+                        lcd.invalidate()
+                    }
+                    "PLAY" -> {   // bloc : si utilisé -> load, sinon save sur fxBlockSel
+                        if (ZtekAudio.fxblockUsed(st.fxBlockSel) == 1) { ZtekAudio.fxblockLoad(st.fxBlockSel); hint("BLOC ${st.fxBlockSel + 1} chargé") }
+                        else { ZtekAudio.fxblockSave(st.fxBlockSel); hint("BLOC ${st.fxBlockSel + 1} sauvé") }
+                        lcd.invalidate()
+                    }
+                }
                 return
             }
             15 -> { // DRUMS : PLAY=auditionne le pad, REC=quitte
@@ -1246,6 +1307,19 @@ class MainActivity : Activity(), SurfaceListener {
             return
         }
         if (down && st.chokeWin) chokeWinClose()        // toute autre touche noire quitte la fenêtre
+        if (st.page == 5 && st.fxView == 0) {   // menu FX, vue pedalboard : OP1..4=chaîne, Shift+OPx=sous-menu
+            if (down) {
+                when {
+                    shiftHeld && bi in 0..3 && st.fxSub == 0 -> { st.fxChainSel = bi; st.fxSub = 1; hint("PÉDALE ${bi + 1}") }
+                    shiftHeld && bi in 0..2 && st.fxSub == 1 -> { st.fxSlotSel = st.fxChainSel * 3 + bi; st.fxSub = 2; hint("SLOT ${bi + 1}") }
+                    bi in 0..3 && st.fxSub == 0 -> st.fxChainSel = bi
+                    bi == 10 -> { shiftHeld = true; op5ShiftAt = System.currentTimeMillis(); op5ShiftFired = false }
+                }
+            } else {
+                if (bi == 10) shiftHeld = false
+            }
+            lcd.invalidate(); surface.invalidate(); return
+        }
         if (st.page == 11) {
             if (down) {
                 when {
