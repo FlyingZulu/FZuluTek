@@ -95,6 +95,21 @@ La page LINK 17 gagne la **télécommande live** et le **miroir d'état** :
   K3 = `CUTOFF`, K4 = `LOOP GAIN` (anti-rebond 1,2 s), **OCT+ = PLAY** (`Y`) ;
   **clavier = notes sur le FM-1** (blanches = 48+slot, noires = note MIDI ; `T`/`O`).
 
+## 4c. v3 — « vue étendue » + presets sur le téléphone (branche `vibe/ztf-link-apk-c9ef18`)
+
+- **Vue étendue modulaire** : bouton **EDIT** sur la page LINK (ou REC en page PATCH) → la baie de
+  patch (page 12) occupe **tout l'écran du téléphone** (échelle min(w,h)/240, centrée, tactile
+  identique — tap = raccourci de boîte, câbles touchés comme sur le LCD du FM-1).
+- **Onglet PRESETS** (PRE = onglet 3) : liste le banc APK de la partie choisie (ALG = PRT 0..2,
+  SEL = slot 1..16, nom via `bankName`) ; **PLAY = export ZTP1** vers `filesDir/ztek/presets/P<p>S<ss>.ztp1`,
+  **SEQ = import** d'un `.ztp1` (SAF) → `nativePresetImport` + load, **ARP = load** dans l'APK.
+- Transfert des **banques de presets du FM-1** (objets `PRESETS_A..D`, `ZSEQ`) : déjà possible en
+  onglet FM-1 (push/pull 0x61, blobs opaques, sûrs — le format ATEK303 preset_t diffère du ZTP1 APK).
+- ⚠️ Pour pousser un preset **ZTP1 édité sur le téléphone vers le store par partie du FM-1**
+  (flash ZSP2 du patch 0008), il faudra exposer ce store comme fichier companion `ZPRE` dans le
+  patch 0010 (PR #12) — à faire quand #11/#12 seront mergées (zone libre restante :
+  0xD2000..0xD3FFF, soit 1 page de 0x1000).
+
 ## 5. Limites v1/v2 connues
 
 - Samples poussés très courts (~92 ms max en µ-law) — le reste vit sur le téléphone.

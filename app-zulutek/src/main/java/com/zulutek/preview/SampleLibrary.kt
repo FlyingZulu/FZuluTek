@@ -27,6 +27,7 @@ object SampleLibrary {
 
     fun samplesDir(ctx: Context): File = File(ctx.filesDir, "ztek/samples").apply { mkdirs() }
     fun pullDir(ctx: Context): File = File(ctx.filesDir, "ztek/pull").apply { mkdirs() }
+    fun presetsDir(ctx: Context): File = File(ctx.filesDir, "ztek/presets").apply { mkdirs() }   // v3 : export/import ZTP1
 
     fun list(ctx: Context): List<File> =
         (samplesDir(ctx).listFiles { f -> f.isFile } ?: emptyArray()).sortedBy { it.name }

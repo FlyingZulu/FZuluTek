@@ -242,6 +242,8 @@ class LcdState {
     var linkDst = 0                          // slot ZSMP cible pour le push (0..7)
     var linkAud = false                      // pont audio hybride on/off
     val linkParams = ArrayList<String>()     // onglet 2 PARAMS : miroir live "NOM val" (0x62)
+    val linkPresets = ArrayList<String>()    // onglet 3 PRESETS : banc APK "n NOM" (partie = linkDst)
+    var wide = false                         // v3 « vue étendue » : la baie occupe tout l'écran du téléphone
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -315,11 +317,17 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
     private fun popColor(i: Int, base: Int): Int =
         if (st.popUntil[i] > System.currentTimeMillis()) FLUO_TURQ else base
 
+    /* v3 vue étendue : échelle = min(w/W, h/H) + centrage quand st.wide (plein écran) */
+    fun scaleF() = if (st.wide) minOf(width.toFloat() / W, height.toFloat() / H) else width.toFloat() / W
+    fun transX() = if (st.wide) (width / scaleF() - W) / 2f else 0f
+    fun transY() = if (st.wide) (height / scaleF() - H) / 2f else 0f
+
     override fun onDraw(c: Canvas) {
         super.onDraw(c)
-        val s = width.toFloat() / W
+        val s = scaleF()
         c.drawColor(BG)
         c.save()
+        c.translate(transX(), transY())
         c.scale(s, s)
 
         val now = System.currentTimeMillis()
@@ -912,11 +920,12 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         // ---- page LINK (17) : liaison ZTF avec le FM-1 ----
         if (st.page == 17) {
             text(c, 6f, 105f, "LINK", FLUO_TURQ, 10f)
-            text(c, 60f, 105f, when (st.linkTab) { 0 -> "FM-1"; 1 -> "LOCAL"; else -> "PARAMS" }, INK, 9f)
-            if (st.linkTab != 2) text(c, 110f, 105f, "DST ZSMP$st.linkDst", DIM, 8f)
+            text(c, 60f, 105f, when (st.linkTab) { 0 -> "FM-1"; 1 -> "LOCAL"; 2 -> "PARAMS"; else -> "PRESETS" }, INK, 9f)
+            if (st.linkTab == 1) text(c, 110f, 105f, "ZSMP$st.linkDst", DIM, 8f)
+            else if (st.linkTab == 3) text(c, 110f, 105f, "PRT ${ZtekAudio.PART_NAMES.getOrElse(st.linkDst) { "?" }}", DIM, 8f)
             text(c, 180f, 105f, if (Fm1Usb.connected) "USB" else "off",
                 if (Fm1Usb.connected) FLUO_TURQ else REC_RED, 8f)
-            val list = when (st.linkTab) { 0 -> st.linkFiles; 1 -> st.linkLocal; else -> st.linkParams }
+            val list = when (st.linkTab) { 0 -> st.linkFiles; 1 -> st.linkLocal; 2 -> st.linkParams; else -> st.linkPresets }
             val n = minOf(list.size, 7)
             for (k in 0 until n) {
                 val y = 120f + k * 13f
@@ -926,12 +935,13 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             if (list.isEmpty()) text(c, 8f, 120f, when (st.linkTab) {
                 0 -> "(SAVE = scan USB)"
                 1 -> "(SEQ = importer WAV)"
-                else -> "(miroir live 0x62 — SAVE = watch)"
+                2 -> "(miroir live 0x62 — SAVE = watch)"
+                else -> "(PLAY = export ZTP1, SEQ = import, ARP = load)"
             }, DIM, 8f)
             text(c, 6f, 216f, st.linkStatus, AMBER, 8f)
             if (st.linkProg.isNotEmpty()) text(c, 6f, 228f, st.linkProg, FLUO_TURQ, 8f)
             if (st.linkAud) text(c, 200f, 228f, "AUD", FLUO_PINK, 8f)
-            text(c, 6f, 92f, "PLAY push/pull SAVE scan ARP load FX rm ENV aud SEQ wav | K1 PG K2 TMP K3 CUT K4 LPG", DIM, 7f)
+            text(c, 6f, 92f, "PLAY push/pull SAVE scan ARP load FX rm ENV aud SEQ wav EDIT wide | K1 PG K2 TMP K3 CUT K4 LPG", DIM, 7f)
         }
         // panneau "sens interdit" (rond rouge + barre blanche) + suggestions / bulles de conseils
         if (now < st.noEntryUntil) {

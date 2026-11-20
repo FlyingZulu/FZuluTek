@@ -27,6 +27,7 @@ class MainActivity : Activity(), SurfaceListener {
     private val st = LcdState()
     private lateinit var lcd: LcdView
     private lateinit var surface: SurfaceView
+    private lateinit var rootLayout: LinearLayout
 
     private var root = 45
     private var scale = 0
@@ -177,7 +178,7 @@ class MainActivity : Activity(), SurfaceListener {
                     st.stripAuxLoop[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_AUX_LOOP)
                 }
             }
-            if (st.page == 17 && tickN % 8 == 0) linkRefreshLocal()   // page LINK : liste des samples locaux
+            if (st.page == 17 && tickN % 8 == 0) { linkRefreshLocal(); linkRefreshPresets() }   // page LINK : samples locaux + banc presets
             if (st.page == 12) {   // PATCH v3 : rebâtit toutes les vues depuis les bitsets du moteur
                 val idx = ZtekAudio.SRC_IDX
                 val words = Array(idx.size) { ZtekAudio.assignWords(idx[it]) }
@@ -260,15 +261,15 @@ class MainActivity : Activity(), SurfaceListener {
         lcd = LcdView(this, st)
         surface = SurfaceView(this, st, this)
 
-        val layout = LinearLayout(this).apply {
+        rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(LcdView.BG)
         }
-        layout.addView(lcd, LinearLayout.LayoutParams(
+        rootLayout.addView(lcd, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        layout.addView(surface, LinearLayout.LayoutParams(
+        rootLayout.addView(surface, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        setContentView(layout)
+        setContentView(rootLayout)
         handler.postDelayed(tick, 250)
 
         /* ZuluLink : l'APK est CONSOLE (surface + horloge). Le FM-1 (module) suit notre
@@ -298,10 +299,10 @@ class MainActivity : Activity(), SurfaceListener {
         /* dans l'APK le LCD est tactile : POW maintenu + toucher = circuit bend
          * (bible : REC maintenu + toucher l'écran ; REC sert déjà au looper ici) */
         lcd.setOnTouchListener { _, ev ->
-            val s = lcd.width.toFloat() / LcdView.W
+            val s = lcd.scaleF()   // v3 : tient compte de la "vue étendue" (plein écran, centrée)
             if (s <= 0f) return@setOnTouchListener false
-            val bx = ev.x / s / LcdView.W
-            val by = ev.y / s / LcdView.H
+            val bx = (ev.x / s - lcd.transX()) / LcdView.W
+            val by = (ev.y / s - lcd.transY()) / LcdView.H
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
                     if (st.page == 12) {          // baie v3 : tap = raccourci tactile (= PLAY sur la ligne)
@@ -421,6 +422,67 @@ class MainActivity : Activity(), SurfaceListener {
         for (f in SampleLibrary.list(this)) st.linkLocal.add(f.name)
     }
 
+    /* v3 onglet PRESETS : liste le banc APK de la partie st.linkDst (0..2) */
+    private fun linkRefreshPresets() {
+        st.linkPresets.clear()
+        for (s in 0 until ZtekAudio.ZT_PSLOTS) {
+            val nm = ZtekAudio.bankName(st.linkDst, s)
+            st.linkPresets.add("${s + 1} ${if (nm.isEmpty()) "-" else nm}")
+        }
+    }
+
+    /* v3 « vue étendue » : la baie de patch (page 12) occupe tout l'écran du téléphone */
+    private fun linkWideToggle() {
+        st.wide = !st.wide
+        if (st.wide) {
+            st.page = 12
+            st.patchView = 0
+            surface.visibility = android.view.View.GONE
+            (surface.layoutParams as LinearLayout.LayoutParams).weight = 0f
+        } else {
+            st.page = 17
+            surface.visibility = android.view.View.VISIBLE
+            (surface.layoutParams as LinearLayout.LayoutParams).weight = 1f
+            setEncLabels(encLink)
+        }
+        lcd.invalidate(); surface.invalidate()
+    }
+
+    /* v3 onglet PRESETS : PLAY = export ZTP1 vers filesDir/ztek/presets, SEQ = import .ztp1, ARP = load dans l'APK */
+    private fun linkPresetExport() {
+        val part = st.linkDst
+        val slot = st.linkSel.coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
+        val blob = ZtekAudio.presetExportBlob(part, slot)
+        if (blob == null) { hint("preset vide"); return }
+        val f = java.io.File(SampleLibrary.presetsDir(this), "P${part}S%02d.ztp1".format(slot))
+        f.writeBytes(blob)
+        st.linkStatus = "export -> ${f.name} (${blob.size} o)"
+        lcd.invalidate()
+    }
+
+    private fun linkPresetImport() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/octet-stream", "application/zip", "audio/*", "text/plain"))
+        }
+        try { startActivityForResult(intent, 4243) } catch (e: Exception) {
+            st.linkStatus = "SAF indisponible: ${e.message}"
+        }
+    }
+
+    private fun linkPresetLoadApk() {
+        val part = st.linkDst
+        val slot = st.linkSel.coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
+        val nm = ZtekAudio.bankName(part, slot)
+        if (nm.isNotEmpty()) {
+            ZtekAudio.bankLoad(part, slot)
+            st.presetName = nm
+            st.linkStatus = "LOAD APK ${ZtekAudio.PART_NAMES.getOrElse(part) { "?" }} ${slot + 1}: $nm"
+        } else hint("SLT ${slot + 1} vide")
+        lcd.invalidate()
+    }
+
     private fun linkScan() {
         st.linkStatus = "scan USB…"
         Fm1Usb.scan()
@@ -433,6 +495,7 @@ class MainActivity : Activity(), SurfaceListener {
     /** PLAY en page LINK : onglet 0 = pull du fichier FM-1 vers le téléphone,
      *  onglet 1 = push du sample local vers ZSMP<linkDst> (ZSM1 µ-law, tronqué au max FM-1) */
     private fun linkAction() {
+        if (st.linkTab == 3) { linkPresetExport(); return }   // onglet PRESETS : pas besoin d'USB
         if (!Fm1Usb.connected) { linkScan(); return }
         if (st.linkTab == 0) {
             if (st.linkSel >= st.linkFiles.size) { hint("aucun fichier"); return }
@@ -528,6 +591,26 @@ class MainActivity : Activity(), SurfaceListener {
                 val f = SampleLibrary.importUri(this, uri)
                 st.linkStatus = if (f != null) "importé: ${f.name}" else "import échoué"
                 linkRefreshLocal()
+                lcd.invalidate()
+            }
+        }
+        if (requestCode == 4243 && resultCode == Activity.RESULT_OK) {   // v3 : import d'un preset ZTP1
+            val uri: Uri? = data?.data
+            if (uri != null) {
+                try {
+                    val blob = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    if (blob != null && blob.size >= 4) {   // le magic ZTP1 est validé par nativePresetImport
+                        val part = st.linkDst
+                        val slot = st.linkSel.coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
+                        val ok = ZtekAudio.presetImportBlob(part, slot, blob)
+                        if (ok) {
+                            ZtekAudio.bankLoad(part, slot)
+                            st.presetName = ZtekAudio.bankName(part, slot)
+                            st.linkStatus = "preset importé -> ${ZtekAudio.PART_NAMES.getOrElse(part) { "?" }} ${slot + 1}"
+                        } else st.linkStatus = "import ZTP1 refusé (${blob.size} o)"
+                    } else st.linkStatus = "fichier illisible"
+                } catch (e: Exception) { st.linkStatus = "import: ${e.message}" }
+                linkRefreshPresets()
                 lcd.invalidate()
             }
         }
@@ -899,12 +982,15 @@ class MainActivity : Activity(), SurfaceListener {
             }
             when (i) {
                 0 -> {
-                    val list = when (st.linkTab) { 0 -> st.linkFiles; 1 -> st.linkLocal; else -> st.linkParams }
+                    val list = when (st.linkTab) { 0 -> st.linkFiles; 1 -> st.linkLocal; 2 -> st.linkParams; else -> st.linkPresets }
                     val n = list.size.coerceAtLeast(1)
                     st.linkSel = (v * (n - 0.001f)).toInt().coerceIn(0, n - 1)
                 }
-                1 -> st.linkTab = (v * 2.999f).toInt().coerceIn(0, 2)   // 0 FM-1, 1 LOCAL, 2 PARAMS (miroir)
-                2 -> st.linkDst = (v * 7.999f).toInt().coerceIn(0, 7)
+                1 -> st.linkTab = (v * 3.999f).toInt().coerceIn(0, 3)   // 0 FM-1, 1 LOCAL, 2 PARAMS, 3 PRESETS
+                2 -> {
+                    if (st.linkTab == 3) { st.linkDst = (v * 2.999f).toInt().coerceIn(0, 2); linkRefreshPresets() } // PRT
+                    else st.linkDst = (v * 7.999f).toInt().coerceIn(0, 7)                                              // ZSMP
+                }
                 3 -> { val p = (v * 13.999f).toInt().coerceIn(0, 13); send(3, p) { ztfPageSet(p) } }        // PAGE FM-1
                 4 -> { val t = 30 + (v * 270.999f).toInt().coerceIn(0, 270); send(4, t) { ztfParamSet(6, t) } } // TEMPO
                 5 -> { val c = (v * 1000.999f).toInt().coerceIn(0, 1000); send(5, c) { ztfParamSet(0, c) } } // CUTOFF
@@ -1120,16 +1206,17 @@ class MainActivity : Activity(), SurfaceListener {
                 if (label == "REC") { st.page = 0; lcd.invalidate() }
                 return
             }
-            17 -> { // LINK (ZTF) : REC=quitte PLAY=push/pull SEQ=import WAV SAVE=scan+ping ARP=LOAD FX=rm ENV=audio OCT+=play FM-1
+            17 -> { // LINK (ZTF) : REC=quitte PLAY=push/pull SEQ=import SAVE=scan+ping ARP=LOAD/preset FX=rm ENV=audio OCT+=play EDIT=vue étendue
                 when (label) {
                     "REC" -> { st.page = 0; setEncLabels(encDefault); lcd.invalidate() }
                     "PLAY" -> linkAction()
-                    "SEQ" -> linkImport()
+                    "SEQ" -> if (st.linkTab == 3) linkPresetImport() else linkImport()
                     "SAVE" -> linkScan()
-                    "ARP" -> linkLoad()
+                    "ARP" -> if (st.linkTab == 3) linkPresetLoadApk() else linkLoad()
                     "FX" -> linkDelete()
                     "ENV" -> linkAudioToggle()
                     "OCT+" -> Fm1Usb.remote("PLAY") { ztfPlay() }
+                    "EDIT" -> linkWideToggle()
                 }
                 return
             }
@@ -1146,6 +1233,7 @@ class MainActivity : Activity(), SurfaceListener {
                 syncSlots(); lcd.invalidate(); return
             }
             12 -> { // PATCH v3 : PLAY=action, REC=remonte, MUT=liste, ERS=plier
+                if (label == "REC" && st.wide) { linkWideToggle(); return }   // v3 : REC quitte la vue étendue
                 when (label) {
                     "PLAY" -> patchPlay()
                     "REC" -> if (st.patchView == 0) { st.page = 11 } else st.patchView = 0
