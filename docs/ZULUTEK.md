@@ -86,18 +86,24 @@ Voir `docs/ZULUTEK-UI-STYLE.md` (palette fluo rose/jaune/turquoise, pops 400 ms,
 - **Rôles** : le FM-1 (firmware zuluTek) est un **MODULE Zulu** (il rend le son, sort au jack) ;
   l'APK peut être **CONSOLE** (surface de pilotage + horloge) ou les deux. Découverte HELLO en
   broadcast UDP (port 53333), messages directs port 53334, paquets binaires < 200 o.
-- **Contrôle/sync par le réseau local ou BLE MIDI, jamais d'audio par le réseau** (règle ZuluLink
-  §0.2) : CLOCK (tempo + beat, console = chef), CC avec **déjà le vocabulaire du FM-1**
+- **Contrôle/sync par le réseau local ou BLE MIDI** (ZuluLink §0.2 : le réseau ne porte que du
+  contrôle/sync ; l'audio suit la règle de routage physique ci-dessous) : CLOCK (tempo + beat, console = chef), CC avec **déjà le vocabulaire du FM-1**
   (74..83 voix, 20..37 FX, 102..115 boutons, + LEARN/LEARN OUT des deux côtés), SNAP (état
   sérialisé `zt_settings_t` + slots de loops → l'APK sert de **librairie** de banques nommées),
   START/STOP ciblés et filtrés (SUIVRE START/STOP = OFF par défaut : le FM-1 ne s'arrête que
   localement), TAP, PING/PONG. Le looper de l'APK suit le tempo reçu (`ml_set_bpm`) et peut
   prendre un **ratio polyrythmique n:d** vs le master (ZuluLink §2b). Le Monkey en relais
   (ZuluLink M5) : contrôleur BT → APK (canaux 1-6/10) → CC vers le FM-1.
-- **Audio : par le jack, pas par le Wi-Fi** — FM-1 line-out → entrée micro du téléphone (câble
-  TRRS) = partie **AIN** du MIX de l'APK. L'APK peut alors **resampler / looper / passer en PoW!**
-  la sortie du FM-1 (ring resample auto-RAM, loops MIDI src ALL+IN), et renvoyer en MIDI-out
-  vers le FM-1 ce que ses loops rejouent.
+- **Règle de routage audio (ZuluLink §0.2 révisée) — connexions physiques d'abord, latence
+  minimale** :
+  1. **jack / RCA / XLR** d'abord — liaisons analogiques classiques. Ex. FM-1 line-out →
+     entrée micro du téléphone (câble TRRS) = partie **AIN** du MIX de l'APK, qui peut alors
+     **resampler / looper / PoW!** la sortie du FM-1 (ring resample auto-RAM, loops MIDI
+     src ALL+IN) et renvoyer en MIDI-out vers le FM-1 ce que ses loops rejouent ;
+  2. puis **USB (UAC)** — pont audio hybride APK ↔ FM-1 dans les deux sens sur un seul câble
+     (`usb_audio_in`/`uac_tap` et `usb_audio_out`/`uac_play` + hook `app_usb_in`, patch 0010) ;
+  3. le **réseau (Wi-Fi/BLE) uniquement en zone de repli**, quand aucun câble n'est possible.
+  Dans tous les cas, choisir la solution de **latence la plus faible**.
 - **Mode « satellite DSP »** : le FM-1 garde les voix + filtres + seq (léger, dans le budget du
   JieLi AC791N : pas de RAM externe, 2e cœur peu fiable) et **délègue à l'APK les traitements
   lourds** (reverb longue, resample 32K, looper multi-slots, mandalas LCD) via jack audio +

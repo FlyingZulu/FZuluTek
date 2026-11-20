@@ -112,7 +112,9 @@ micro-USB → USB-A + clé USB), routage UAC.
   sur le FM-1 ; fallback export WAV. USB 2.0 (480 Mb/s) suffit largement (MIDI + UAC1
   ≈ 1,4 Mb/s) ; le FM-1 a sa propre batterie, la puissance 5 V limitée du port ne
   bloque pas.
-- **Wi-Fi** : ZuluLink vers le yuga (UDP 53333/53334, même réseau, 2,4 GHz OK).
+- **Wi-Fi** : ZuluLink vers le yuga (UDP 53333/53334, même réseau, 2,4 GHz OK) — contrôle
+  uniquement ; l'audio suit la règle de routage révisée (jack/RCA/XLR d'abord, puis USB,
+  réseau en repli, latence minimale — voir `docs/ZULUTEK.md`).
 
 ### Ce que la tablette affiche en synchro
 
@@ -165,3 +167,30 @@ MIX = tranches avec tirettes.
    avec le layout gauche infos / droite tirettes.
 6. Côté FM-1 : zone de duplication sur le LCD (patch) une fois l'UI tablette
    stabilisée.
+
+### Chemin audio : micro → Vankyo → FM-1, boucles audio dans la Vankyo
+
+Règle de routage audio révisée (ZuluLink §0.2, `docs/ZULUTEK.md`) : **connexions physiques
+d'abord** — jack/RCA/XLR, puis USB (UAC) — réseau (Wi-Fi/BLE) uniquement en repli ; dans
+tous les cas, la solution de **latence minimale** gagne.
+
+- **Micro → FM-1** : micro de la Vanqio (ou interface UAC externe sur la tablette) →
+  `AudioRecord` (`RECORD_AUDIO` déjà dans le manifest, demandé à l'exécution
+  `MainActivity.kt:595-597`) → moteur audio APK → `AudioTrack` sur l'UAC-out
+  (`Fm1UsbAudio.kt`, `setPreferredDevice` API 23+, thread `fm1-uac-tx`) → FM-1
+  `usb_audio_out`/`uac_play` + hook `app_usb_in` → `zml_usb_feed` (patch 0010) →
+  ring resample du looper (REC armé) → chaîne FX du FM-1 → **sortie jack**.
+- **FM-1 → Vankyo** : `usb_audio_in`/`uac_tap` → `AudioRecord` sur l'UAC-in (thread
+  `fm1-uac-rx`) = capture/miroir de ce que joue le FM-1.
+- **Boucles audio longues dans la Vankyo** : tablette = 48 kHz Oboe, heap (`FX_HOST`),
+  2-3 Go RAM + microSD → les longues boucles audio tournent et sont stockées côté
+  tablette, et montent vers le FM-1 en entrée live par l'UAC. Côté FM-1 le ring est
+  court (`ML_RS_MAX` 4096 ≈ 128 ms µ-law 32 kHz, patch 0008 ; ZSMP max 4064 o ≈ 92 ms)
+  et le Loop FM-1 est un **looper MIDI** (`docs/ZULUTEK-LOOP.md`) : boucles MIDI +
+  presets = ZTF (ZLUP/ZTP1) ; boucles audio longues = APK.
+- **Limites** : patch 0010 à builder/tester avant tout flash (fm1-emu + toolchain JieLi) ;
+  routage UAC du port micro-USB OTG à vérifier (try/catch, no-op propre sinon ; fallback
+  export/import WAV) ; alimentation 5 V de l'OTG à vérifier (le FM-1 a sa propre
+  batterie) ; latence UAC1 + ring = dizaines de ms, **pas sample-accurate** — le
+  transport/l'horloge passent en MIDI (ZTF play/notes, ZuluLink CLOCK), l'audio suit ;
+  full-duplex UAC selon le descripteur UAC du FM-1, sinon half-duplex par session.
