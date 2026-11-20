@@ -49,6 +49,8 @@ en « All repositories ». Concernés :
    (chemin + lignes), puis on dit si le code diverge. Si on doute ou si le code dérive trop du doc :
    on se réfère au mode d'emploi / à la Bible, ou on pose la question / on fait un point avec
    Flying Zulu. Un mode d'emploi et une machine qui ne correspondent pas, c'est un bug.
+6. **En cas de doute : on s'arrête, on pose la question à Flying Zulu, et on attend sa réponse
+   avant de reprendre.** Mieux vaut une question qu'une mauvaise direction.
 
 ## Ordre suggéré pour démarrer
 
