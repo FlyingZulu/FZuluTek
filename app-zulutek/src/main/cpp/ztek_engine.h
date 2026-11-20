@@ -103,6 +103,10 @@ void ztek_xy_hold(ztek_t *z, int holdMode);
 
 /* ---- sirène (mode SIREN, triple-tap GLO côté FM-1) -------------------------------- */
 void ztek_siren(ztek_t *z, int on, float lvl, float t, float fb);
+void ztek_siren_wave(ztek_t *z, int w);              /* 0 CLASSIQUE 1 CHOP 2 POLICE 3 LASER */
+int  ztek_siren_wave_get(const ztek_t *z);
+void ztek_siren_mix(ztek_t *z, float m);             /* 0 = pre-FX, 1 = post-FX (master) */
+float ztek_siren_mix_get(const ztek_t *z);
 
 /* ---- sequencer advanced sub-mode (double-tap SEQ on page SEQ) ----------------------
  * 5 extra knobs, also matrix destinations 30..34:
@@ -187,6 +191,13 @@ const char *ztek_preset_name_part(int part, int i);   /* factory name per part (
 void ztek_preset_factory(ztek_t *z, int part, int i);  /* factory pre-patched preset of a part: generic
                                                         * preset + part engine/sound + 4 macro slots filled */
 
+/* ---- table de mixage principale : 4 tranches BASSE/LEAD/DRUMS/LOOP -------------------- */
+enum { ZTEK_STRIP_BASSE = 0, ZTEK_STRIP_LEAD, ZTEK_STRIP_DRUMS, ZTEK_STRIP_LOOP, ZTEK_NSTRIP };
+enum { ZTEK_MIX_CUT, ZTEK_MIX_FMODE, ZTEK_MIX_VOL, ZTEK_MIX_PAN, ZTEK_MIX_MUT, ZTEK_MIX_SOLO,
+       ZTEK_MIX_LDR, ZTEK_MIX_AUX_POW, ZTEK_MIX_AUX_LOOP,
+       ZTEK_MIX_AUX1, ZTEK_MIX_AUX2, ZTEK_MIX_AUX3, ZTEK_MIX_AUX4, ZTEK_MIX_N };
+enum { ZTEK_MIXM_GAIN, ZTEK_MIXM_AUX1, ZTEK_MIXM_AUX2, ZTEK_MIXM_N };   /* master : bus + 2 aux libres */
+
 /* preset bank per part: part 0 = BASSE, 1 = LEAD, 2 = DRUMS; 16 slots each. The bank is
  * FREE: the first ZT_NPRESETS slots hold the factory pre-patched presets, but any slot can
  * be overwritten by a user save. ztek_bank_load() picks the right one (user save wins over
@@ -216,6 +227,10 @@ typedef struct {
     int16_t mac_dst[ZT_NMACRO];
     int16_t mac_sub[ZT_NMACRO];
     float mac_val[ZT_NMACRO];
+    float strip_par[ZTEK_NSTRIP][ZTEK_MIX_N];   /* table de mixage 4 tranches (base manuelle) */
+    float master_par[ZTEK_MIXM_N];
+    int   siren_wave;
+    float siren_mix;
 } ztek_preset_t;
 
 void ztek_preset_save(ztek_t *z, int part, int slot);
@@ -235,13 +250,16 @@ void ztek_mix_set_aux(ztek_t *z, int slot, int on);       /* ML_SP_FX : slot -> 
 
 /* ---- table de mixage principale : 4 tranches BASSE/LEAD/DRUMS/LOOP --------------------
  * Par tranche : filtre traversant en tête (pré-fader : 0 LP, 1 neutre, 2 HP + cutoff),
- * VOL, MUT, départs auxiliaires post-fader (PoW!, Loop, 2 slots libres AUX1/AUX2).
+ * puis PAN (pré-fader), VOL, MUT/SOLO, départs auxiliaires post-fader
+ * (P->PoW!, L->Loop, AUX1..4 libres ; la tranche LOOP n'a pas de départ Loop).
+ * LDR = choke général de la tranche : BASSE ON = une note de basse coupe le lead (at_panic),
+ * LEAD ON = une note de lead coupe la basse (bass_panic), DRUMS/LOOP ON = mode leader/hybride
+ * des chokes de séquenceurs (défaut ON), OFF = Koala mutuel. Default OFF sur BASSE/LEAD.
  * BASSE et LEAD partagent le bus voix physique (engine 0 = LEAD, 1..4 = BASSE). */
-enum { ZTEK_STRIP_BASSE = 0, ZTEK_STRIP_LEAD, ZTEK_STRIP_DRUMS, ZTEK_STRIP_LOOP, ZTEK_NSTRIP };
-enum { ZTEK_MIX_CUT, ZTEK_MIX_FMODE, ZTEK_MIX_VOL, ZTEK_MIX_MUT,
-       ZTEK_MIX_AUX_POW, ZTEK_MIX_AUX_LOOP, ZTEK_MIX_AUX1, ZTEK_MIX_AUX2, ZTEK_MIX_N };
 void  ztek_mix_set_strip(ztek_t *z, int strip, int param, float v);
 float ztek_mix_get_strip(const ztek_t *z, int strip, int param);
+void  ztek_mix_set_master(ztek_t *z, int param, float v);
+float ztek_mix_get_master(const ztek_t *z, int param);
 void ztek_mix_set_gain(ztek_t *z, float g);               /* loop_gain (page MIX) */
 float ztek_mix_get_gain(const ztek_t *z);
 float ztek_master_peak(const ztek_t *z);                  /* VU master (page MIX), 0..~1 */
@@ -265,15 +283,20 @@ int   ztek_loop_slot_act(const ztek_t *z, int slot);       /* notes actives du s
  *                          vides par défaut et assignables dans la baie)          offset 155
  *   module 7 AUX   : 8   = 2 slots aux libres x 4 tranches du main mix (BASSE/LEAD/DRUMS/LOOP),
  *                          vides par défaut, assignables                          offset 160
+ *   module 8 MIX   : 55  = 13 params x 4 tranches (CUT,FMODE,VOL,PAN,MUT,SOLO,LDR,
+ *                          AUX_POW,AUX_LOOP,AUX1..4) + 3 master (GAIN,AUX1,AUX2)     offset 168
  * Compatibilité (protection façon VCV Rack/miRack) : sources audio (0..3, 22 DRUMS) -> OUT/AUX ;
- * sources CV (X/Y + modulation, 4..21) -> modules paramètres 0..5 seulement. */
+ * sources CV (X/Y + modulation, 4..21) -> modules paramètres 0..5 et MIX (8) seulement. */
 #define ZTEK_NSRC 23
 #define ZTEK_PSRC_DRUMS 22
-#define ZTEK_NMOD 8
-#define ZTEK_NDST 168
-#define ZTEK_AWORDS 3                       /* bitset par source : 3 x uint64 = 192 bits */
+#define ZTEK_NMOD 9
+#define ZTEK_NDST 223
+#define ZTEK_AWORDS 4                       /* bitset par source : 4 x uint64 = 256 bits */
 #define ZTEK_MOD_OUT 6
 #define ZTEK_MOD_AUX 7
+#define ZTEK_MOD_MIX 8
+#define ZTEK_MIX_NSTRIP_PORTS (ZTEK_MIX_N * ZTEK_NSTRIP)          /* 52 */
+#define ZTEK_MIX_NPORT (ZTEK_MIX_NSTRIP_PORTS + ZTEK_MIXM_N)      /* 55 */
 extern const int ZTEK_MOD_OFF[ZTEK_NMOD + 1];       /* offsets des modules dans les ports */
 extern const char *const ZTEK_MOD_NAME[ZTEK_NMOD];
 extern const int ZTEK_MOD_NPORT[ZTEK_NMOD];

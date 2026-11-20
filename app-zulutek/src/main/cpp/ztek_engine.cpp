@@ -60,11 +60,17 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
         float cut;                  /* cutoff du filtre traversant 0..1 */
         int   fmode;                /* 0 LP, 1 neutre, 2 HP (pré-fader, en tête) */
         float vol;
+        float pan;                  /* 0..1, 0.5 = centre (pré-fader, après filtre) */
         int   mut;
-        float aux_pow, aux_loop, aux1, aux2;   /* départs auxiliaires post-fader */
+        int   solo;
+        int   ldr;                  /* choke général de la tranche (voir header) */
+        float aux_pow, aux_loop, aux1, aux2, aux3, aux4;   /* départs auxiliaires post-fader */
         float lp;                   /* mémoire one-pole du filtre */
     } strip[ZTEK_NSTRIP];
-    float *mixbuf, *loopbuf, *sendbuf, *rsbuf;  /* ZTEK_MAX_BLOCK, heap */
+    float strip_mod[ZTEK_NSTRIP][ZTEK_MIX_N];  /* modulation baie (base + câble, lu dans render) */
+    float master_par[ZTEK_MIXM_N];             /* GAIN = loop_gain, AUX1/AUX2 master */
+    float master_mod[ZTEK_MIXM_N];
+    float *mixbuf, *mixbufL, *mixbufR, *loopbuf, *sendbuf, *rsbuf, *sirenbuf;  /* ZTEK_MAX_BLOCK, heap */
 
     acid_pattern_t pat;
     acid_params_t ap;
@@ -118,7 +124,8 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
 
     /* sirène */
     int siren_on;
-    float siren_lvl, siren_t, siren_fb;
+    int siren_wave;                 /* 0 CLASSIQUE 1 CHOP 2 POLICE 3 LASER */
+    float siren_lvl, siren_t, siren_fb, siren_mix;   /* siren_mix : 0 pre-FX, 1 post-FX */
     float siren_ph, siren_f, siren_out, siren_sw;
 
     /* PoW! (dernier état, pour les snapshots) */
@@ -146,11 +153,8 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
         int8_t   drum_lead[DR_NCHOKE];
         uint8_t  drum_leader;
         /* table de mixage 4 tranches (snapshot) */
-        float strip_cut[ZTEK_NSTRIP];
-        int   strip_fmode[ZTEK_NSTRIP];
-        float strip_vol[ZTEK_NSTRIP];
-        int   strip_mut[ZTEK_NSTRIP];
-        float strip_aux[ZTEK_NSTRIP][4];   /* pow, loop, aux1, aux2 */
+        float strip_par[ZTEK_NSTRIP][ZTEK_MIX_N];   /* base manuelle de chaque param */
+        float master_par[ZTEK_MIXM_N];
     } snap[16], kit[16], undo_st[3], redo_st[3];
     int undo_n, redo_n;
 
@@ -396,14 +400,17 @@ ztek_t *ztek_create(float sr)
     z->mono = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->drumbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->mixbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->mixbufL = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->mixbufR = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->loopbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->sendbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->rsbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
+    z->sirenbuf = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     z->smp_cap = (uint32_t)(ZTEK_SMP_SECONDS * sr);
     z->smp = (float *)malloc(z->smp_cap * sizeof(float));
-    if (!z->mono || !z->smp || !z->drumbuf || !z->mixbuf || !z->loopbuf || !z->sendbuf || !z->rsbuf) {
+    if (!z->mono || !z->smp || !z->drumbuf || !z->mixbuf || !z->mixbufL || !z->mixbufR || !z->loopbuf || !z->sendbuf || !z->rsbuf || !z->sirenbuf) {
         free(z->mono); free(z->smp); free(z->drumbuf);
-        free(z->mixbuf); free(z->loopbuf); free(z->sendbuf); free(z->rsbuf);
+        free(z->mixbuf); free(z->mixbufL); free(z->mixbufR); free(z->loopbuf); free(z->sendbuf); free(z->rsbuf); free(z->sirenbuf);
         delete z; return NULL;
     }
     drum_init(&z->drum, sr);
@@ -417,15 +424,22 @@ ztek_t *ztek_create(float sr)
     z->bend_hold = 0.0f; z->bend_trem_ph = 0.0f; z->bend_rng = 0xBEAD01u & 0x7fffffffu;
     z->xy_on = 0; z->xy_hold = 0; z->xy_target[0] = 1; z->xy_target[1] = 2;   /* X->CUTOFF Y->RESO */
     z->siren_on = 0; z->siren_lvl = 0.3f; z->siren_t = 0.5f; z->siren_fb = 0.0f;
+    z->siren_wave = 0; z->siren_mix = 0.0f;
     z->siren_ph = 0.0f; z->siren_f = 600.0f; z->siren_out = 0.0f; z->siren_sw = 0.0f;
     z->punch_on = 0; z->punch_type = 8; z->punch_a = z->punch_b = z->punch_mix = 0.0f;   /* POW! défaut = ECHO */
     z->punch_on = 0; z->punch_type = 0; z->punch_a = z->punch_b = z->punch_mix = 0.0f;
-    for (int s = 0; s < ZTEK_NSTRIP; s++) {          /* tranches par défaut : vol 0.8, filtre neutre */
-        z->strip[s].cut = 0.5f; z->strip[s].fmode = 1; z->strip[s].vol = 0.8f; z->strip[s].mut = 0;
+    for (int s = 0; s < ZTEK_NSTRIP; s++) {          /* tranches par défaut : vol 0.8, filtre neutre, pan centre */
+        z->strip[s].cut = 0.5f; z->strip[s].fmode = 1; z->strip[s].vol = 0.8f; z->strip[s].pan = 0.5f;
+        z->strip[s].mut = 0; z->strip[s].solo = 0;
+        z->strip[s].ldr = (s == ZTEK_STRIP_DRUMS || s == ZTEK_STRIP_LOOP) ? 1 : 0;  /* leader/hybride par défaut */
         z->strip[s].aux_pow = 0.0f; z->strip[s].aux1 = 0.0f; z->strip[s].aux2 = 0.0f;
+        z->strip[s].aux3 = 0.0f; z->strip[s].aux4 = 0.0f;
         z->strip[s].aux_loop = (s == ZTEK_STRIP_LOOP) ? 0.0f : 1.0f;   /* pas de départ Loop sur la tranche LOOP */
         z->strip[s].lp = 0.0f;
+        for (int p = 0; p < ZTEK_MIX_N; p++) z->strip_mod[s][p] = 0.0f;
     }
+    z->master_par[ZTEK_MIXM_GAIN] = 1.0f; z->master_par[ZTEK_MIXM_AUX1] = 0.0f; z->master_par[ZTEK_MIXM_AUX2] = 0.0f;
+    for (int p = 0; p < ZTEK_MIXM_N; p++) z->master_mod[p] = 0.0f;
     z->undo_n = 0; z->redo_n = 0;
     memset(z->assign, 0, sizeof z->assign);
     memset(z->xy_assign, 0, sizeof z->xy_assign);
@@ -451,9 +465,12 @@ void ztek_destroy(ztek_t *z)
     free(z->smp);
     free(z->drumbuf);
     free(z->mixbuf);
+    free(z->mixbufL);
+    free(z->mixbufR);
     free(z->loopbuf);
     free(z->sendbuf);
     free(z->rsbuf);
+    free(z->sirenbuf);
     delete z;
 }
 
@@ -465,8 +482,13 @@ static void ztek_note_on_int(ztek_t *z, int note, int vel, int accent, int slide
         for (int i = 0; i < 4; i++) { z->lfo_ph[i] = 0.0f; z->lfo_sh[i] = 0.0f; }
         for (int e = 0; e < 2; e++) { z->env_ph[e] = 0.0f; z->env_stage[e] = 0; }
     }
-    if (z->engine == 0) at_gate(&z->voice, 1, note, accent, slide);
-    else bass_gate(&z->bass, 1, note, accent, slide);
+    if (z->engine == 0) {
+        at_gate(&z->voice, 1, note, accent, slide);
+        if (z->strip[ZTEK_STRIP_LEAD].ldr) bass_panic(&z->bass);    /* LDR LEAD : la lead coupe la basse */
+    } else {
+        bass_gate(&z->bass, 1, note, accent, slide);
+        if (z->strip[ZTEK_STRIP_BASSE].ldr) at_panic(&z->voice);    /* LDR BASSE : la basse coupe le lead */
+    }
 }
 
 void ztek_note_on(ztek_t *z, int note, int vel, int accent, int slide)
@@ -614,22 +636,38 @@ int ztek_loop_rs_rec(const ztek_t *z) { return z->loop.rs_rec; }
 
 void ztek_mix_set_vol(ztek_t *z, int slot, float v) { ml_set_sp(&z->loop, slot, ML_SP_VOL, v); }
 void ztek_mix_set_aux(ztek_t *z, int slot, int on) { ml_set_sp(&z->loop, slot, ML_SP_FX, on ? 1.0f : 0.0f); }
-void ztek_mix_set_gain(ztek_t *z, float g) { z->loop.loop_gain = g < 0.0f ? 0.0f : g > 2.0f ? 2.0f : g; }
+void ztek_mix_set_gain(ztek_t *z, float g)
+{
+    g = g < 0.0f ? 0.0f : g > 2.0f ? 2.0f : g;
+    z->loop.loop_gain = g;
+    z->master_par[ZTEK_MIXM_GAIN] = g;
+    z->master_mod[ZTEK_MIXM_GAIN] = 0.0f;
+}
 
 void ztek_mix_set_strip(ztek_t *z, int strip, int param, float v)
 {
     ztek_s::strip_t *st;
     if (strip < 0 || strip >= ZTEK_NSTRIP || param < 0 || param >= ZTEK_MIX_N) return;
     st = &z->strip[strip];
+    z->strip_mod[strip][param] = 0.0f;          /* réglage manuel = base, la modulation s'ajoute après */
     switch (param) {
     case ZTEK_MIX_CUT:      st->cut = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
     case ZTEK_MIX_FMODE:    st->fmode = (int)v; if (st->fmode < 0) st->fmode = 0; if (st->fmode > 2) st->fmode = 2; break;
     case ZTEK_MIX_VOL:      st->vol = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
+    case ZTEK_MIX_PAN:      st->pan = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
     case ZTEK_MIX_MUT:      st->mut = v > 0.5f ? 1 : 0; break;
+    case ZTEK_MIX_SOLO:     st->solo = v > 0.5f ? 1 : 0; break;
+    case ZTEK_MIX_LDR:
+        st->ldr = v > 0.5f ? 1 : 0;
+        if (strip == ZTEK_STRIP_DRUMS) drum_set_leader(&z->drum, st->ldr);   /* ON = leader/hybride, OFF = Koala */
+        if (strip == ZTEK_STRIP_LOOP) ml_set_leader(&z->loop, st->ldr);
+        break;
     case ZTEK_MIX_AUX_POW:  st->aux_pow = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
     case ZTEK_MIX_AUX_LOOP: st->aux_loop = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
     case ZTEK_MIX_AUX1:     st->aux1 = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
     case ZTEK_MIX_AUX2:     st->aux2 = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
+    case ZTEK_MIX_AUX3:     st->aux3 = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
+    case ZTEK_MIX_AUX4:     st->aux4 = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
     }
 }
 
@@ -642,13 +680,33 @@ float ztek_mix_get_strip(const ztek_t *z, int strip, int param)
     case ZTEK_MIX_CUT:      return st->cut;
     case ZTEK_MIX_FMODE:    return (float)st->fmode;
     case ZTEK_MIX_VOL:      return st->vol;
+    case ZTEK_MIX_PAN:      return st->pan;
     case ZTEK_MIX_MUT:      return (float)st->mut;
+    case ZTEK_MIX_SOLO:     return (float)st->solo;
+    case ZTEK_MIX_LDR:      return (float)st->ldr;
     case ZTEK_MIX_AUX_POW:  return st->aux_pow;
     case ZTEK_MIX_AUX_LOOP: return st->aux_loop;
     case ZTEK_MIX_AUX1:     return st->aux1;
     case ZTEK_MIX_AUX2:     return st->aux2;
+    case ZTEK_MIX_AUX3:     return st->aux3;
+    case ZTEK_MIX_AUX4:     return st->aux4;
     }
     return 0.0f;
+}
+
+void ztek_mix_set_master(ztek_t *z, int param, float v)
+{
+    if (param < 0 || param >= ZTEK_MIXM_N) return;
+    z->master_mod[param] = 0.0f;
+    if (param == ZTEK_MIXM_GAIN) { ztek_mix_set_gain(z, v); return; }
+    z->master_par[param] = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
+}
+
+float ztek_mix_get_master(const ztek_t *z, int param)
+{
+    if (param < 0 || param >= ZTEK_MIXM_N) return 0.0f;
+    if (param == ZTEK_MIXM_GAIN) return z->loop.loop_gain;
+    return z->master_par[param];
 }
 float ztek_mix_get_gain(const ztek_t *z) { return z->loop.loop_gain; }
 float ztek_master_peak(const ztek_t *z) { return z->master_peak; }
@@ -662,9 +720,9 @@ int ztek_loop_slot_act(const ztek_t *z, int slot)
  * Ports 0..34 identiques à la matrice ASSIGN de la branche seq-plus (ZT_NDST=35) :
  * 0..7 VOIX (AT_), 8..25 FX (FX_), 26..34 SEQ. Puis SIREN, SMP, LOOP (16 slots x 7), OUT. */
 
-const int ZTEK_MOD_OFF[ZTEK_NMOD + 1] = { 0, 8, 26, 35, 38, 43, 155, 160, 168 };
-const char *const ZTEK_MOD_NAME[ZTEK_NMOD] = { "VOIX", "FX", "SEQ", "SIREN", "SMP", "LOOP", "OUT", "AUX" };
-const int ZTEK_MOD_NPORT[ZTEK_NMOD] = { 8, 18, 9, 3, 5, 112, 5, 8 };
+const int ZTEK_MOD_OFF[ZTEK_NMOD + 1] = { 0, 8, 26, 35, 38, 43, 155, 160, 168, 223 };
+const char *const ZTEK_MOD_NAME[ZTEK_NMOD] = { "VOIX", "FX", "SEQ", "SIREN", "SMP", "LOOP", "OUT", "AUX", "MIX" };
+const int ZTEK_MOD_NPORT[ZTEK_NMOD] = { 8, 18, 9, 3, 5, 112, 5, 8, ZTEK_MIX_NPORT };
 const char *const ZTEK_SRC_NAME[ZTEK_NSRC] = {
     "VOIX", "SIREN", "SMP", "LOOP", "X", "Y",
     "LFO1", "LFO2", "LFO3", "LFO4", "LAB1", "LAB2", "LAB3", "LAB4",
@@ -696,7 +754,7 @@ int ztek_patch_compat(int src, int dst)
     mod = ztek_mod_of(dst);
     if (src < 4 || src == ZTEK_PSRC_DRUMS)
         return mod == ZTEK_MOD_OUT || mod == ZTEK_MOD_AUX;   /* audio -> OUT/AUX (départs libres) */
-    return mod < ZTEK_MOD_OUT;                              /* CV -> params */
+    return mod < ZTEK_MOD_OUT || mod == ZTEK_MOD_MIX;        /* CV -> params (modules 0..5 + MIX) */
 }
 
 void ztek_assign_set(ztek_t *z, int src, int dst, int on)
@@ -850,15 +908,10 @@ static void ztek_capture(ztek_t *z, ztek_t::ztek_state_t *s)
     memcpy(s->drum_lead, z->drum.lead, sizeof s->drum_lead);
     s->drum_leader = z->drum.leader;
     for (i = 0; i < ZTEK_NSTRIP; i++) {
-        s->strip_cut[i] = z->strip[i].cut;
-        s->strip_fmode[i] = z->strip[i].fmode;
-        s->strip_vol[i] = z->strip[i].vol;
-        s->strip_mut[i] = z->strip[i].mut;
-        s->strip_aux[i][0] = z->strip[i].aux_pow;
-        s->strip_aux[i][1] = z->strip[i].aux_loop;
-        s->strip_aux[i][2] = z->strip[i].aux1;
-        s->strip_aux[i][3] = z->strip[i].aux2;
+        int p;
+        for (p = 0; p < ZTEK_MIX_N; p++) s->strip_par[i][p] = ztek_mix_get_strip(z, i, p);
     }
+    for (i = 0; i < ZTEK_MIXM_N; i++) s->master_par[i] = ztek_mix_get_master(z, i);
 }
 
 static void ztek_apply(ztek_t *z, const ztek_t::ztek_state_t *s)
@@ -888,15 +941,10 @@ static void ztek_apply(ztek_t *z, const ztek_t::ztek_state_t *s)
         if (z->drum.choke_order[i] > z->drum.choke_tick) z->drum.choke_tick = z->drum.choke_order[i];
     z->drum.leader = s->drum_leader;
     for (i = 0; i < ZTEK_NSTRIP; i++) {
-        z->strip[i].cut = s->strip_cut[i];
-        z->strip[i].fmode = s->strip_fmode[i];
-        z->strip[i].vol = s->strip_vol[i];
-        z->strip[i].mut = s->strip_mut[i];
-        z->strip[i].aux_pow = s->strip_aux[i][0];
-        z->strip[i].aux_loop = s->strip_aux[i][1];
-        z->strip[i].aux1 = s->strip_aux[i][2];
-        z->strip[i].aux2 = s->strip_aux[i][3];
+        int p;
+        for (p = 0; p < ZTEK_MIX_N; p++) ztek_mix_set_strip(z, i, p, s->strip_par[i][p]);
     }
+    for (i = 0; i < ZTEK_MIXM_N; i++) ztek_mix_set_master(z, i, s->master_par[i]);
     for (i = 0; i < ML_NSLOTS; i++) {
         int want = (s->slotmask >> i) & 1u;
         if (want != z->loop.slot[i].on) ml_toggle(&z->loop, i);
@@ -1020,6 +1068,48 @@ void ztek_siren(ztek_t *z, int on, float lvl, float t, float fb)
     z->siren_lvl = lvl < 0.0f ? 0.0f : lvl > 1.0f ? 1.0f : lvl;
     z->siren_t = t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
     z->siren_fb = fb;
+}
+
+void ztek_siren_wave(ztek_t *z, int w)
+{
+    if (w < 0) w = 0;
+    if (w > 3) w = 3;
+    z->siren_wave = w;
+}
+
+int ztek_siren_wave_get(const ztek_t *z) { return z->siren_wave; }
+
+void ztek_siren_mix(ztek_t *z, float m)
+{
+    z->siren_mix = m < 0.0f ? 0.0f : m > 1.0f ? 1.0f : m;
+}
+
+float ztek_siren_mix_get(const ztek_t *z) { return z->siren_mix; }
+
+/* un échantillon de sirène : LFO siren_sw (0..1) balaie la fréquence selon le type (wave) */
+static float ztek_siren_sample(ztek_t *z, float fsr)
+{
+    float f = 300.0f + 1100.0f * (0.5f + 0.5f * fm_sin_turns(z->siren_sw));
+    float amp = 1.0f;
+    switch (z->siren_wave) {
+    case 1:   /* CHOP : haché par le LFO */
+        { float q = z->siren_sw * 4.0f; if (q - fm_floorf(q) >= 0.55f) return 0.0f; }
+        break;
+    case 2:   /* POLICE : deux tons, alternance 1x / 1.5x à chaque demi-cycle */
+        if (z->siren_sw >= 0.5f) f *= 1.5f;
+        break;
+    case 3:   /* LASER : balayage linéaire montant + montée d'amplitude */
+        f = 300.0f + 1100.0f * z->siren_sw;
+        amp = 0.35f + 0.65f * z->siren_sw;
+        break;
+    default:  /* CLASSIQUE : balayage triangle doux */
+        break;
+    }
+    z->siren_f = f;
+    z->siren_ph += f * fsr;
+    if (z->siren_ph >= 1.0f) z->siren_ph -= 1.0f;
+    float sv = fm_sin_turns(z->siren_ph) + 0.5f * fm_sin_turns(z->siren_ph * 2.003f + z->siren_fb);
+    return sv * amp;
 }
 
 /* ---- boîte à rythmes (source DRUMS = 22, dsp/drum_engine.c vendored de la PR #5) --------- */
@@ -1446,6 +1536,48 @@ static void ztek_matrix_block(ztek_t *z)
         if (v > 1.f) v = 1.f;
         ztek_dst_set(z, d, v);
     }
+    /* module MIX de la baie (ports ZTEK_MOD_OFF[ZTEK_MOD_MIX]..+ZTEK_MIX_NPORT) : les câbles CV
+     * (sources 4..21) s'ajoutent à la valeur manuelle (base) ; flags au seuil > 0.5 à l'usage */
+    {
+        int base = ZTEK_MOD_OFF[ZTEK_MOD_MIX];
+        int s, w, b;
+        for (s = 0; s < ZTEK_NSTRIP; s++)
+            for (int p = 0; p < ZTEK_MIX_N; p++) z->strip_mod[s][p] = 0.0f;
+        for (int p = 0; p < ZTEK_MIXM_N; p++) z->master_mod[p] = 0.0f;
+        for (s = 4; s < ZTEK_NSRC; s++) {
+            float sv = (z->src_val[s] - 0.5f) * 2.0f;
+            const uint64_t *bm = z->assign[s];
+            for (w = base / 64; w < ZTEK_AWORDS; w++) {
+                uint64_t bits = bm[w];
+                if (!bits) continue;
+                int p0 = w * 64;
+                if (p0 + 63 < base) continue;
+                for (b = 0; b < 64; b++) {
+                    int p = p0 + b;
+                    if (p < base || p >= base + ZTEK_MIX_NPORT) continue;
+                    if (!((bits >> b) & 1u)) continue;
+                    int idx = p - base;
+                    if (idx < ZTEK_MIX_NSTRIP_PORTS)
+                        z->strip_mod[idx / ZTEK_MIX_N][idx % ZTEK_MIX_N] += sv;
+                    else
+                        z->master_mod[idx - ZTEK_MIX_NSTRIP_PORTS] += sv;
+                }
+            }
+        }
+    }
+}
+
+/* valeur effective d'un param de tranche : base + modulation baie, clampée 0..1 */
+static inline float ztek_strip_eff(const ztek_t *z, int s, int p)
+{
+    float v = ztek_mix_get_strip(z, s, p) + z->strip_mod[s][p];
+    return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
+}
+
+static inline float ztek_master_eff(const ztek_t *z, int p)
+{
+    float v = ztek_mix_get_master(z, p) + z->master_mod[p];
+    return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
 }
 
 /* ---- page MACRO (16 slots assignables) ---------------------------------------------
@@ -1817,6 +1949,11 @@ void ztek_preset_save(ztek_t *z, int part, int slot)
         p->mac_sub[m] = (int16_t)z->macro[m].sub;
         p->mac_val[m] = z->macro[m].val;
     }
+    for (int s = 0; s < ZTEK_NSTRIP; s++)
+        for (int q = 0; q < ZTEK_MIX_N; q++) p->strip_par[s][q] = ztek_mix_get_strip(z, s, q);
+    for (int q = 0; q < ZTEK_MIXM_N; q++) p->master_par[q] = ztek_mix_get_master(z, q);
+    p->siren_wave = z->siren_wave;
+    p->siren_mix = z->siren_mix;
 }
 
 void ztek_preset_load(ztek_t *z, int part, int slot)
@@ -1846,6 +1983,11 @@ void ztek_preset_load(ztek_t *z, int part, int slot)
         z->macro[m].val = p->mac_val[m];
         z->dst_base[ZT_NDST + m] = p->mac_val[m];
     }
+    for (int s = 0; s < ZTEK_NSTRIP; s++)
+        for (int q = 0; q < ZTEK_MIX_N; q++) ztek_mix_set_strip(z, s, q, p->strip_par[s][q]);
+    for (int q = 0; q < ZTEK_MIXM_N; q++) ztek_mix_set_master(z, q, p->master_par[q]);
+    ztek_siren_wave(z, p->siren_wave);
+    ztek_siren_mix(z, p->siren_mix);
     for (int k = 0; k < 5; k++) ztek_seq_knob(z, 5 + k, p->seqk[k]);
 }
 
@@ -2133,20 +2275,21 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
             z->blk_peak = pk;
         }
 
-        /* sirène / SMP branchés selon la baie de patch : ->FX ou AUX1 = pré-FX (dans mono) */
-        if (z->siren_on && (ztek_bit_get(z->assign[ZTEK_PSRC_SIREN], ZTEK_PORT_FXIN) ||
-                            ztek_bit_get(z->assign[ZTEK_PSRC_SIREN], ZTEK_PORT_AUX1))) {
+        /* sirène : un buffer par bloc (le LFO siren_sw avance par bloc), puis routage baie */
+        if (z->siren_on) {
             float fsr = 1.0f / z->sr;
             float period = 0.5f + 7.5f * z->siren_t;
             z->siren_sw += (float)blk / (z->sr * period);
             if (z->siren_sw >= 1.0f) z->siren_sw -= 1.0f;
-            z->siren_f = 300.0f + 1100.0f * (0.5f + 0.5f * fm_sin_turns(z->siren_sw));
-            for (uint32_t i = 0; i < blk; i++) {
-                z->siren_ph += z->siren_f * fsr;
-                if (z->siren_ph >= 1.0f) z->siren_ph -= 1.0f;
-                float sv = fm_sin_turns(z->siren_ph) + 0.5f * fm_sin_turns(z->siren_ph * 2.003f + z->siren_fb);
-                z->mono[i] += sv * 0.25f * z->siren_lvl;
-            }
+            for (uint32_t i = 0; i < blk; i++)
+                z->sirenbuf[i] = ztek_siren_sample(z, fsr);
+        }
+        /* sirène -> FX ou AUX1 = pré-FX (dans mono) */
+        if (z->siren_on && (ztek_bit_get(z->assign[ZTEK_PSRC_SIREN], ZTEK_PORT_FXIN) ||
+                            ztek_bit_get(z->assign[ZTEK_PSRC_SIREN], ZTEK_PORT_AUX1))) {
+            float pre = 0.25f * z->siren_lvl * (1.0f - z->siren_mix);
+            for (uint32_t i = 0; i < blk; i++)
+                z->mono[i] += z->sirenbuf[i] * pre;
         }
         /* SMP -> FX : le sample est mixé dans le bus pré-FX */
         int smp_prefx = z->smp_play && z->smp_len > 0 &&
@@ -2181,36 +2324,62 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
             memset(z->drumbuf, 0, blk * sizeof(float));
         }
 
-        /* 4. table de mixage : 4 tranches BASSE/LEAD/DRUMS/LOOP — filtre traversant pré-fader
-         *    en tête, puis VOL, MUT, somme sur le bus master ; départs post-fader vers Loop */
-        memset(z->mixbuf, 0, blk * sizeof(float));
+        /* 4. table de mixage : 4 tranches BASSE/LEAD/DRUMS/LOOP — chaîne par tranche :
+         *    FILTRE traversant pré-fader (LP/neutre/HP + CUT) -> PAN pré-fader -> VOL -> MUT/SOLO,
+         *    somme stéréo sur le bus master ; départs auxiliaires post-fader (L -> Loop, P -> PoW!) */
+        memset(z->mixbuf, 0, blk * sizeof(float));    /* somme mono = entrée de la chaîne FX */
+        memset(z->mixbufL, 0, blk * sizeof(float));   /* bus master stéréo (pan pré-fader) */
+        memset(z->mixbufR, 0, blk * sizeof(float));
         memset(z->sendbuf, 0, blk * sizeof(float));
         memset(z->loopbuf, 0, blk * sizeof(float));
         memset(z->rsbuf, 0, blk * sizeof(float));
         ml_rs_render(&z->loop, z->loopbuf, z->rsbuf, blk);       /* audio du loop -> tranche LOOP */
         {
             const float *src[ZTEK_NSTRIP];
+            int any_solo = 0;
+            int s;
             src[ZTEK_STRIP_BASSE] = (z->engine != 0) ? z->mono : NULL;   /* BASSE/LEAD partagent le bus voix */
             src[ZTEK_STRIP_LEAD]  = (z->engine == 0) ? z->mono : NULL;
             src[ZTEK_STRIP_DRUMS] = z->drumbuf;
             src[ZTEK_STRIP_LOOP]  = z->loopbuf;
-            for (int s = 0; s < ZTEK_NSTRIP; s++) {
+            for (s = 0; s < ZTEK_NSTRIP; s++)
+                if (ztek_strip_eff(z, s, ZTEK_MIX_SOLO) > 0.5f) any_solo = 1;
+            for (s = 0; s < ZTEK_NSTRIP; s++) {
                 ztek_s::strip_t *st = &z->strip[s];
                 const float *in = src[s];
-                float fc, ca;
+                float fc, ca, cut, vol, pan, aux_loop, aux_pow;
                 uint32_t i;
+                int fmode, muted;
                 if (!in) continue;
-                fc = 40.0f * fm_exp2f(7.0f * st->cut);                     /* 40 Hz .. 5 kHz */
+                cut = ztek_strip_eff(z, s, ZTEK_MIX_CUT);
+                fmode = (int)(ztek_strip_eff(z, s, ZTEK_MIX_FMODE) + 0.5f);
+                if (fmode < 0) fmode = 0; if (fmode > 2) fmode = 2;
+                vol = ztek_strip_eff(z, s, ZTEK_MIX_VOL);
+                pan = ztek_strip_eff(z, s, ZTEK_MIX_PAN);
+                aux_loop = ztek_strip_eff(z, s, ZTEK_MIX_AUX_LOOP);
+                aux_pow = ztek_strip_eff(z, s, ZTEK_MIX_AUX_POW);
+                muted = (ztek_strip_eff(z, s, ZTEK_MIX_MUT) > 0.5f) ||
+                        (any_solo && ztek_strip_eff(z, s, ZTEK_MIX_SOLO) <= 0.5f);
+                fc = 40.0f * fm_exp2f(7.0f * cut);                        /* 40 Hz .. 5 kHz */
                 ca = 1.0f - fm_expf(-FM_TWO_PI * fc / z->sr);
-                for (i = 0; i < blk; i++) {
-                    float x = in[i];
-                    st->lp += ca * (x - st->lp);
-                    float hp = x - st->lp;
-                    float f = st->fmode == 0 ? st->lp : (st->fmode == 2 ? hp : x);
-                    float v = f * st->vol * (st->mut ? 0.0f : 1.0f);
-                    z->mixbuf[i] += v;
-                    if (s != ZTEK_STRIP_LOOP)
-                        z->sendbuf[i] += v * st->aux_loop;                /* départ post-fader vers Loop */
+                {
+                    float panL = pan <= 0.5f ? 1.0f : (1.0f - pan) * 2.0f;
+                    float panR = pan >= 0.5f ? 1.0f : pan * 2.0f;
+                    for (i = 0; i < blk; i++) {
+                        float x = in[i];
+                        st->lp += ca * (x - st->lp);
+                        float hp = x - st->lp;
+                        float f = fmode == 0 ? st->lp : (fmode == 2 ? hp : x);
+                        float v = f * vol * (muted ? 0.0f : 1.0f);
+                        z->mixbuf[i] += v;                              /* somme mono -> entrée FX */
+                        z->mixbufL[i] += v * panL;                      /* bus master stéréo */
+                        z->mixbufR[i] += v * panR;
+                        if (s != ZTEK_STRIP_LOOP)
+                            z->sendbuf[i] += v * aux_loop;             /* départ post-fader vers Loop */
+                        /* aux_pow (départ vers PoW!) reste un niveau stocké/modulable : la chaîne
+                         * PoW! est un insert post-master (fx_punch), pas un bus séparé */
+                        (void)aux_pow;
+                    }
                 }
             }
         }
@@ -2223,18 +2392,18 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
             ztek_bit_get(z->assign[ZTEK_PSRC_DRUMS], ZTEK_PORT_AUX1)) {
             fx_process(z->mixbuf, outL + done, outR + done, blk);
         } else {
-            for (uint32_t i = 0; i < blk; i++) { outL[done + i] = z->mixbuf[i]; outR[done + i] = z->mixbuf[i]; }
+            for (uint32_t i = 0; i < blk; i++) { outL[done + i] = z->mixbufL[i]; outR[done + i] = z->mixbufR[i]; }
         }
 
-        /* sirène -> MASTER (direct, post-FX) */
+        /* sirène -> MASTER (direct, post-FX) : siren_mix = part post-FX (0 = tout en pre-FX) */
         if (z->siren_on && ztek_bit_get(z->assign[ZTEK_PSRC_SIREN], ZTEK_PORT_MASTER)) {
-            float fsr = 1.0f / z->sr;
+            bool pre = ztek_bit_get(z->assign[ZTEK_PSRC_SIREN], ZTEK_PORT_FXIN) ||
+                       ztek_bit_get(z->assign[ZTEK_PSRC_SIREN], ZTEK_PORT_AUX1);
+            float post = 0.25f * z->siren_lvl * (pre ? z->siren_mix : 1.0f);
             for (uint32_t i = 0; i < blk; i++) {
-                z->siren_ph += z->siren_f * fsr;
-                if (z->siren_ph >= 1.0f) z->siren_ph -= 1.0f;
-                float sv = fm_sin_turns(z->siren_ph) + 0.5f * fm_sin_turns(z->siren_ph * 2.003f + z->siren_fb);
-                outL[done + i] += sv * 0.25f * z->siren_lvl;
-                outR[done + i] += sv * 0.25f * z->siren_lvl;
+                float sv = z->sirenbuf[i] * post;
+                outL[done + i] += sv;
+                outR[done + i] += sv;
             }
         }
 

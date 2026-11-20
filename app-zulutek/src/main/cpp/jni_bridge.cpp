@@ -260,6 +260,26 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSiren(JNIEnv *, j
     ztek_siren(zte(NULL, h), on, lvl, t, fb);
 }
 
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSirenWave(JNIEnv *, jclass, jlong h, jint w)
+{
+    ztek_siren_wave(zte(NULL, h), w);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSirenWaveGet(JNIEnv *, jclass, jlong h)
+{
+    return ztek_siren_wave_get(zte(NULL, h));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSirenMix(JNIEnv *, jclass, jlong h, jfloat m)
+{
+    ztek_siren_mix(zte(NULL, h), m);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSirenMixGet(JNIEnv *, jclass, jlong h)
+{
+    return ztek_siren_mix_get(zte(NULL, h));
+}
+
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumPlay(JNIEnv *, jclass, jlong h, jint on)
 {
     ztek_drum_play(zte(NULL, h), on);
@@ -630,6 +650,15 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixSetStrip(JNIEn
 ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixGetStrip(JNIEnv *, jclass, jlong h, jint strip, jint param)
 {
     return ztek_mix_get_strip(zte(NULL, h), strip, param);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixSetMaster(JNIEnv *, jclass, jlong h, jint param, jfloat v)
+{
+    ztek_mix_set_master(zte(NULL, h), param, v);
+}
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixGetMaster(JNIEnv *, jclass, jlong h, jint param)
+{
+    return ztek_mix_get_master(zte(NULL, h), param);
 }
 
 ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMasterPeak(JNIEnv *, jclass, jlong h)

@@ -154,6 +154,11 @@ object ZtekAudio {
 
     /* sirène */
     fun siren(on: Int, lvl: Float, t: Float, fb: Float) { if (handle != 0L) nativeSiren(handle, on, lvl, t, fb) }
+    fun sirenWave(w: Int) { if (handle != 0L) nativeSirenWave(handle, w) }
+    fun sirenWaveGet(): Int = if (handle != 0L) nativeSirenWaveGet(handle) else 0
+    fun sirenMix(m: Float) { if (handle != 0L) nativeSirenMix(handle, m) }
+    fun sirenMixGet(): Float = if (handle != 0L) nativeSirenMixGet(handle) else 0f
+    val SIREN_WAVES = arrayOf("CLASSIQUE", "CHOP", "POLICE", "LASER")
 
     /* resample dans un slot looper (ring audio) */
     fun loopRsStart(dst: Int, monmask: Int, fmt: Int, khz: Int) { if (handle != 0L) nativeLoopRsStart(handle, dst, monmask, fmt, khz) }
@@ -180,13 +185,14 @@ object ZtekAudio {
     /* sources affichées dans la baie : audio d'abord (VOIX/SIREN/SMP/LOOP/DRUMS), puis X/Y */
     val SRC_IDX = intArrayOf(0, 1, 2, 3, PSRC_DRUMS, 4, 5)
     val NSRC_ACTIVE = SRC_IDX.size     // 0..5 + DRUMS actifs ici ; 6..21 câblés par le moteur de PR #3
-    const val NMOD = 8
-    const val NDST = 168
+    const val NMOD = 9
+    const val NDST = 223
     const val MOD_OUT = 6
     const val MOD_AUX = 7              // 8 slots aux libres (2 x 4 tranches du main mix)
-    val MOD_OFF = intArrayOf(0, 8, 26, 35, 38, 43, 155, 160, 168)
-    val MOD_NAME = arrayOf("VOIX", "FX", "SEQ", "SIREN", "SMP", "LOOP", "OUT", "AUX")
-    val MOD_NPORT = intArrayOf(8, 18, 9, 3, 5, 112, 5, 8)
+    const val MOD_MIX = 8              // 55 ports : 13 params x 4 tranches + 3 master
+    val MOD_OFF = intArrayOf(0, 8, 26, 35, 38, 43, 155, 160, 168, 223)
+    val MOD_NAME = arrayOf("VOIX", "FX", "SEQ", "SIREN", "SMP", "LOOP", "OUT", "AUX", "MIX")
+    val MOD_NPORT = intArrayOf(8, 18, 9, 3, 5, 112, 5, 8, 55)
     val SRC_NAME = arrayOf("VOIX", "SIREN", "SMP", "LOOP", "X", "Y",
         "LFO1", "LFO2", "LFO3", "LFO4", "LAB1", "LAB2", "LAB3", "LAB4",
         "ENV1", "ENV2", "EF", "LOG", "SLEW", "CMP", "QUANT", "ATT", "DRUMS")
@@ -219,7 +225,7 @@ object ZtekAudio {
     }
     fun assignSet(src: Int, dst: Int, on: Int) { if (handle != 0L) nativeAssignSet(handle, src, dst, on) }
     fun assignGet(src: Int, dst: Int): Int = if (handle != 0L) nativeAssignGet(handle, src, dst) else 0
-    fun assignWords(src: Int): LongArray = if (handle != 0L) nativeAssignWords(handle, src) else LongArray(3)
+    fun assignWords(src: Int): LongArray = if (handle != 0L) nativeAssignWords(handle, src) else LongArray(4)
     fun assignBit(words: LongArray, dst: Int): Boolean = (words[dst / 64] shr (dst % 64)) and 1L == 1L
 
     private external fun nativeCreate(sampleRate: Int): Long
@@ -265,6 +271,10 @@ object ZtekAudio {
     private external fun nativeXyTarget(handle: Long, axis: Int, target: Int)
     private external fun nativeXyHold(handle: Long, hold: Int)
     private external fun nativeSiren(handle: Long, on: Int, lvl: Float, t: Float, fb: Float)
+    private external fun nativeSirenWave(handle: Long, w: Int)
+    private external fun nativeSirenWaveGet(handle: Long): Int
+    private external fun nativeSirenMix(handle: Long, m: Float)
+    private external fun nativeSirenMixGet(handle: Long): Float
     private external fun nativeLoopGetSp(handle: Long, slot: Int, idx: Int): Float
     private external fun nativeLoopRsStart(handle: Long, dst: Int, monmask: Int, fmt: Int, khz: Int)
     private external fun nativeLoopRsStop(handle: Long)
@@ -418,13 +428,23 @@ object ZtekAudio {
     const val STRIP_LEAD = 1
     const val STRIP_DRUMS = 2
     const val STRIP_LOOP = 3
-    const val MIX_CUT = 0; const val MIX_FMODE = 1; const val MIX_VOL = 2; const val MIX_MUT = 3
-    const val MIX_AUX_POW = 4; const val MIX_AUX_LOOP = 5; const val MIX_AUX1 = 6; const val MIX_AUX2 = 7
+    const val MIX_CUT = 0; const val MIX_FMODE = 1; const val MIX_VOL = 2; const val MIX_PAN = 3
+    const val MIX_MUT = 4; const val MIX_SOLO = 5; const val MIX_LDR = 6
+    const val MIX_AUX_POW = 7; const val MIX_AUX_LOOP = 8
+    const val MIX_AUX1 = 9; const val MIX_AUX2 = 10; const val MIX_AUX3 = 11; const val MIX_AUX4 = 12
+    const val MIX_N = 13
+    const val MIXM_GAIN = 0; const val MIXM_AUX1 = 1; const val MIXM_AUX2 = 2
+    val MIX_PAR_NAMES = arrayOf("CUT", "FILT", "VOL", "PAN", "MUT", "SOLO", "LDR",
+        "P>POW", "L>LOOP", "AUX1", "AUX2", "AUX3", "AUX4")
     val STRIP_NAMES = arrayOf("BASSE", "LEAD", "DRUMS", "LOOP")
     fun mixSetStrip(strip: Int, param: Int, v: Float) { if (handle != 0L) nativeMixSetStrip(handle, strip, param, v) }
     fun mixGetStrip(strip: Int, param: Int): Float = if (handle != 0L) nativeMixGetStrip(handle, strip, param) else 0f
+    fun mixSetMaster(param: Int, v: Float) { if (handle != 0L) nativeMixSetMaster(handle, param, v) }
+    fun mixGetMaster(param: Int): Float = if (handle != 0L) nativeMixGetMaster(handle, param) else 0f
     private external fun nativeMixSetStrip(handle: Long, strip: Int, param: Int, v: Float)
     private external fun nativeMixGetStrip(handle: Long, strip: Int, param: Int): Float
+    private external fun nativeMixSetMaster(handle: Long, param: Int, v: Float)
+    private external fun nativeMixGetMaster(handle: Long, param: Int): Float
     private external fun nativeMasterPeak(handle: Long): Float
     private external fun nativeLoopSlotAct(handle: Long, slot: Int): Int
     private external fun nativePatchSet(handle: Long, src: Int, dst: Int, on: Int)
