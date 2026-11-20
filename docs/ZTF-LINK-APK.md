@@ -84,7 +84,18 @@ python3 tools/test_ztf_codec.py --with-c   # + cross-check contre le VRAI firmwa
 firmware (ZLS1, ZMC1), que le ring µ-law vit après import ZSM1, que la trame PONG est
 conforme et que pack7 == `cp_pack7` de `fm1-base/device/companion.c`.
 
-## 5. Limites v1 connues
+## 4b. v2 — mode A « deux machines » (branche `vibe/ztf-link-apk-c9ef18`)
+
+La page LINK 17 gagne la **télécommande live** et le **miroir d'état** :
+
+- **Miroir live** : à la connexion, `paramWatch(true)` (0x62) + lecture des 12 params ; un thread
+  dédié (`Fm1Usb.startWatch` → `ZtfTransport.poll`) collecte les notifications `PQ_CHANGED`
+  envoyées spontanément par le FM-1 → onglet **PARAMS** (PRE = onglet 0 FM-1 / 1 LOCAL / 2 PARAMS).
+- **Télécommande ZTF** depuis la page LINK : K1 = `PAGE` (0..13), K2 = `TEMPO` (30..300),
+  K3 = `CUTOFF`, K4 = `LOOP GAIN` (anti-rebond 1,2 s), **OCT+ = PLAY** (`Y`) ;
+  **clavier = notes sur le FM-1** (blanches = 48+slot, noires = note MIDI ; `T`/`O`).
+
+## 5. Limites v1/v2 connues
 
 - Samples poussés très courts (~92 ms max en µ-law) — le reste vit sur le téléphone.
 - Pont audio dépend du routage UAC du téléphone (certains ports OTG sont limités) ; le

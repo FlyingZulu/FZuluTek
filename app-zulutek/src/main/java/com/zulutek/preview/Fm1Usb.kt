@@ -116,6 +116,29 @@ object Fm1Usb {
     var onStatus: (String) -> Unit = {}
     var onFiles: (List<Fm1File>) -> Unit = {}
     var onProgress: (String) -> Unit = {}
+    /** notifications de params (0x62 CHANGED) reçues en live quand watch est actif — miroir mode A */
+    var onParams: (List<Pair<Int, Int>>) -> Unit = {}
+
+    private var watchThread: Thread? = null
+
+    /** boucle de réception des notifications de params (démarrée à la connexion) */
+    private fun startWatch() {
+        watchThread = thread(name = "fm1-params-rx", start = true) {
+            while (connected) {
+                val t = transport
+                if (t == null) { Thread.sleep(300); continue }
+                try {
+                    val ns = t.poll(300)
+                    if (ns.isNotEmpty()) onParams(ns)
+                } catch (e: Exception) { Thread.sleep(500) }
+            }
+        }
+    }
+
+    /** exécute une op ZTF/companion nommée sur le worker : Fm1Usb.remote("PAGE") { ztfPageSet(3) } */
+    fun remote(label: String, op: ZtfTransport.() -> Unit) {
+        run(label) { transport?.let { op(it) } }
+    }
 
     private lateinit var appCtx: Context
     private var usbManager: UsbManager? = null
@@ -223,6 +246,7 @@ object Fm1Usb {
                 link = l
                 transport = ZtfTransport(l)
                 connected = true
+                startWatch()
                 onStatus("FM-1 connecté ($deviceName)")
             } catch (e: Exception) {
                 connected = false
@@ -233,10 +257,12 @@ object Fm1Usb {
 
     fun close() {
         worker.execute {
+            connected = false
+            watchThread?.interrupt()
+            watchThread = null
             link?.close()
             link = null
             transport = null
-            connected = false
         }
     }
 

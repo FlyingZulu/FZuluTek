@@ -241,6 +241,7 @@ class LcdState {
     var linkProg = ""
     var linkDst = 0                          // slot ZSMP cible pour le push (0..7)
     var linkAud = false                      // pont audio hybride on/off
+    val linkParams = ArrayList<String>()     // onglet 2 PARAMS : miroir live "NOM val" (0x62)
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -911,22 +912,26 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         // ---- page LINK (17) : liaison ZTF avec le FM-1 ----
         if (st.page == 17) {
             text(c, 6f, 105f, "LINK", FLUO_TURQ, 10f)
-            text(c, 60f, 105f, if (st.linkTab == 0) "FM-1" else "LOCAL", INK, 9f)
-            text(c, 110f, 105f, "DST ZSMP$st.linkDst", DIM, 8f)
+            text(c, 60f, 105f, when (st.linkTab) { 0 -> "FM-1"; 1 -> "LOCAL"; else -> "PARAMS" }, INK, 9f)
+            if (st.linkTab != 2) text(c, 110f, 105f, "DST ZSMP$st.linkDst", DIM, 8f)
             text(c, 180f, 105f, if (Fm1Usb.connected) "USB" else "off",
                 if (Fm1Usb.connected) FLUO_TURQ else REC_RED, 8f)
-            val list = if (st.linkTab == 0) st.linkFiles else st.linkLocal
+            val list = when (st.linkTab) { 0 -> st.linkFiles; 1 -> st.linkLocal; else -> st.linkParams }
             val n = minOf(list.size, 7)
             for (k in 0 until n) {
                 val y = 120f + k * 13f
                 if (k == st.linkSel) { frame.color = FLUO_YEL; c.drawRect(4f, y - 9f, 236f, y + 2f, frame) }
                 text(c, 8f, y, list[k], INK, 9f)
             }
-            if (list.isEmpty()) text(c, 8f, 120f, if (st.linkTab == 0) "(SAVE = scan USB)" else "(SEQ = importer WAV)", DIM, 8f)
+            if (list.isEmpty()) text(c, 8f, 120f, when (st.linkTab) {
+                0 -> "(SAVE = scan USB)"
+                1 -> "(SEQ = importer WAV)"
+                else -> "(miroir live 0x62 — SAVE = watch)"
+            }, DIM, 8f)
             text(c, 6f, 216f, st.linkStatus, AMBER, 8f)
             if (st.linkProg.isNotEmpty()) text(c, 6f, 228f, st.linkProg, FLUO_TURQ, 8f)
             if (st.linkAud) text(c, 200f, 228f, "AUD", FLUO_PINK, 8f)
-            text(c, 6f, 92f, "PLAY push/pull  SAVE scan  ARP load  FX rm  ENV audio  SEQ import", DIM, 7f)
+            text(c, 6f, 92f, "PLAY push/pull SAVE scan ARP load FX rm ENV aud SEQ wav | K1 PG K2 TMP K3 CUT K4 LPG", DIM, 7f)
         }
         // panneau "sens interdit" (rond rouge + barre blanche) + suggestions / bulles de conseils
         if (now < st.noEntryUntil) {

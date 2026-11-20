@@ -41,6 +41,21 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
         return out
     }
 
+    /** lit les trames arrivées pendant timeoutMs et retourne les notifications de params
+     *  (0x62 PQ_CHANGED envoyées spontanément par le FM-1 quand watch est actif) — miroir live mode A */
+    fun poll(timeoutMs: Long): List<Pair<Int, Int>> {
+        lock.withLock {
+            val end = System.currentTimeMillis() + timeoutMs
+            while (System.currentTimeMillis() < end) {
+                val pkt = link.read(end - System.currentTimeMillis()) ?: break
+                val a = ZtfCodec.parseFrame(pkt) ?: continue
+                if (a.first == ZtfCodec.CMD_PARAMS && a.second.isNotEmpty() &&
+                    a.second[0].toInt() == ZtfCodec.PQ_CHANGED) noteChanged(a.second)
+            }
+        }
+        return pollNotes()
+    }
+
     // ---- bas niveau : une requête companion -> body de la réponse --------------------
 
     private fun request(cmd: Int, payload: ByteArray, match: ((ByteArray) -> Boolean)? = null): ByteArray {

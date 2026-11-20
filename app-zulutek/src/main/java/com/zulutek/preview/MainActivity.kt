@@ -288,6 +288,11 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
         } }
         Fm1UsbAudio.onStatus = { s -> handler.post { st.linkStatus = s; lcd.invalidate() } }
+        Fm1Usb.onParams = { ns -> handler.post {
+            for ((id, v) in ns) if (id in 0 until LINK_PARAM_NAMES.size) linkParamVals[id] = v
+            linkParamsRefresh()
+            lcd.invalidate()
+        } }
         linkRefreshLocal()
 
         /* dans l'APK le LCD est tactile : POW maintenu + toucher = circuit bend
@@ -380,7 +385,36 @@ class MainActivity : Activity(), SurfaceListener {
     // ---- page LINK (17) : liaison ZTF APK <-> FM-1 ------------------------------
 
     private val encDefault = arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")
-    private val encLink = arrayOf("SEL", "TAB", "DST", "", "", "", "")
+    private val encLink = arrayOf("SEL", "TAB", "DST", "PAGE", "TEMP", "CUT", "LPG")
+
+    /* noms des 12 params ZTF (ordre P_* de ztek_link.c, patch 0010) */
+    private val LINK_PARAM_NAMES = arrayOf("CUTOFF", "RESO", "ENVMOD", "DECAY", "WAVE", "ENGINE",
+        "TEMPO", "PAGE", "LOOPG", "DLYT", "REVM", "SWING")
+    private val linkParamVals = HashMap<Int, Int>()
+    private val linkSendAt = LongArray(7)
+    private val linkSendVal = IntArray(7)
+
+    private fun linkParamsRefresh() {
+        st.linkParams.clear()
+        for (id in 0 until LINK_PARAM_NAMES.size) {
+            val v = linkParamVals[id] ?: continue
+            st.linkParams.add("${LINK_PARAM_NAMES[id]} $v")
+        }
+    }
+
+    /** v2 mode A : demande la liste des params + active le watch (notifications live) */
+    private fun linkWatchStart() {
+        Fm1Usb.remote("WATCH") {
+            paramWatch(true)
+            val m = paramGet((0 until 12).toList().toIntArray())
+            handler.post {
+                linkParamVals.clear()
+                for ((id, v) in m) linkParamVals[id] = v
+                linkParamsRefresh()
+                lcd.invalidate()
+            }
+        }
+    }
 
     private fun linkRefreshLocal() {
         st.linkLocal.clear()
@@ -392,6 +426,7 @@ class MainActivity : Activity(), SurfaceListener {
         Fm1Usb.scan()
         Fm1Usb.ping()
         Fm1Usb.refreshFiles()
+        linkWatchStart()
         linkRefreshLocal()
     }
 
@@ -855,14 +890,25 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
             return
         }
-        if (st.page == 17) {                  // page LINK : SEL=ligne TAB=onglet DST=slot ZSMP cible
+        if (st.page == 17) {                  // page LINK : SEL=ligne TAB=onglet DST=slot + télécommande ZTF K1..K4
+            fun send(i: Int, value: Int, op: ZtfTransport.() -> Unit) {   // anti-rebond : 1 envoi / valeur, puis 1,2 s
+                val now = System.currentTimeMillis()
+                if (linkSendVal[i] == value && now - linkSendAt[i] < 1200) return
+                linkSendVal[i] = value; linkSendAt[i] = now
+                Fm1Usb.remote("L$i", op)
+            }
             when (i) {
                 0 -> {
-                    val n = (if (st.linkTab == 0) st.linkFiles.size else st.linkLocal.size).coerceAtLeast(1)
+                    val list = when (st.linkTab) { 0 -> st.linkFiles; 1 -> st.linkLocal; else -> st.linkParams }
+                    val n = list.size.coerceAtLeast(1)
                     st.linkSel = (v * (n - 0.001f)).toInt().coerceIn(0, n - 1)
                 }
-                1 -> st.linkTab = if (v > 0.5f) 1 else 0
+                1 -> st.linkTab = (v * 2.999f).toInt().coerceIn(0, 2)   // 0 FM-1, 1 LOCAL, 2 PARAMS (miroir)
                 2 -> st.linkDst = (v * 7.999f).toInt().coerceIn(0, 7)
+                3 -> { val p = (v * 13.999f).toInt().coerceIn(0, 13); send(3, p) { ztfPageSet(p) } }        // PAGE FM-1
+                4 -> { val t = 30 + (v * 270.999f).toInt().coerceIn(0, 270); send(4, t) { ztfParamSet(6, t) } } // TEMPO
+                5 -> { val c = (v * 1000.999f).toInt().coerceIn(0, 1000); send(5, c) { ztfParamSet(0, c) } } // CUTOFF
+                6 -> { val g = (v * 1000.999f).toInt().coerceIn(0, 1000); send(6, g) { ztfParamSet(8, g) } } // LOOP GAIN
             }
             lcd.invalidate()
             return
@@ -1074,7 +1120,7 @@ class MainActivity : Activity(), SurfaceListener {
                 if (label == "REC") { st.page = 0; lcd.invalidate() }
                 return
             }
-            17 -> { // LINK (ZTF) : REC=quitte PLAY=push/pull SEQ=import WAV SAVE=scan+ping ARP=LOAD FX=rm ENV=audio
+            17 -> { // LINK (ZTF) : REC=quitte PLAY=push/pull SEQ=import WAV SAVE=scan+ping ARP=LOAD FX=rm ENV=audio OCT+=play FM-1
                 when (label) {
                     "REC" -> { st.page = 0; setEncLabels(encDefault); lcd.invalidate() }
                     "PLAY" -> linkAction()
@@ -1083,6 +1129,7 @@ class MainActivity : Activity(), SurfaceListener {
                     "ARP" -> linkLoad()
                     "FX" -> linkDelete()
                     "ENV" -> linkAudioToggle()
+                    "OCT+" -> Fm1Usb.remote("PLAY") { ztfPlay() }
                 }
                 return
             }
@@ -1253,6 +1300,12 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- white keys = looper slots (SNAP/KIT : load/store ; SMP : PLAY) ----
     override fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean) {
+        if (st.page == 17) {   // page LINK : le clavier joue les notes SUR le FM-1 (ZTF TRIG/OFF)
+            val n = 48 + slot
+            if (down) Fm1Usb.remote("TRIG") { ztfNoteOn(n, 100) }
+            else Fm1Usb.remote("OFF") { ztfNoteOff(n) }
+            return
+        }
         if (st.smpPage && down && !longPress) { ZtekAudio.smpPlay(1); return }
         if (st.chokeWin && chokeCtx() && down && !longPress) {
             // fenêtre choke ouverte : POLY armé -> ce pad devient leader (manip terminée) ;
@@ -1325,6 +1378,11 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- black keys = notes ; MONO (9e) / POLY (10e) = manip choke sur DRUMS / LOOP-CHK ----
     override fun onBlackKey(note: Int, down: Boolean) {
+        if (st.page == 17) {   // page LINK : les noires jouent aussi sur le FM-1 (ZTF TRIG/OFF)
+            if (down) Fm1Usb.remote("TRIG") { ztfNoteOn(note, 100) }
+            else Fm1Usb.remote("OFF") { ztfNoteOff(note) }
+            return
+        }
         if (down && chokeCtx() && note == KEY_MONO) {   // MONO = bascule le pad/slot en mode choke
             chokeToggleMono()
             lcd.invalidate(); surface.invalidate()
