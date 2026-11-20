@@ -1,0 +1,519 @@
+From 165a4d31e56be5853df4bb0e3c732430212f1bfc Mon Sep 17 00:00:00 2001
+From: Vibe Nuage Agent <vibe@mistral.ai>
+Date: Fri, 20 Nov 2026 03:54:33 +0000
+Subject: [PATCH] =?UTF-8?q?feat(atek303):=20patch=200006=20zuluTek=20?=
+ =?UTF-8?q?=E2=80=94=20arp=C3=A9giateur=20(OCT-+ARP,=20module=20ztek=5Farp?=
+ =?UTF-8?q?.c/h)=20+=20MIDI=20looper=20SEQ+=20(ml=5Fmutate/ml=5Fset=5Frand?=
+ =?UTF-8?q?p/mode=20RANDOM=20dans=20dsp/midi=5Flooper)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ atek303/app/app.c             |  28 ++++-
+ atek303/app/dsp/midi_looper.c |  88 +++++++++++++-
+ atek303/app/dsp/midi_looper.h |   7 ++
+ atek303/app/fm1.toml          |   2 +-
+ atek303/app/ztek_arp.c        | 209 ++++++++++++++++++++++++++++++++++
+ atek303/app/ztek_arp.h        |  33 ++++++
+ 6 files changed, 360 insertions(+), 7 deletions(-)
+ create mode 100644 atek303/app/ztek_arp.c
+ create mode 100644 atek303/app/ztek_arp.h
+
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 8c1bdd5..b055205 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -59,6 +59,7 @@
+ #include "acid_pattern.h"
+ #include "fx.h"
+ #include "ztek_seqplus.h"   /* patch 0005: pack SEQ+ (modulation 8/8, ASSIGN, TM, LUDIQUE, presets par partie) */
++#include "ztek_arp.h"      /* patch 0006: arpégiateur (OCT- + ARP, K1..K3 quand actif) */
+ 
+ /* the Animatek palette, as on the VCV Rack modules (UZZ-VCV-RACK src/ui/CommonWidgets.hpp, AcidEditor.hpp):
+  * the screens are slate, the values in the displays' blue, the selection in the logo's blue */
+@@ -783,15 +784,17 @@ static void app_render_events(void)
+     while (q_r != q_w) {
+         uint32_t e = q[q_r % QN], kind = e & 0xFFu, a = (e >> 8) & 0xFFu, b = e >> 16;
+         if (kind == EV_NOTE_ON) {
+-            held_on((int)a, b);
++            if (zarp_on()) zarp_note_in((int)a); else held_on((int)a, b);   /* patch 0006: l'arp capture */
+             zsp_note_retrig();                    /* patch 0005: LFO TRIG */
+         }
+-        else if (kind == EV_NOTE_OFF)
+-            held_off((int)a);
++        else if (kind == EV_NOTE_OFF) {
++            if (zarp_on()) zarp_note_out((int)a); else held_off((int)a);    /* patch 0006 */
++        }
+         else if (kind == EV_PARAM)
+             at_set(&voice, (int)a, (float)b / 1000.0f);
+         else if (kind == EV_PANIC) {
+             nheld = 0;
++            zarp_clear();                     /* patch 0006 */
+             if (!sq.running) {
+                 at_panic(&voice);
+                 ui_note = -1;
+@@ -846,7 +849,8 @@ static void app_render_voice(float *out, uint32_t n)
+     for (off = 0; off < n; off += CHUNK) {     /* the sequencer at 0.7 ms, the voice between */
+         uint32_t c = n - off < CHUNK ? n - off : CHUNK;
+         seq_chunk(c);
+-        zsp_mod_chunk(c, (float)c / SR);          /* patch 0005: modulation per CHUNK */
++        zsp_mod_chunk(c, (float)c / SR);
++        zarp_render(c, (float)c / SR);            /* patch 0006: arpégiateur per CHUNK */          /* patch 0005: modulation per CHUNK */
+         at_render(&voice, out + off, c);
+         {   /* the synth bus peak, for the EF tool */
+             float pk = 0.0f;
+@@ -1074,6 +1078,7 @@ static void store_load(void)
+ void app_init(void)
+ {
+     zsp_flash_load();                     /* patch 0005: SEQ+ state from OBJ_ZSEQ */
++    zarp_init((float)SR);                 /* patch 0006: arpégiateur */
+     int i;
+     at_init(&voice, SR);
+     options_load();
+@@ -1159,6 +1164,10 @@ void zsp_set_root(int r) { set.root = (uint8_t)(r % 12); set_dirty = 1; }
+ void zsp_set_scale(int s) { set.scale = (uint8_t)s; set_dirty = 1; }
+ int  zsp_scale(void) { return set.scale; }
+ void zsp_regrow(void) { seq_generate(0); }
++/* patch 0006: accesseurs pour ztek_arp.c */
++void zarp_gate(int on, int note, int accent, int slide) { at_gate(&voice, on, note, accent, slide); }
++int  zarp_tempo(void) { return set.tempo; }
++float zarp_sr(void) { return (float)SR; }
+ int  app_preset_used_raw(int slot) { return presets[slot].used; }
+ void app_preset_set_used_raw(int slot, int raw) { presets[slot].used = (unsigned)raw; set_dirty = 1; }
+ 
+@@ -1693,6 +1702,11 @@ static void input(void)
+         } else if (ui.edit && (k == B_ENV || k == B_LFO)) {
+             post(EV_EDIT, ui.cursor, k == B_ENV ? ED_ACC : ED_SLIDE);
+             set_dirty = 1;
++        } else if (k == B_ARP && ui.oct_hold) {   /* patch 0006: OCT- + ARP = arpégiateur on/off */
++            ui.oct_used = 1;
++            zarp_set_on(!zarp_on());
++            app_say("ARP", zarp_on() ? "ON" : "OFF");
++            set_dirty = 1;
+         } else if (k == B_ENV || k == B_LFO || k == B_ARP) {
+             uint32_t now = plat_ms();             /* patch 0005: double-tap ENV/LFO/ARP = pages LFO/ENV/ASSIGN */
+             uint32_t *lt = k == B_ENV ? &ui.last_env_tap : k == B_LFO ? &ui.last_lfo_tap : &ui.last_arp_tap;
+@@ -1778,6 +1792,12 @@ static void input(void)
+             t[0] = 0;
+             text_cat(t, AT_OSC_NAME[at_osc_index(set.param[AT_WAVE])]);
+             app_say("WAVE", t);
++        } else if (zarp_on() && k == EN_SELECT) { /* patch 0006: ARP on, SEL = cycle MODE */
++            zarp_cycle_mode(e);
++            ui.redraw = 1;
++        } else if (zarp_on() && k >= EN_K1 && k <= EN_K3) {  /* patch 0006: K1..K3 = OCT DIV GATE */
++            zarp_knob_turn(k - EN_K1 + 1, e);
++            ui.redraw = 1;
+         } else if (set.page >= 8u) {              /* patch 0005: pages LFO(8) ENV(9) ASSIGN(10) */
+             zsp_page_turn(set.page, k, e);
+             ui.redraw = 1;
+diff --git a/atek303/app/dsp/midi_looper.c b/atek303/app/dsp/midi_looper.c
+index 5c7b05e..b960b5c 100644
+--- a/atek303/app/dsp/midi_looper.c
++++ b/atek303/app/dsp/midi_looper.c
+@@ -161,7 +161,7 @@ void ml_set_sp(ml_t *m, int slot, int idx, float v)
+     switch (idx) {
+     case ML_SP_PITCH: s->sp.pitch = (int8_t)clampf(v, -12.0f, 12.0f); break;
+     case ML_SP_POS:   s->sp.pos = (uint16_t)clampf(v, 0.0f, s->len ? (float)s->len - 1.0f : 0.0f); break;
+-    case ML_SP_MODE:  s->sp.mode = (uint8_t)clampf(v, 0.0f, 2.0f); if (s->sp.mode) s->dir = s->sp.mode == 2 ? 1 : -1; break;
++    case ML_SP_MODE:  s->sp.mode = (uint8_t)clampf(v, 0.0f, 3.0f); if (s->sp.mode == 2) s->dir = 1; else if (s->sp.mode == 1) s->dir = -1; break;
+     case ML_SP_MUT:   s->sp.mut = (uint8_t)clampf(v * 255.0f, 0.0f, 255.0f); break;
+     case ML_SP_SRC:   s->sp.src = (uint8_t)clampf(v, 0.0f, 6.0f); break;
+     case ML_SP_FX:    s->sp.fx = v >= 0.5f ? 1 : 0; break;
+@@ -554,6 +554,8 @@ static void ml_fire(ml_t *m, int si, ml_slot_t *s, float p0, float p1, int dir)
+     }
+ }
+ 
++static void ml_rand_slot(ml_t *m, int slot);   /* défini plus bas (pack SEQ+ RAND) */
++
+ void ml_render(ml_t *m, uint32_t n)
+ {
+     float rate, step;
+@@ -590,12 +592,94 @@ void ml_render(ml_t *m, uint32_t n)
+                     ml_fire(m, i, s, 0.0f, p1, 1);
+                 } else ml_fire(m, i, s, p0, p1, -1);
+             }
++        } else if (s->sp.mode == 3) {                          /* RANDOM (pack SEQ+) : saut aléatoire au wrap */
++            p1 = p0 + step;
++            if (p1 >= (float)s->len) {
++                ml_fire(m, i, s, p0, (float)s->len, 1);
++                p1 = (float)(ml_rnd(m) % (uint32_t)s->len);    /* nouvelle position aléatoire */
++                if (m->randp > 0.0f && (float)(ml_rnd(m) & 0xFFFF) / 65536.0f < m->randp)
++                    ml_rand_slot(m, i);                        /* RAND au wrap : re-génère le slot */
++                ml_fire(m, i, s, 0.0f, p1, 1);
++            } else ml_fire(m, i, s, p0, p1, 1);
+         } else {                                               /* normal */
+             p1 = p0 + step;
+-            if (p1 >= (float)s->len) { ml_fire(m, i, s, p0, (float)s->len, 1); p1 -= (float)s->len; ml_fire(m, i, s, 0.0f, p1, 1); }
++            if (p1 >= (float)s->len) {
++                ml_fire(m, i, s, p0, (float)s->len, 1);
++                p1 -= (float)s->len;
++                if (m->randp > 0.0f && (float)(ml_rnd(m) & 0xFFFF) / 65536.0f < m->randp)
++                    ml_rand_slot(m, i);                        /* RAND au wrap (mode normal aussi) */
++                ml_fire(m, i, s, 0.0f, p1, 1);
++            }
+             else ml_fire(m, i, s, p0, p1, 1);
+         }
+         s->pos = p1;
+         s->last_pos = p1;
+     }
+ }
++
++/* ---- pack SEQ+ : RAND au wrap + mutation live ENV/LFO/SEQ (mêmes sémantiques que le
++ * seq acid EV_MUTATE et le drum) ------------------------------------------------ */
++
++void ml_set_randp(ml_t *m, float p)
++{
++    m->randp = p < 0.0f ? 0.0f : p > 1.0f ? 1.0f : p;
++}
++
++/* re-génère le contenu d'un slot (notes aléatoires dans la longueur conservée) */
++static void ml_rand_slot(ml_t *m, int slot)
++{
++    ml_slot_t *s;
++    int i, n;
++    if (slot < 0 || slot >= ML_NSLOTS) return;
++    s = &m->slot[slot];
++    if (s->len == 0 || s->rec || s->rs) return;
++    n = 1 + (int)(ml_rnd(m) % (uint32_t)(s->len / 8 + 1));      /* ~len/8 notes */
++    if (n > ML_MAXEV) n = ML_MAXEV;
++    s->n_note = (uint16_t)n;
++    for (i = 0; i < n; i++) {
++        s->note[i].t = (uint16_t)(ml_rnd(m) % s->len);
++        s->note[i].note = (uint8_t)(36 + (ml_rnd(m) % 37));      /* 36..72 */
++        s->note[i].vel = (uint8_t)(50 + (ml_rnd(m) % 78));
++        s->note[i].dur = (uint8_t)(1 + (ml_rnd(m) % (uint32_t)(s->len / 4 + 1)));
++    }
++    s->n_par = 0;
++}
++
++/* mutation live d'un slot : layer 1=TIME (dur/timing) 2=PITCH (transpose) 3=ARTIC (vélocité) */
++void ml_mutate(ml_t *m, int slot, int layer)
++{
++    ml_slot_t *s;
++    int i;
++    if (slot < 0 || slot >= ML_NSLOTS) return;
++    s = &m->slot[slot];
++    switch (layer) {
++    case 1:                                                     /* TIME (ENV seul) */
++        for (i = 0; i < s->n_note; i++) {
++            int d = (int)s->note[i].dur + ((int)(ml_rnd(m) % 9) - 4);
++            s->note[i].dur = (uint8_t)(d < 1 ? 1 : d);
++            int t = (int)s->note[i].t + ((int)(ml_rnd(m) % 5) - 2);
++            if (t < 0) t = 0;
++            if (s->len && t >= (int)s->len) t = (int)s->len - 1;
++            s->note[i].t = (uint16_t)t;
++        }
++        break;
++    case 2: {                                                   /* PITCH (LFO seul) : transpose le slot */
++        int dp = ((int)(ml_rnd(m) % 5) - 2);                    /* -2..+2 demi-tons */
++        int np = s->sp.pitch + dp;
++        if (np < -12) np = -12;
++        if (np > 12) np = 12;
++        s->sp.pitch = (int8_t)np;
++        for (i = 0; i < s->n_note; i++) {
++            int nn = (int)s->note[i].note + dp;
++            if (nn < 0) nn = 0;
++            if (nn > 127) nn = 127;
++            s->note[i].note = (uint8_t)nn;
++        }
++        break;
++    }
++    default:                                                    /* ARTIC (ENV+LFO) : vélocités */
++        for (i = 0; i < s->n_note; i++)
++            s->note[i].vel = (uint8_t)(40 + (ml_rnd(m) % 88));
++        break;
++    }
++}
+diff --git a/atek303/app/dsp/midi_looper.h b/atek303/app/dsp/midi_looper.h
+index 922445a..2278630 100644
+--- a/atek303/app/dsp/midi_looper.h
++++ b/atek303/app/dsp/midi_looper.h
+@@ -58,6 +58,7 @@ typedef struct {
+ typedef struct {
+     float sr, bpm;
+     float loop_gain;             /* MIX page: the loop return level */
++    float randp;                 /* RAND global (pack SEQ+) : proba de re-générer un slot à son wrap */
+     ml_slot_t slot[ML_NSLOTS];
+     int sel;                 /* the selected slot (SELECT) */
+     int playing;
+@@ -107,3 +108,9 @@ void ml_rs_stop(ml_t *m);                                            /* quantize
+ void ml_rs_render(ml_t *m, float *outL, float *outR, uint32_t n);    /* mix the resample loop into L/R */
+ 
+ void ml_render(ml_t *m, uint32_t n);         /* advance the clock, fire the loops' events */
++
++/* pack SEQ+ — mêmes fonctions ENV / LFO / SEQ que le seq acid et le drum :
++ * mutation live d'un slot (layer 1=TIME 2=PITCH 3=ARTIC/vel, comme EV_MUTATE),
++ * RAND au wrap (randp 0..1), mode de lecture 3=RANDOM (voir ML_SP_MODE). */
++void ml_set_randp(ml_t *m, float p);
++void ml_mutate(ml_t *m, int slot, int layer);
+diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+index fa7debd..5145949 100644
+--- a/atek303/app/fm1.toml
++++ b/atek303/app/fm1.toml
+@@ -10,7 +10,7 @@ usb_audio_out = false
+ backup = true                  # copia y restauración de los presets por USB (tools/fm1_backup.py --magic AT64)
+ words = "words.tsv"
+ include = ["dsp"]
+-o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "ztek_seqplus.c"]   # el motor, el generador y los efectos, a -O2
++o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "ztek_seqplus.c", "ztek_arp.c"]   # el motor, el generador y los efectos, a -O2
+ # el sitio
+ title = "ATEK303"              # el nombre que ve la gente (si no, firmware.json saldría como «Animatek»)
+ tagline = "The ATEK303 acid voice on the M-VAVE FM-1"
+diff --git a/atek303/app/ztek_arp.c b/atek303/app/ztek_arp.c
+new file mode 100644
+index 0000000..a0b5496
+--- /dev/null
++++ b/atek303/app/ztek_arp.c
+@@ -0,0 +1,209 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_arp.c — see ztek_arp.h. C99, no dynamic allocation (FM-1), per-chunk render. */
++#include "ztek_arp.h"
++
++#define ZARP_NHELD 16
++#define ZARP_NMODE 5
++#define ZARP_NDIV  6
++
++static const float SPB[ZARP_NDIV] = { 1.f, 2.f, 4.f, 8.f, 3.f, 6.f };  /* steps per beat */
++
++static int     s_on;
++static float   s_k[4];                    /* MODE OCT DIV GATE */
++static int     s_held[ZARP_NHELD];        /* sorted ascending */
++static int     s_order[ZARP_NHELD];       /* as-played */
++static int     s_n, s_nord, s_idx;
++static float   s_clk;
++static int     s_note;                    /* -1 none */
++static int32_t s_gate;                    /* samples left before note-off */
++static uint32_t s_rng;
++static float   s_sr;
++
++static uint32_t zarp_rnd(void)
++{
++    s_rng = s_rng * 1664525u + 1013904223u;
++    return s_rng >> 8;
++}
++
++static int zarp_mode(void)
++{
++    int m = (int)(s_k[0] * (ZARP_NMODE - 0.01f));
++    return m < 0 ? 0 : m >= ZARP_NMODE ? ZARP_NMODE - 1 : m;
++}
++static int zarp_oct(void)
++{
++    int o = 1 + (int)(s_k[1] * 3.99f);
++    return o < 1 ? 1 : o > 4 ? 4 : o;
++}
++static int zarp_div(void)
++{
++    int d = (int)(s_k[2] * (ZARP_NDIV - 0.01f));
++    return d < 0 ? 0 : d >= ZARP_NDIV ? ZARP_NDIV - 1 : d;
++}
++
++static void zarp_silence(void)
++{
++    if (s_note >= 0) {
++        zarp_gate(0, s_note, 0, 0);
++        s_note = -1;
++    }
++    s_gate = 0;
++}
++
++static void zarp_step(void)
++{
++    int mode = zarp_mode(), oct = zarp_oct(), div = zarp_div();
++    const int *base = (mode == 4) ? s_order : s_held;
++    int base_n = (mode == 4) ? s_nord : s_n;
++    int L, idx, note;
++    if (base_n <= 0) return;
++    L = base_n * oct;
++    switch (mode) {
++    case 1:  idx = L - 1 - (s_idx % L); break;                   /* DOWN */
++    case 2: { int p = s_idx % (2 * L - 2);                       /* UP-DOWN */
++              idx = p < L ? p : 2 * L - 2 - p; break; }
++    case 3:  idx = (int)(zarp_rnd() % (uint32_t)L); break;        /* RANDOM */
++    default: idx = s_idx % L; break;                             /* UP / AS-PLAYED */
++    }
++    s_idx++;
++    note = base[idx % base_n] + 12 * (idx / base_n);
++    if (note < 0) note = 0;
++    if (note > 127) note = 127;
++    if (s_note >= 0 && s_note != note) zarp_silence();
++    zarp_gate(1, note, 0, 0);
++    s_note = note;
++    {
++        float gate = s_k[3] * 0.95f + 0.05f;
++        float step_s = s_sr / (((float)zarp_tempo() / 60.0f) * SPB[div]);
++        s_gate = (int32_t)(gate * step_s);
++    }
++}
++
++void zarp_init(float sr)
++{
++    s_on = 0;
++    s_k[0] = 0.0f; s_k[1] = 0.34f; s_k[2] = 0.4f; s_k[3] = 0.5f;   /* UP, 2 oct, 1/16, gate 50% */
++    s_n = s_nord = s_idx = 0;
++    s_clk = 0.0f;
++    s_note = -1;
++    s_gate = 0;
++    s_rng = 0x2545F491u;
++    s_sr = sr;
++}
++
++void zarp_set_on(int on)
++{
++    on = on ? 1 : 0;
++    if (s_on == on) return;
++    s_on = on;
++    if (!on) {
++        zarp_silence();
++        s_n = s_nord = 0;
++        s_clk = 0.0f;
++    } else {
++        s_idx = 0;
++        s_clk = 1.0f;                 /* start at the next chunk */
++    }
++}
++
++int zarp_on(void) { return s_on; }
++
++void zarp_knob(int k, float v)
++{
++    if (k < 0 || k > 3) return;
++    if (v < 0.0f) v = 0.0f;
++    if (v > 1.0f) v = 1.0f;
++    s_k[k] = v;
++}
++
++float zarp_knob_get(int k)
++{
++    if (k < 0 || k > 3) return 0.0f;
++    return s_k[k];
++}
++
++void zarp_knob_turn(int k, int32_t det)
++{
++    if (det == 0) return;
++    if (k == 0) {                                    /* MODE stepped */
++        int m = zarp_mode() + (det > 0 ? 1 : -1);
++        if (m < 0) m = ZARP_NMODE - 1;
++        if (m >= ZARP_NMODE) m = 0;
++        s_k[0] = ((float)m + 0.5f) / ZARP_NMODE;
++    } else if (k == 1) {                             /* OCT 1..4 */
++        int o = zarp_oct() + (det > 0 ? 1 : -1);
++        if (o < 1) o = 4;
++        if (o > 4) o = 1;
++        s_k[1] = (float)(o - 1) / 3.0f;
++    } else if (k == 2) {                             /* DIV 0..5 */
++        int d = zarp_div() + (det > 0 ? 1 : -1);
++        if (d < 0) d = ZARP_NDIV - 1;
++        if (d >= ZARP_NDIV) d = 0;
++        s_k[2] = (float)d / (ZARP_NDIV - 1);
++    } else {                                         /* GATE 0.05..1.0 by 5% */
++        float g = s_k[3] + (det > 0 ? 0.05f : -0.05f);
++        if (g < 0.05f) g = 1.0f;
++        if (g > 1.0f) g = 0.05f;
++        s_k[3] = g;
++    }
++}
++
++void zarp_cycle_mode(int dir) { zarp_knob_turn(0, dir > 0 ? 1 : -1); }
++
++void zarp_note_in(int note)
++{
++    int i;
++    if (note < 0 || note > 127) return;
++    for (i = 0; i < s_n; i++) if (s_held[i] == note) return;   /* already held */
++    if (s_n == 0) s_idx = 0;
++    if (s_n < ZARP_NHELD) {
++        i = s_n;
++        while (i > 0 && s_held[i - 1] > note) { s_held[i] = s_held[i - 1]; i--; }
++        s_held[i] = note;
++        s_n++;
++    }
++    if (s_nord < ZARP_NHELD) s_order[s_nord++] = note;
++}
++
++void zarp_note_out(int note)
++{
++    int i, j;
++    for (i = 0; i < s_n; i++) if (s_held[i] == note) {
++        for (j = i; j < s_n - 1; j++) s_held[j] = s_held[j + 1];
++        s_n--;
++        break;
++    }
++    for (i = 0; i < s_nord; i++) if (s_order[i] == note) {
++        for (j = i; j < s_nord - 1; j++) s_order[j] = s_order[j + 1];
++        s_nord--;
++        break;
++    }
++    if (s_n == 0) zarp_silence();                    /* nothing held: silence */
++}
++
++void zarp_clear(void)
++{
++    zarp_silence();
++    s_n = s_nord = 0;
++}
++
++int zarp_held(void) { return s_n; }
++
++void zarp_render(uint32_t n, float dt)
++{
++    uint32_t i;
++    float rate;
++    if (!s_on) return;
++    rate = ((float)zarp_tempo() / 60.0f) * SPB[zarp_div()] / s_sr;   /* steps per sample */
++    for (i = 0; i < n; i++) {
++        if (s_gate > 0 && --s_gate == 0 && s_note >= 0) zarp_silence();
++        s_clk += rate;
++        while (s_clk >= 1.0f) {
++            s_clk -= 1.0f;
++            zarp_step();
++        }
++    }
++    (void)dt;
++}
+diff --git a/atek303/app/ztek_arp.h b/atek303/app/ztek_arp.h
+new file mode 100644
+index 0000000..f5980c1
+--- /dev/null
++++ b/atek303/app/ztek_arp.h
+@@ -0,0 +1,33 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_arp: the arpeggiator (FZuluTek PR #3, APK page 13) ported to the FM-1 firmware,
++ * on top of the ATEK303 app (patch 0006). Same behaviour as the APK preview:
++ *   - OCT- hold + ARP button toggles the arp; while on, the keys feed a held-note list
++ *     (16 max, sorted + as-played order) instead of gating the voice directly;
++ *   - SEL cycles MODE, K1..K3 = OCT / DIV / GATE;
++ *   - MODE 0 UP, 1 DOWN, 2 UP-DOWN (ping-pong), 3 RANDOM, 4 AS-PLAYED;
++ *   - OCT 1..4, DIV 1/4 1/8 1/16 1/32 1/8T 1/16T (steps/beat 1,2,4,8,3,6, tempo-synced),
++ *     GATE 0.05..1.0 of the step.
++ * The module is decoupled from app.c through the zarp_* accessors the patch defines there. */
++#pragma once
++#include <stdint.h>
++
++/* ---- provided by app.c (patch 0006) ---------------------------------------------- */
++void  zarp_gate(int on, int note, int accent, int slide);   /* -> at_gate(&voice, ...) */
++int   zarp_tempo(void);                                     /* set.tempo (bpm) */
++float zarp_sr(void);                                        /* sample rate */
++
++/* ---- the arp -------------------------------------------------------------------- */
++void  zarp_init(float sr);
++void  zarp_set_on(int on);
++int   zarp_on(void);
++void  zarp_knob(int k, float v);          /* k = 0 MODE, 1 OCT, 2 DIV, 3 GATE (0..1) */
++float zarp_knob_get(int k);
++void  zarp_knob_turn(int k, int32_t det); /* stepped encoders (K1..K3 -> knobs 1..3) */
++void  zarp_cycle_mode(int dir);           /* SEL cycles MODE */
++void  zarp_note_in(int note);             /* key held while the arp is on */
++void  zarp_note_out(int note);
++void  zarp_clear(void);                   /* all notes off / panic */
++int   zarp_held(void);                    /* held count (LCD) */
++void  zarp_render(uint32_t n, float dt);  /* per audio chunk, from app_render_voice */
+-- 
+2.47.3
+
