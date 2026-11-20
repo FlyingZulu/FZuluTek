@@ -45,6 +45,7 @@ class MainActivity : Activity(), SurfaceListener {
     private var envDown = false
     private var lfoDown = false
     private var lastSeqTap = 0L
+    private var presetIdx = 0
 
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
@@ -315,9 +316,13 @@ class MainActivity : Activity(), SurfaceListener {
                 st.dly = (st.dly + 0.25f) % 1.0f
                 ZtekAudio.fxSet(ZtekAudio.FX_DLY_MIX, st.dly)
             }
-            "EDIT" -> if (down) {
-                st.rev = (st.rev + 0.25f) % 1.0f
-                ZtekAudio.fxSet(ZtekAudio.FX_REV_MIX, st.rev)
+            "EDIT" -> if (down) {                       // EDIT = preset pré-patché suivant (ZuluFx style)
+                presetIdx = (presetIdx + 1) % ZtekAudio.ZT_NPRESETS
+                ZtekAudio.preset(presetIdx)
+                st.presetName = ZtekAudio.presetName(presetIdx)
+                st.hintUntil = System.currentTimeMillis() + 1600
+                st.hintMsg = "PRESET: ${st.presetName}"
+                lcd.invalidate()
             }
             "FX" -> if (down) { ZtekAudio.allNotesOff(); st.curNote = -1 }
         }

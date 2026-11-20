@@ -50,6 +50,7 @@ class LcdState {
     var hintUntil = 0L                // transient contextual hint (valid assignment)
     var hintMsg = ""
     var ludiqueOn = true              // mode ludique (option LUDIQUE, FM-1: OPTIONS > LUDIQUE)
+    var presetName = "ACID 303"       // current pre-patched preset
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -170,8 +171,8 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 text(c, 72f, 105f, "${(st.dly * 100).toInt()}", INK, 10f)
                 text(c, 110f, 105f, "REV", DIM, 9f)
                 text(c, 138f, 105f, "${(st.rev * 100).toInt()}", INK, 10f)
-                text(c, 180f, 105f, "SEL", DIM, 9f)
-                text(c, 208f, 105f, "${st.selSlot + 1}", if (st.recArmed) REC_RED else INK, 10f)
+                text(c, 168f, 105f, "PST", FLUO_PINK, 8f)
+                text(c, 188f, 105f, st.presetName, FLUO_PINK, 9f)
             }
         }
 

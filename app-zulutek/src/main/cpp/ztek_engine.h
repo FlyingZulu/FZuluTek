@@ -97,6 +97,11 @@ void ztek_assign(ztek_t *z, int dst, int src, float depth);  /* src 255 = off */
 int   ztek_assign_src(const ztek_t *z, int dst);
 float ztek_assign_depth(const ztek_t *z, int dst);
 
+/* pre-patched synth presets (ZuluFx style: LFO/modulation pre-assigned), for the FM-1 too */
+#define ZT_NPRESETS 8
+void ztek_preset(ztek_t *z, int i);              /* 0..ZT_NPRESETS-1, wraps */
+const char *ztek_preset_name(int i);
+
 #ifdef __cplusplus
 }
 #endif

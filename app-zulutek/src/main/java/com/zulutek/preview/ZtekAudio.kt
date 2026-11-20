@@ -45,6 +45,9 @@ object ZtekAudio {
     const val ACID_MUT_PITCH = 2
     const val ACID_MUT_ARTICULATION = 3
     const val DST_OFF = 255
+    const val ZT_NPRESETS = 8
+    val PRESET_NAMES = arrayOf("ACID 303", "FILTRE WOBBLE", "PITCH DRIFT", "GATE 303",
+        "SLIDE CITY", "LABO CHAOS", "TM MAX", "MAREE")
 
     private var handle: Long = 0
     const val SAMPLE_RATE = 48000
@@ -151,6 +154,10 @@ object ZtekAudio {
     fun assignSrc(dst: Int): Int = if (handle != 0L) nativeAssignSrc(handle, dst) else DST_OFF
     fun assignDepth(dst: Int): Float = if (handle != 0L) nativeAssignDepth(handle, dst) else 0f
 
+    /* pre-patched presets (ZuluFx style) */
+    fun preset(i: Int) { if (handle != 0L) nativePreset(handle, i) }
+    fun presetName(i: Int): String = if (handle != 0L) nativePresetName(i) else "?"
+
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeStart(handle: Long): Boolean
@@ -189,4 +196,6 @@ object ZtekAudio {
     private external fun nativeAssign(handle: Long, dst: Int, src: Int, depth: Float)
     private external fun nativeAssignSrc(handle: Long, dst: Int): Int
     private external fun nativeAssignDepth(handle: Long, dst: Int): Float
+    private external fun nativePreset(handle: Long, i: Int)
+    private external fun nativePresetName(i: Int): String
 }

@@ -837,6 +837,112 @@ float ztek_assign_depth(const ztek_t *z, int dst)
     return z->asg_depth[dst];
 }
 
+/* ---- pre-patched presets (ZuluFx style) ------------------------------------------- */
+
+static const char *const ZT_PRESET_NAMES[ZT_NPRESETS] = {
+    "ACID 303", "FILTRE WOBBLE", "PITCH DRIFT", "GATE 303",
+    "SLIDE CITY", "LABO CHAOS", "TM MAX", "MAREE"
+};
+
+const char *ztek_preset_name(int i)
+{
+    if (i < 0) i = 0;
+    if (i >= ZT_NPRESETS) i = ZT_NPRESETS - 1;
+    return ZT_PRESET_NAMES[i];
+}
+
+static void ztek_preset_reset(ztek_t *z)
+{
+    for (int d = 0; d < ZT_NDST; d++) { z->asg_src[d] = 255; z->asg_depth[d] = 0.0f; }
+    for (int k = 0; k < 5; k++) { z->seqk[k] = 0.0f; z->dst_base[ZT_SEQ_DST0 + 4 + k] = 0.0f; }
+    z->lfo_sync = 0;
+    z->lfo_trig = 0;
+    for (int e = 0; e < 2; e++) z->env_loop[e] = 1;
+    ztek_set_param(z, AT_CUTOFF, 0.7f);
+    ztek_set_param(z, AT_RESONANCE, 0.25f);
+    ztek_set_param(z, AT_ENVMOD, 0.5f);
+    ztek_set_param(z, AT_DECAY, 0.55f);
+    ztek_set_param(z, AT_WAVE, 0.0f);
+    ztek_set_bpm(z, 120.0f);
+}
+
+void ztek_preset(ztek_t *z, int i)
+{
+    if (i < 0) i = 0;
+    if (i >= ZT_NPRESETS) i = ZT_NPRESETS - 1;
+    ztek_preset_reset(z);
+    switch (i) {
+    case 0:   /* ACID 303: sober defaults, TM off */
+        break;
+    case 1:   /* FILTRE WOBBLE: LFO1 SIN -> CUTOFF */
+        ztek_mod_knob(z, 0, 0, 0.55f);   /* rate */
+        ztek_mod_knob(z, 0, 1, 0.05f);   /* SIN */
+        ztek_mod_knob(z, 0, 2, 0.7f);    /* depth */
+        z->lfo_sync = 1;
+        ztek_set_param(z, AT_CUTOFF, 0.35f);
+        ztek_assign(z, AT_CUTOFF, 0, 0.7f);
+        break;
+    case 2:   /* PITCH DRIFT: LFO2 DRUNK -> TUNING */
+        ztek_mod_knob(z, 1, 0, 0.35f);
+        ztek_mod_knob(z, 1, 1, 0.85f);   /* DRUNK */
+        ztek_mod_knob(z, 1, 2, 0.5f);
+        ztek_set_param(z, AT_TUNING, 0.5f);
+        ztek_assign(z, AT_TUNING, 1, 0.35f);
+        break;
+    case 3:   /* GATE 303: ENV1 loop -> ENVMOD + DECAY */
+        ztek_mod_knob(z, 8, 0, 0.15f);   /* A */
+        ztek_mod_knob(z, 8, 1, 0.4f);    /* D */
+        ztek_mod_knob(z, 8, 2, 0.6f);    /* S */
+        ztek_mod_knob(z, 8, 3, 0.5f);    /* R */
+        ztek_assign(z, AT_ENVMOD, 8, 0.7f);
+        ztek_assign(z, AT_DECAY, 8, 0.4f);
+        break;
+    case 4:   /* SLIDE CITY: PING-PONG + LFO3 SAW sync -> TEMPO */
+        ztek_seq_knob(z, 8, 0.9f);       /* PLAY = PING-PONG */
+        ztek_mod_knob(z, 2, 0, 0.5f);
+        ztek_mod_knob(z, 2, 1, 0.55f);   /* SAW */
+        ztek_mod_knob(z, 2, 2, 0.6f);
+        z->lfo_sync = 1;
+        ztek_assign(z, ZT_SEQ_DST0 + 2, 2, 0.15f);   /* -> TEMPO */
+        break;
+    case 5:   /* LABO CHAOS: LABO1 CHAOS(LFO1 SQ, LFO2) -> RESONANCE */
+        ztek_mod_knob(z, 0, 1, 0.55f);   /* LFO1 SQ */
+        ztek_mod_knob(z, 0, 0, 0.7f);
+        ztek_mod_knob(z, 1, 1, 0.05f);   /* LFO2 SIN */
+        ztek_mod_knob(z, 1, 0, 0.4f);
+        ztek_mod_knob(z, 4, 0, 0.55f);   /* LABO1 type = CHAOS (4) */
+        ztek_mod_knob(z, 4, 1, 0.0f);    /* SRC1 = LFO1 */
+        ztek_mod_knob(z, 4, 2, 0.07f);   /* SRC2 = LFO2 */
+        ztek_mod_knob(z, 4, 3, 0.8f);    /* DEPTH */
+        ztek_assign(z, AT_RESONANCE, 4, 0.8f);
+        break;
+    case 6:   /* TM MAX: Turing Machine wide open */
+        ztek_seq_knob(z, 5, 0.8f);       /* TM LOCK */
+        ztek_seq_knob(z, 6, 0.2f);       /* TM LEN ~16 */
+        ztek_seq_knob(z, 7, 0.4f);       /* MUT */
+        ztek_seq_knob(z, 8, 0.9f);       /* PLAY PING-PONG */
+        ztek_seq_knob(z, 9, 0.1f);       /* RAND */
+        ztek_set_bpm(z, 138.0f);
+        break;
+    case 7:   /* MAREE: LABO4 MAREE(ENV1) -> REV MIX, ENV2 -> DLY TIME */
+        ztek_mod_knob(z, 8, 0, 0.3f);
+        ztek_mod_knob(z, 8, 1, 0.3f);
+        ztek_mod_knob(z, 8, 2, 0.7f);
+        ztek_mod_knob(z, 8, 3, 0.8f);    /* ENV1 slow */
+        ztek_mod_knob(z, 9, 0, 0.1f);    /* ENV2 very slow */
+        ztek_mod_knob(z, 9, 1, 0.1f);
+        ztek_mod_knob(z, 9, 2, 0.5f);
+        ztek_mod_knob(z, 9, 3, 0.9f);
+        ztek_mod_knob(z, 7, 0, 0.9f);    /* LABO4 type = MAREE (7) */
+        ztek_mod_knob(z, 7, 1, 0.53f);   /* SRC1 = ENV1 (8/16) */
+        ztek_mod_knob(z, 7, 2, 0.6f);    /* SRC2 = ENV2 (9/16) */
+        ztek_mod_knob(z, 7, 3, 0.7f);
+        ztek_assign(z, 8 + FX_REV_MIX, 7, 0.6f);
+        ztek_assign(z, 8 + FX_DLY_TIME, 9, 0.5f);
+        break;
+    }
+}
+
 /* ---- sequencer advanced API -------------------------------------------------------- */
 
 void ztek_seq_knob(ztek_t *z, int k, float v)

@@ -211,3 +211,13 @@ ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssignDepth(JNI
 {
     return ztek_assign_depth(zte(NULL, h), dst);
 }
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePreset(JNIEnv *, jclass, jlong h, jint i)
+{
+    ztek_preset(zte(NULL, h), i);
+}
+
+ZTEK_JNI jstring JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetName(JNIEnv *env, jclass, jint i)
+{
+    return env->NewStringUTF(ztek_preset_name(i));
+}
