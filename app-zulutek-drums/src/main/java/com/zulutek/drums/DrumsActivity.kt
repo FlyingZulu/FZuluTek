@@ -125,6 +125,8 @@ class DrumsActivity : Activity() {
         swingVal.text = "SWING 0%"
 
         // ---- boutons ----
+        lateinit var stepBtn: Button
+        lateinit var playBtn: Button
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         fun mk(label: String, cb: () -> Unit): Button {
             val b = Button(this).apply {
@@ -139,7 +141,7 @@ class DrumsActivity : Activity() {
             btns.addView(b)
             return b
         }
-        val stepBtn = mk("STEP") {
+        stepBtn = mk("STEP") {
             grid.editMode = !grid.editMode
             stepBtn.setBackgroundColor(if (grid.editMode) Color.rgb(255, 238, 0) else Color.rgb(0, 255, 224))
             grid.invalidate()
@@ -147,7 +149,7 @@ class DrumsActivity : Activity() {
         mk("CLEAR") { DrumsAudio.clear(grid.selPad); grid.refreshPat(); grid.invalidate() }
         mk("RAND") { DrumsAudio.rand(grid.selPad, 0.4f, (System.nanoTime() shr 8).toInt()); grid.refreshPat(); grid.invalidate() }
         mk("RESET") { DrumsAudio.reset() }
-        val playBtn = mk(if (running) "STOP" else "PLAY") {
+        playBtn = mk(if (running) "STOP" else "PLAY") {
             running = !running
             if (running) DrumsAudio.start() else DrumsAudio.stop()
             playBtn.text = if (running) "STOP" else "PLAY"
