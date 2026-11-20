@@ -102,6 +102,39 @@ float ztek_assign_depth(const ztek_t *z, int dst);
 void ztek_preset(ztek_t *z, int i);              /* 0..ZT_NPRESETS-1, wraps */
 const char *ztek_preset_name(int i);
 
+/* user presets per part: part 0 = BASSE, 1 = LEAD, 2 = DRUMS; 8 slots each.
+ * A preset is a POD snapshot of the whole modulable state; export/import give a binary
+ * blob so the APK can persist it (SharedPreferences) and the FM-1 its flash. */
+#define ZT_NPARTS 3
+#define ZT_PSLOTS 8
+typedef struct {
+    uint32_t magic;                  /* 'ZTP1' when used */
+    int32_t part, slot;
+    char name[16];
+    int engine;
+    float param[AT_NPARAMS];
+    float fx[FX_NPARAMS];
+    float bpm;
+    int root, scale;
+    float mod_knob[ZT_NSRC][4];
+    int lab_type[4];
+    int lab_src[4][2];
+    int lfo_sync, lfo_trig;
+    int env_loop[2];
+    int asg_src[ZT_NDST];
+    float asg_depth[ZT_NDST];
+    float seqk[5];
+} ztek_preset_t;
+
+void ztek_preset_save(ztek_t *z, int part, int slot);
+void ztek_preset_load(ztek_t *z, int part, int slot);      /* no-op if empty */
+int  ztek_preset_used(const ztek_t *z, int part, int slot);
+void ztek_preset_clear(ztek_t *z, int part, int slot);
+void ztek_preset_set_name(ztek_t *z, int part, int slot, const char *name);
+const char *ztek_preset_slot_name(const ztek_t *z, int part, int slot);
+int  ztek_preset_export(const ztek_t *z, int part, int slot, uint8_t *buf, int cap);  /* bytes, 0 if empty */
+int  ztek_preset_import(ztek_t *z, int part, int slot, const uint8_t *buf, int len); /* 1 ok */
+
 #ifdef __cplusplus
 }
 #endif

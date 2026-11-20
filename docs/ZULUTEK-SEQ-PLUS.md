@@ -94,9 +94,23 @@ mener des expériences plus poussées (les 4 labos + la matrice ASSIGN typée so
 - Vérifs : `g++ -fsyntax-only` (stubs jni/oboe) OK ; test hôte gcc sur
   `acid_mutate_burst_range` + rotation TM + `acid_import` OK.
 
-## 6. À faire ensuite
+## 6. Presets
+
+Deux niveaux de presets :
+
+- **8 presets usine pré-patchés** façon ZuluFx (bouton **EDIT** sur la page MAIN de l'APK) :
+  ACID 303, FILTRE WOBBLE (LFO1→CUTOFF), PITCH DRIFT (LFO2 DRUNK→TUNING), GATE 303
+  (ENV1→ENVMOD/DECAY), SLIDE CITY (PING-PONG + LFO3→TEMPO), LABO CHAOS (LABO1→RESO),
+  TM MAX (Turing Machine ouverte), MARÉE (LABO4 MARÉE→REV MIX, ENV2→DLY TIME).
+- **Presets user par partie** : page **PRESETS** (REC+EDIT) — **3 parties × 8 slots**
+  (0 = BASSE, 1 = LEAD, 2 = DRUMS) ; SEL = slot, PRE = partie, K1 = LOAD, K2 = SAVE,
+  K3 = effacer. Un preset = snapshot POD complet de l'état modulable (knobs des 16
+  sources, labos, LFO SYNC/TRIG, ENV loop, matrice ASSIGN, seqk, params voix/FX, tempo,
+  root, scale, engine). Persistance : blob binaire `ztek_preset_export/import`
+  → **SharedPreferences (Base64) côté APK**, **flash côté FM-1** (à porter dans le patch).
+
+## 7. À faire ensuite
 
 - Porter le pack sur le FM-1 (patches `patches/atek303-*.patch`) : `EV_MUTATE`, pages,
-  option LUDIQUE dans OPTIONS.
-- Presets de synthé **pré-patchés** façon ZuluFx (LFO/modulation pré-assignés) en exemples.
+  option LUDIQUE dans OPTIONS, presets user en flash.
 - Mix des slots PoW! comme destinations de la matrice (`labApply` au-delà de `ZT_NDST`).

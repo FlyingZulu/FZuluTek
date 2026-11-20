@@ -48,6 +48,16 @@ object ZtekAudio {
     const val ZT_NPRESETS = 8
     val PRESET_NAMES = arrayOf("ACID 303", "FILTRE WOBBLE", "PITCH DRIFT", "GATE 303",
         "SLIDE CITY", "LABO CHAOS", "TM MAX", "MAREE")
+    const val ZT_NPARTS = 3          // 0 BASSE, 1 LEAD, 2 DRUMS
+    val PART_NAMES = arrayOf("BASSE", "LEAD", "DRUMS")
+    const val ZT_PSLOTS = 8
+
+    /* persistence of the user presets (SharedPreferences, Base64 blobs) */
+    private var prefs: android.content.SharedPreferences? = null
+    fun initPrefs(ctx: android.content.Context) {
+        prefs = ctx.getSharedPreferences("zulutek_presets", android.content.Context.MODE_PRIVATE)
+    }
+    private fun pkey(part: Int, slot: Int) = "p${part}s${slot}"
 
     private var handle: Long = 0
     const val SAMPLE_RATE = 48000
@@ -158,6 +168,35 @@ object ZtekAudio {
     fun preset(i: Int) { if (handle != 0L) nativePreset(handle, i) }
     fun presetName(i: Int): String = if (handle != 0L) nativePresetName(i) else "?"
 
+    /* user presets per part (bass/lead/drums) x 8 slots, persisted to SharedPreferences */
+    fun presetSave(part: Int, slot: Int) {
+        if (handle == 0L) return
+        nativePresetSave(handle, part, slot)
+        val blob = nativePresetExport(handle, part, slot) ?: return
+        prefs?.edit()?.putString(pkey(part, slot),
+            android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP))?.apply()
+    }
+    fun presetLoad(part: Int, slot: Int): Boolean {
+        if (handle == 0L) return false
+        var blob = nativePresetExport(handle, part, slot)
+        if (blob == null) {   // not in RAM: try the persisted copy
+            val s = prefs?.getString(pkey(part, slot), null) ?: return false
+            blob = android.util.Base64.decode(s, android.util.Base64.NO_WRAP)
+            if (!nativePresetImport(handle, part, slot, blob)) return false
+        }
+        nativePresetLoad(handle, part, slot)
+        return true
+    }
+    fun presetUsed(part: Int, slot: Int): Boolean =
+        handle != 0L && (nativePresetUsed(handle, part, slot) ||
+            (prefs?.getString(pkey(part, slot), null) != null))
+    fun presetClear(part: Int, slot: Int) {
+        if (handle != 0L) nativePresetClear(handle, part, slot)
+        prefs?.edit()?.remove(pkey(part, slot))?.apply()
+    }
+    fun presetSlotName(part: Int, slot: Int): String =
+        if (handle != 0L) nativePresetSlotName(handle, part, slot) else ""
+
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeStart(handle: Long): Boolean
@@ -198,4 +237,12 @@ object ZtekAudio {
     private external fun nativeAssignDepth(handle: Long, dst: Int): Float
     private external fun nativePreset(handle: Long, i: Int)
     private external fun nativePresetName(i: Int): String
+    private external fun nativePresetSave(handle: Long, part: Int, slot: Int)
+    private external fun nativePresetLoad(handle: Long, part: Int, slot: Int)
+    private external fun nativePresetUsed(handle: Long, part: Int, slot: Int): Boolean
+    private external fun nativePresetClear(handle: Long, part: Int, slot: Int)
+    private external fun nativePresetExport(handle: Long, part: Int, slot: Int): ByteArray?
+    private external fun nativePresetImport(handle: Long, part: Int, slot: Int, data: ByteArray): Boolean
+    private external fun nativePresetSlotName(handle: Long, part: Int, slot: Int): String
+    private external fun nativePresetSlotSetName(handle: Long, part: Int, slot: Int, name: String)
 }

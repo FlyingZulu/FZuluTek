@@ -16,6 +16,7 @@ extern "C" {
 }
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <new>
 #include <memory>
@@ -79,6 +80,9 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     int   play_dir;                 /* ping-pong direction */
     uint32_t seq_rng;
     int   seq_wrapped;              /* a loop wrap happened, pending TM/RAND at block edge */
+
+    /* user presets per part (bass/lead/drums) x 8 slots */
+    ztek_preset_t pstore[ZT_NPARTS][ZT_PSLOTS];
 
     std::shared_ptr<oboe::AudioStream> out;
 
@@ -253,6 +257,7 @@ ztek_t *ztek_create(float sr)
     z->play_dir = 1;
     z->seq_rng = 0x9e3779b9u;
     z->seq_wrapped = 0;
+    memset(z->pstore, 0, sizeof(z->pstore));
 
     z->mono = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
     if (!z->mono) { delete z; return NULL; }
@@ -941,6 +946,110 @@ void ztek_preset(ztek_t *z, int i)
         ztek_assign(z, 8 + FX_DLY_TIME, 9, 0.5f);
         break;
     }
+}
+
+/* ---- user presets per part (bass/lead/drums) -------------------------------------- */
+
+static int ztek_pslot_ok(int part, int slot)
+{
+    return part >= 0 && part < ZT_NPARTS && slot >= 0 && slot < ZT_PSLOTS;
+}
+
+void ztek_preset_save(ztek_t *z, int part, int slot)
+{
+    if (!ztek_pslot_ok(part, slot)) return;
+    ztek_preset_t *p = &z->pstore[part][slot];
+    memset(p, 0, sizeof(*p));
+    p->magic = 0x5A545031u;                     /* 'ZTP1' */
+    p->part = part;
+    p->slot = slot;
+    snprintf(p->name, sizeof(p->name), "P%d-%d", part + 1, slot + 1);
+    p->engine = z->engine;
+    memcpy(p->param, z->param, sizeof(p->param));
+    memcpy(p->fx, z->fx_base, sizeof(p->fx));
+    p->bpm = z->bpm;
+    p->root = z->root;
+    p->scale = z->scale;
+    memcpy(p->mod_knob, z->mod_knob, sizeof(p->mod_knob));
+    memcpy(p->lab_type, z->lab_type, sizeof(p->lab_type));
+    memcpy(p->lab_src, z->lab_src, sizeof(p->lab_src));
+    p->lfo_sync = z->lfo_sync;
+    p->lfo_trig = z->lfo_trig;
+    memcpy(p->env_loop, z->env_loop, sizeof(p->env_loop));
+    memcpy(p->asg_src, z->asg_src, sizeof(p->asg_src));
+    memcpy(p->asg_depth, z->asg_depth, sizeof(p->asg_depth));
+    memcpy(p->seqk, z->seqk, sizeof(p->seqk));
+}
+
+void ztek_preset_load(ztek_t *z, int part, int slot)
+{
+    if (!ztek_pslot_ok(part, slot)) return;
+    const ztek_preset_t *p = &z->pstore[part][slot];
+    if (p->magic != 0x5A545031u) return;
+    ztek_set_engine(z, p->engine);
+    for (int i = 0; i < AT_NPARAMS; i++) ztek_set_param(z, i, p->param[i]);
+    for (int i = 0; i < FX_NPARAMS; i++) ztek_fx_set(z, i, p->fx[i]);
+    ztek_set_bpm(z, p->bpm);
+    ztek_set_root(z, p->root);
+    ztek_set_scale(z, p->scale);
+    for (int s = 0; s < ZT_NSRC; s++)
+        for (int k = 0; k < 4; k++)
+            ztek_mod_knob(z, s, k, p->mod_knob[s][k]);
+    memcpy(z->lab_type, p->lab_type, sizeof(z->lab_type));
+    memcpy(z->lab_src, p->lab_src, sizeof(z->lab_src));
+    z->lfo_sync = p->lfo_sync;
+    z->lfo_trig = p->lfo_trig;
+    memcpy(z->env_loop, p->env_loop, sizeof(z->env_loop));
+    for (int d = 0; d < ZT_NDST; d++) ztek_assign(z, d, p->asg_src[d], p->asg_depth[d]);
+    for (int k = 0; k < 5; k++) ztek_seq_knob(z, 5 + k, p->seqk[k]);
+}
+
+int ztek_preset_used(const ztek_t *z, int part, int slot)
+{
+    if (!ztek_pslot_ok(part, slot)) return 0;
+    return z->pstore[part][slot].magic == 0x5A545031u;
+}
+
+void ztek_preset_clear(ztek_t *z, int part, int slot)
+{
+    if (!ztek_pslot_ok(part, slot)) return;
+    memset(&z->pstore[part][slot], 0, sizeof(ztek_preset_t));
+}
+
+void ztek_preset_set_name(ztek_t *z, int part, int slot, const char *name)
+{
+    if (!ztek_pslot_ok(part, slot) || !name) return;
+    ztek_preset_t *p = &z->pstore[part][slot];
+    if (p->magic != 0x5A545031u) { p->magic = 0x5A545031u; p->part = part; p->slot = slot; }
+    snprintf(p->name, sizeof(p->name), "%s", name);
+}
+
+const char *ztek_preset_slot_name(const ztek_t *z, int part, int slot)
+{
+    if (!ztek_pslot_ok(part, slot)) return "";
+    return z->pstore[part][slot].name;
+}
+
+int ztek_preset_export(const ztek_t *z, int part, int slot, uint8_t *buf, int cap)
+{
+    if (!ztek_pslot_ok(part, slot)) return 0;
+    if (z->pstore[part][slot].magic != 0x5A545031u) return 0;
+    if (!buf || cap < (int)sizeof(ztek_preset_t)) return 0;
+    memcpy(buf, &z->pstore[part][slot], sizeof(ztek_preset_t));
+    return (int)sizeof(ztek_preset_t);
+}
+
+int ztek_preset_import(ztek_t *z, int part, int slot, const uint8_t *buf, int len)
+{
+    if (!ztek_pslot_ok(part, slot)) return 0;
+    if (!buf || len != (int)sizeof(ztek_preset_t)) return 0;
+    ztek_preset_t tmp;
+    memcpy(&tmp, buf, sizeof(tmp));
+    if (tmp.magic != 0x5A545031u) return 0;
+    tmp.part = part;
+    tmp.slot = slot;
+    z->pstore[part][slot] = tmp;
+    return 1;
 }
 
 /* ---- sequencer advanced API -------------------------------------------------------- */

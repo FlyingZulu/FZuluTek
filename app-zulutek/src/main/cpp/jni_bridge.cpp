@@ -221,3 +221,64 @@ ZTEK_JNI jstring JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetName(JNI
 {
     return env->NewStringUTF(ztek_preset_name(i));
 }
+
+/* user presets per part (0 bass, 1 lead, 2 drums) x 8 slots */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetSave(JNIEnv *, jclass, jlong h,
+    jint part, jint slot)
+{
+    ztek_preset_save(zte(NULL, h), part, slot);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetLoad(JNIEnv *, jclass, jlong h,
+    jint part, jint slot)
+{
+    ztek_preset_load(zte(NULL, h), part, slot);
+}
+
+ZTEK_JNI jboolean JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetUsed(JNIEnv *, jclass, jlong h,
+    jint part, jint slot)
+{
+    return ztek_preset_used(zte(NULL, h), part, slot) ? JNI_TRUE : JNI_FALSE;
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetClear(JNIEnv *, jclass, jlong h,
+    jint part, jint slot)
+{
+    ztek_preset_clear(zte(NULL, h), part, slot);
+}
+
+ZTEK_JNI jbyteArray JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetExport(JNIEnv *env, jclass, jlong h,
+    jint part, jint slot)
+{
+    uint8_t buf[2048];
+    int n = ztek_preset_export(zte(NULL, h), part, slot, buf, (int)sizeof(buf));
+    if (n <= 0) return NULL;
+    jbyteArray a = env->NewByteArray(n);
+    if (a) env->SetByteArrayRegion(a, 0, n, (const jbyte *)buf);
+    return a;
+}
+
+ZTEK_JNI jboolean JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetImport(JNIEnv *env, jclass, jlong h,
+    jint part, jint slot, jbyteArray data)
+{
+    if (!data) return JNI_FALSE;
+    jsize n = env->GetArrayLength(data);
+    if (n <= 0 || n > 2048) return JNI_FALSE;
+    uint8_t buf[2048];
+    env->GetByteArrayRegion(data, 0, n, (jbyte *)buf);
+    return ztek_preset_import(zte(NULL, h), part, slot, buf, n) ? JNI_TRUE : JNI_FALSE;
+}
+
+ZTEK_JNI jstring JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetSlotName(JNIEnv *env, jclass, jlong h,
+    jint part, jint slot)
+{
+    return env->NewStringUTF(ztek_preset_slot_name(zte(NULL, h), part, slot));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetSlotSetName(JNIEnv *env, jclass, jlong h,
+    jint part, jint slot, jstring name)
+{
+    const char *s = name ? env->GetStringUTFChars(name, NULL) : NULL;
+    ztek_preset_set_name(zte(NULL, h), part, slot, s);
+    if (s) env->ReleaseStringUTFChars(name, s);
+}

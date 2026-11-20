@@ -56,6 +56,10 @@ class MainActivity : Activity(), SurfaceListener {
                 st.asgSrc = ZtekAudio.assignSrc(st.sub)
                 st.asgDepth = ZtekAudio.assignDepth(st.sub)
             }
+            if (st.page == 13) {
+                st.psUsed = ZtekAudio.presetUsed(st.psPart, st.psSlot)
+                st.psName = if (st.psUsed) ZtekAudio.presetSlotName(st.psPart, st.psSlot) else ""
+            }
             lcd.invalidate()
             handler.postDelayed(this, 120)
         }
@@ -64,6 +68,7 @@ class MainActivity : Activity(), SurfaceListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ZtekAudio.start()
+        ZtekAudio.initPrefs(this)
         ZtekAudio.setEngine(0)
         ZtekAudio.setBpm(bpm)
         ZtekAudio.setRoot(root)
@@ -137,6 +142,7 @@ class MainActivity : Activity(), SurfaceListener {
             10 -> arrayOf("SUB", "SYN", "TRG", "K1", "K2", "K3", "K4")
             11 -> arrayOf("SUB", "LOOP", "", "K1", "K2", "K3", "K4")
             12 -> arrayOf("DST", "SRC", "LUD", "DPT", "", "", "")
+            13 -> arrayOf("SLT", "PRT", "", "LD", "SV", "CLR", "")
             else -> arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")
         }
         lcd.invalidate()
@@ -196,6 +202,22 @@ class MainActivity : Activity(), SurfaceListener {
                         ZtekAudio.modKnob(8 + sub, k, vv)
                     }
                 }
+            }
+            13 -> when (i) {                      // PRESETS user par partie (basse/lead/drums)
+                0 -> st.psSlot = (v * 7.999f).toInt().coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
+                1 -> st.psPart = (v * 2.999f).toInt().coerceIn(0, ZtekAudio.ZT_NPARTS - 1)
+                3 -> {                            // K1 = LOAD
+                    if (ZtekAudio.presetLoad(st.psPart, st.psSlot)) {
+                        st.hintUntil = System.currentTimeMillis() + 1600
+                        st.hintMsg = "LOAD ${ZtekAudio.PART_NAMES[st.psPart]} ${st.psSlot + 1}"
+                    }
+                }
+                4 -> {                            // K2 = SAVE (persisted)
+                    ZtekAudio.presetSave(st.psPart, st.psSlot)
+                    st.hintUntil = System.currentTimeMillis() + 1600
+                    st.hintMsg = "SAVE ${ZtekAudio.PART_NAMES[st.psPart]} ${st.psSlot + 1}"
+                }
+                5 -> ZtekAudio.presetClear(st.psPart, st.psSlot)   // K3 = effacer
             }
             12 -> when (i) {                      // ASSIGN: typed matrix, out -> in only
                 0 -> {                            // SEL sweeps dsts AND sources: sources are NOT valid dsts
@@ -316,13 +338,16 @@ class MainActivity : Activity(), SurfaceListener {
                 st.dly = (st.dly + 0.25f) % 1.0f
                 ZtekAudio.fxSet(ZtekAudio.FX_DLY_MIX, st.dly)
             }
-            "EDIT" -> if (down) {                       // EDIT = preset pré-patché suivant (ZuluFx style)
-                presetIdx = (presetIdx + 1) % ZtekAudio.ZT_NPRESETS
-                ZtekAudio.preset(presetIdx)
-                st.presetName = ZtekAudio.presetName(presetIdx)
-                st.hintUntil = System.currentTimeMillis() + 1600
-                st.hintMsg = "PRESET: ${st.presetName}"
-                lcd.invalidate()
+            "EDIT" -> if (down) {
+                if (recDown) setPage(13)               // REC+EDIT = page PRESETS user
+                else {                                  // EDIT = preset pré-patché suivant (ZuluFx style)
+                    presetIdx = (presetIdx + 1) % ZtekAudio.ZT_NPRESETS
+                    ZtekAudio.preset(presetIdx)
+                    st.presetName = ZtekAudio.presetName(presetIdx)
+                    st.hintUntil = System.currentTimeMillis() + 1600
+                    st.hintMsg = "PRESET: ${st.presetName}"
+                    lcd.invalidate()
+                }
             }
             "FX" -> if (down) { ZtekAudio.allNotesOff(); st.curNote = -1 }
         }

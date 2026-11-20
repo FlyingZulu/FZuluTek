@@ -35,10 +35,14 @@ class LcdState {
     val popUntil = LongArray(10)      // per-widget pop animation (frame turquoise while it runs)
     fun pop(i: Int) { popUntil[i] = System.currentTimeMillis() + 1200 }
 
-    /* pages: 0 MAIN, 3 SEQ+ (advanced), 10 LFO, 11 ENV/TOOLS, 12 ASSIGN */
+    /* pages: 0 MAIN, 3 SEQ+ (advanced), 10 LFO, 11 ENV/TOOLS, 12 ASSIGN, 13 PRESETS */
     var page = 0
     var sub = 0                       // selected sub-module on pages 10/11 (0..7), dst on 12
-    val pageNames = mapOf(0 to "MAIN", 3 to "SEQ+", 10 to "LFO", 11 to "ENV", 12 to "ASSIGN")
+    val pageNames = mapOf(0 to "MAIN", 3 to "SEQ+", 10 to "LFO", 11 to "ENV", 12 to "ASSIGN", 13 to "PRESETS")
+    var psPart = 0                    // preset page: part (0 bass, 1 lead, 2 drums)
+    var psSlot = 0                    // preset page: slot 0..7
+    var psUsed = false
+    var psName = ""
     val srcVals = FloatArray(16)      // live source values 0..1 (16 bars)
     var lfoSync = false
     var lfoTrig = false
@@ -157,6 +161,13 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                         c.drawRect(x0, 116f - h, x0 + 11f, 116f, frame)
                     }
                 }
+            }
+            13 -> {  // PRESETS: part, slot, used, name
+                text(c, 44f, 105f, "PRT", DIM, 8f)
+                text(c, 70f, 105f, ZtekAudio.PART_NAMES.getOrElse(st.psPart) { "?" }, FLUO_PINK, 9f)
+                text(c, 116f, 105f, "SLT", DIM, 8f)
+                text(c, 140f, 105f, "${st.psSlot + 1}${if (st.psUsed) "*" else " "}", INK, 9f)
+                text(c, 170f, 105f, if (st.psName.isEmpty()) "-" else st.psName, if (st.psUsed) FLUO_YEL else DIM, 9f)
             }
             12 -> {  // ASSIGN: dst, src, depth, option LUDIQUE
                 text(c, 44f, 105f, "DST", DIM, 8f)
