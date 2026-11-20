@@ -1,0 +1,13 @@
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 04f7a9a..3a287a5 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -1981,7 +1981,7 @@ static void input(void)
+         else if (k == B_PLAY)
+             post(EV_PLAY, 0, 0);
+         else if (k == B_FX) {                  /* the effect pages: in, then the next one */
+-            set.page = (uint8_t)(set.page < 4u || set.page >= 11u ? 4u : set.page + 1u);   /* patch 0008: FX saute les pages 11..13 */
++            set.page = (uint8_t)(set.page < 4u || set.page >= 10u ? 4u : set.page + 1u);   /* patch 0008: FX saute les pages 11..13 ; patch 0014: depuis la page 10 (ASSIGN) on reboucle sur 4 au lieu d'atterrir sur 11 (DRUM) — off-by-one */
+             set_dirty = 1;
+             ui.redraw = 1;
+         }
