@@ -30,8 +30,9 @@ interface SurfaceListener {
 class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener) : View(ctx) {
 
     companion object {
-        val BTN_LABELS = arrayOf("PLAY", "REC", "SEQ", "GEN", "TAP", "SCL", "R-",
-                                 "R+", "ERS", "DRV", "DLY", "REV", "POW", "MUT")
+        /* the FM-1's 14 buttons, same order (BTN_NAMES of the firmware) */
+        val BTN_LABELS = arrayOf("FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME",
+                                 "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+")
         // 27 keys F3..G5: white keys (16) carry slot indices, black keys (11) MIDI notes
         val BLACK_NOTES = intArrayOf(54, 56, 58, 61, 63, 66, 68, 70, 73, 75, 78)
         const val KEY_TOP = 150f
@@ -130,8 +131,8 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             val col = i % 7
             val x0 = col * bw + 3f
             val y0 = 76f + row * 30f
-            val active = (i == 0 && st.playing) || (i == 1 && st.recArmed) || (i == 2 && st.seqOn) ||
-                         (st.slotRec.getOrElse(st.selSlot) { false } && i == 1)
+            val active = (i == 10 && st.playing) || (i == 11 && st.recArmed) || (i == 9 && st.seqOn) ||
+                         (st.slotRec.getOrElse(st.selSlot) { false } && i == 11)
             frame.color = if (active) LcdView.REC_RED else LcdView.DIM
             c.drawRect(x0, y0, x0 + bw - 6f, y0 + 24f, frame)
             mono.color = if (active) LcdView.INK else LcdView.DIM

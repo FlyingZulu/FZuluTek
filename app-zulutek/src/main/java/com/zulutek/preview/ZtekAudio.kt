@@ -30,6 +30,22 @@ object ZtekAudio {
     const val ML_SP_SRC = 4
     const val ML_SP_VOL = 6
 
+    /* modulation sources (ztek_engine.h): page LFO subs 0..7 = LFO1..4 + LABO1..4,
+     * page ENV subs 0..7 = ENV1, ENV2, EF, LOG, SLEW, CMP, QUANT, ATT */
+    const val ZT_NSRC = 16
+    const val ZT_NDST = 35                 /* 0..7 voice, 8..25 FX, 26..34 seq */
+    const val ZT_SEQ_DST0 = 26
+    val SRC_NAMES = arrayOf("LFO1", "LFO2", "LFO3", "LFO4",
+        "LAB1", "LAB2", "LAB3", "LAB4",
+        "ENV1", "ENV2", "EF", "LOG", "SLEW", "CMP", "QUANT", "ATT")
+    val LAB_NAMES = arrayOf("LINK", "MYCEL", "HUMUS", "NETVINT", "CHAOS", "OISEAUX", "INSECT", "MAREE")
+    val LFO_WAVES = arrayOf("SIN", "TRI", "SQ", "SAW", "S&H", "DRUNK")
+    val TOOL_NAMES = arrayOf("ENV1", "ENV2", "EF", "LOG", "SLEW", "CMP", "QUANT", "ATT")
+    const val ACID_MUT_TIME = 1
+    const val ACID_MUT_PITCH = 2
+    const val ACID_MUT_ARTICULATION = 3
+    const val DST_OFF = 255
+
     private var handle: Long = 0
     const val SAMPLE_RATE = 48000
 
@@ -118,6 +134,23 @@ object ZtekAudio {
     fun acidPlay(on: Int) { if (handle != 0L) nativeAcidPlay(handle, on) }
     fun acidKnob(which: Int, v: Float) { if (handle != 0L) nativeAcidKnob(handle, which, v) }
 
+    /* sequencer advanced (double-tap SEQ): k = 5..9 */
+    fun seqKnob(k: Int, v: Float) { if (handle != 0L) nativeSeqKnob(handle, k, v) }
+    fun seqKnobGet(k: Int): Float = if (handle != 0L) nativeSeqKnobGet(handle, k) else 0f
+    fun seqMutate(layer: Int) { if (handle != 0L) nativeSeqMutate(handle, layer) }
+
+    /* modulation: 16 sources x 4 knobs */
+    fun modKnob(src: Int, k: Int, v: Float) { if (handle != 0L) nativeModKnob(handle, src, k, v) }
+    fun modKnobGet(src: Int, k: Int): Float = if (handle != 0L) nativeModKnobGet(handle, src, k) else 0f
+    fun lfoOpt(which: Int, on: Int) { if (handle != 0L) nativeLfoOpt(handle, which, on) }
+    fun envLoop(e: Int, on: Int) { if (handle != 0L) nativeEnvLoop(handle, e, on) }
+    fun srcVal(src: Int): Float = if (handle != 0L) nativeSrcVal(handle, src) else 0f
+
+    /* ASSIGN matrix */
+    fun assign(dst: Int, src: Int, depth: Float) { if (handle != 0L) nativeAssign(handle, dst, src, depth) }
+    fun assignSrc(dst: Int): Int = if (handle != 0L) nativeAssignSrc(handle, dst) else DST_OFF
+    fun assignDepth(dst: Int): Float = if (handle != 0L) nativeAssignDepth(handle, dst) else 0f
+
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeStart(handle: Long): Boolean
@@ -145,4 +178,15 @@ object ZtekAudio {
     private external fun nativeAcidGenerate(handle: Long, seed: Int)
     private external fun nativeAcidPlay(handle: Long, on: Int)
     private external fun nativeAcidKnob(handle: Long, which: Int, v: Float)
+    private external fun nativeSeqKnob(handle: Long, k: Int, v: Float)
+    private external fun nativeSeqKnobGet(handle: Long, k: Int): Float
+    private external fun nativeSeqMutate(handle: Long, layer: Int)
+    private external fun nativeModKnob(handle: Long, src: Int, k: Int, v: Float)
+    private external fun nativeModKnobGet(handle: Long, src: Int, k: Int): Float
+    private external fun nativeLfoOpt(handle: Long, which: Int, on: Int)
+    private external fun nativeEnvLoop(handle: Long, e: Int, on: Int)
+    private external fun nativeSrcVal(handle: Long, src: Int): Float
+    private external fun nativeAssign(handle: Long, dst: Int, src: Int, depth: Float)
+    private external fun nativeAssignSrc(handle: Long, dst: Int): Int
+    private external fun nativeAssignDepth(handle: Long, dst: Int): Float
 }

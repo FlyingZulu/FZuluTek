@@ -5,15 +5,25 @@
  * cloned control surface (7 encoders, 14 buttons, 27 keys F3..G5). Everything drives the
  * native ztek engine through ZtekAudio.
  *
- * Mapping (docs/ZULUTEK.md):
+ * Pages (as on the FM-1): 0 MAIN, 3 SEQ+ (double-tap SEQ: TM LOCK/LEN, MUT, PLAY, RAND),
+ * 10 LFO (REC+LFO: 4 LFO + 4 labos), 11 ENV (REC+ENV: ENV1/ENV2 loopable + EF/LOG/SLEW/CMP/
+ * QUANT/ATT), 12 ASSIGN (REC+HOME: typed matrix, source -> destination only, like a VCV Rack
+ * patchbay: an input is never offered as a source, and no feedback cycles are proposed).
+ *
+ * Mapping (docs/ZULUTEK.md + docs/ZULUTEK-SEQ-PLUS.md):
  *  - 16 white keys = the 16 looper slots (tap = play/stop, long = rec arm/stop)
  *  - 11 black keys = playable notes (gate while held)
- *  - encoders: SEL = slot select, PRE = drive type, ALG = WAVE, K1..K4 = CUTOFF/RESO/ENVMOD/DECAY
- *  - buttons:  PLAY REC SEQ GEN TAP SCL R- R+ ERS DRV DLY REV POW MUT */
+ *  - buttons: FX SEL ENV LFO EDIT GLO HOME SAVE ARP SEQ PLAY REC OCT- OCT+
+ *      SEQ tap = seq play/stop, SEQ double-tap = generate + SEQ+ page
+ *      ENV alone = mutate TIME, LFO alone = mutate PITCH, ENV+LFO = mutate ARTICULATION
+ *      REC+ENV = ENV page, REC+LFO = LFO page, REC+HOME = ASSIGN page, HOME = MAIN
+ *  - encoders on page MAIN: SEL slot, PRE drive type, ALG WAVE, K1..K4 CUTOFF/RESO/ENVMOD/DECAY */
 package com.zulutek.preview
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.widget.LinearLayout
 import kotlin.math.roundToInt
@@ -29,6 +39,26 @@ class MainActivity : Activity(), SurfaceListener {
     private var bpm = 120f
     private val tapTimes = LongArray(8)
     private var tapIdx = 0
+
+    /* button hold state for REC+ combos and ENV+LFO */
+    private var recDown = false
+    private var envDown = false
+    private var lfoDown = false
+    private var lastSeqTap = 0L
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val refresh = object : Runnable {
+        override fun run() {
+            for (i in 0 until ZtekAudio.ZT_NSRC) st.srcVals[i] = ZtekAudio.srcVal(i)
+            for (k in 0 until 5) st.seqkVals[k] = ZtekAudio.seqKnobGet(5 + k)
+            if (st.page == 12) {
+                st.asgSrc = ZtekAudio.assignSrc(st.sub)
+                st.asgDepth = ZtekAudio.assignDepth(st.sub)
+            }
+            lcd.invalidate()
+            handler.postDelayed(this, 120)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,81 +84,242 @@ class MainActivity : Activity(), SurfaceListener {
         layout.addView(surface, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(layout)
+        handler.postDelayed(refresh, 120)
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(refresh)
         ZtekAudio.stop()
         super.onDestroy()
+    }
+
+    /* forbidden assignment: "sens interdit" pop + valid suggestions below (VCV-style typed patch).
+     * Both hints and the no-entry sign are part of the playful mode (LUDIQUE option, off for
+     * advanced users). */
+    private fun forbidden(sug: String) {
+        if (!st.ludiqueOn) return
+        st.noEntryUntil = System.currentTimeMillis() + 1200
+        st.sugMsg = sug
+        lcd.invalidate()
+    }
+
+    private fun hint(msg: String) {
+        if (!st.ludiqueOn) return
+        st.hintUntil = System.currentTimeMillis() + 1600
+        st.hintMsg = msg
+        lcd.invalidate()
+    }
+
+    /* contextual suggestion for a valid destination, by category */
+    private fun dstHint(dst: Int, src: Int): String {
+        val srcName = if (src in 0 until ZtekAudio.ZT_NSRC) ZtekAudio.SRC_NAMES[src] else "SRC?"
+        return when {
+            dst < 8 -> "$srcName -> VOIX: ex LFO1->CUTOFF, ENV1->DECAY"
+            dst < ZtekAudio.ZT_SEQ_DST0 -> "$srcName -> FX: ex LFO2->DLY, LABO->REV"
+            else -> "$srcName -> SEQ: ex LFO->TEMPO, ENV->STEPS, LFO->TM"
+        }
+    }
+
+    private fun srcNamesUpTo(maxExclusive: Int): String {
+        val sb = StringBuilder()
+        for (i in 0 until maxExclusive.coerceAtMost(ZtekAudio.ZT_NSRC)) {
+            if (sb.isNotEmpty()) sb.append(' ')
+            sb.append(ZtekAudio.SRC_NAMES[i])
+        }
+        return sb.toString()
+    }
+
+    private fun setPage(p: Int) {
+        st.page = p
+        st.encLabels = when (p) {
+            3 -> arrayOf("RND", "DEN", "ACC", "LCK", "LEN", "MUT", "PLY")
+            10 -> arrayOf("SUB", "SYN", "TRG", "K1", "K2", "K3", "K4")
+            11 -> arrayOf("SUB", "LOOP", "", "K1", "K2", "K3", "K4")
+            12 -> arrayOf("DST", "SRC", "LUD", "DPT", "", "", "")
+            else -> arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")
+        }
+        lcd.invalidate()
+        surface.invalidate()
     }
 
     // ---- encoders ----
     override fun onEncoder(i: Int, v: Float) {
         st.pop(i)
-        when (i) {
-            0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
-            1 -> {
-                val t = (v * 4.999f).toInt().coerceIn(0, 4)
-                if (t != st.driveType) {
-                    st.driveType = t
-                    ZtekAudio.fxSet(ZtekAudio.FX_DRIVE_TYPE, t.toFloat())
-                    ZtekAudio.fxSet(ZtekAudio.FX_DRIVE, 0.6f)
+        when (st.page) {
+            3 -> when (i) {                       // SEQ advanced sub-mode
+                0 -> { st.seqkVals[4] = v; ZtekAudio.seqKnob(9, v) }   // SELECT = RAND
+                1 -> ZtekAudio.acidKnob(0, v)                          // PRE = density
+                2 -> ZtekAudio.acidKnob(1, v)                          // ALG = accent
+                3 -> { st.seqkVals[0] = v; ZtekAudio.seqKnob(5, v) }   // K1 = TM LOCK
+                4 -> { st.seqkVals[1] = v; ZtekAudio.seqKnob(6, v) }   // K2 = TM LEN
+                5 -> { st.seqkVals[2] = v; ZtekAudio.seqKnob(7, v) }   // K3 = MUT
+                6 -> { st.seqkVals[3] = v; ZtekAudio.seqKnob(8, v) }   // K4 = PLAY
+            }
+            10 -> {                               // LFO page: subs 0..7 = LFO1..4 + LABO1..4
+                val sub = st.sub
+                when (i) {
+                    0 -> st.sub = (v * 7.999f).toInt().coerceIn(0, 7)
+                    1 -> { st.lfoSync = v > 0.5f; ZtekAudio.lfoOpt(0, if (st.lfoSync) 1 else 0) }
+                    2 -> { st.lfoTrig = v > 0.5f; ZtekAudio.lfoOpt(1, if (st.lfoTrig) 1 else 0) }
+                    else -> {
+                        val k = i - 3
+                        /* typed sources: a labo (sub 4..7) can only source lower ids (no cycle,
+                         * like a VCV patchbay). Beyond that: no-entry sign + suggestions. */
+                        var vv = v
+                        if (sub >= 4 && (k == 1 || k == 2)) {
+                            val maxV = (sub - 1) / 16.999f
+                            if (v > maxV) {
+                                forbidden("-> ${srcNamesUpTo(sub)}")
+                                vv = maxV
+                            }
+                        }
+                        ZtekAudio.modKnob(sub, k, vv)
+                    }
                 }
             }
-            2 -> ZtekAudio.setParam(ZtekAudio.AT_WAVE, v)
-            3 -> ZtekAudio.setParam(ZtekAudio.AT_CUTOFF, v)
-            4 -> ZtekAudio.setParam(ZtekAudio.AT_RESONANCE, v)
-            5 -> ZtekAudio.setParam(ZtekAudio.AT_ENVMOD, v)
-            6 -> ZtekAudio.setParam(ZtekAudio.AT_DECAY, v)
+            11 -> {                               // ENV page: subs 0..7 = ENV1..ATT (sources 8..15)
+                val sub = st.sub
+                when (i) {
+                    0 -> st.sub = (v * 7.999f).toInt().coerceIn(0, 7)
+                    1 -> if (sub < 2) ZtekAudio.envLoop(sub, if (v > 0.5f) 1 else 0)
+                    else -> {
+                        val k = i - 3
+                        var vv = v
+                        if (sub >= 2 && k == 0) {   // tool SRC: only lower source ids
+                            val maxV = (7 + sub) / 16.999f
+                            if (v > maxV) {
+                                forbidden("-> ${srcNamesUpTo(8 + sub)}")
+                                vv = maxV
+                            }
+                        }
+                        ZtekAudio.modKnob(8 + sub, k, vv)
+                    }
+                }
+            }
+            12 -> when (i) {                      // ASSIGN: typed matrix, out -> in only
+                0 -> {                            // SEL sweeps dsts AND sources: sources are NOT valid dsts
+                    val raw = (v * 50.999f).toInt().coerceIn(0, 50)
+                    if (raw < ZtekAudio.ZT_NDST) {   // 0..34: the param inputs -> OK
+                        st.sub = raw
+                        st.asgSrc = ZtekAudio.assignSrc(st.sub)
+                        st.asgDepth = ZtekAudio.assignDepth(st.sub)
+                        hint(dstHint(st.sub, st.asgSrc))
+                    } else {                          // 35..50 = a source used as destination: forbidden
+                        forbidden("DST: VOIX 0-7 FX 8-25 SEQ 26-34")
+                    }
+                }
+                1 -> {                            // PRE sweeps sources AND dsts: dsts are NOT valid sources
+                    val raw = (v * 33.999f).toInt().coerceIn(0, 33)
+                    if (raw <= 16) {                 // 0..15 sources, 16 = OFF
+                        ZtekAudio.assign(st.sub, if (raw == 16) ZtekAudio.DST_OFF else raw, st.asgDepth)
+                        hint(dstHint(st.sub, raw))
+                    } else {                          // 17..33 = a param used as source: forbidden
+                        forbidden("SRC: ${srcNamesUpTo(16)} OFF")
+                    }
+                }
+                2 -> {                            // ALG = option LUDIQUE (mode ludique on/off)
+                    st.ludiqueOn = v > 0.5f
+                    st.encVals[2] = if (st.ludiqueOn) 1f else 0f
+                    hint(if (st.ludiqueOn) "LUDIQUE ON: conseils actifs" else "LUDIQUE OFF: mode expert")
+                }
+                3 -> {                            // K1 = depth
+                    st.asgDepth = v
+                    ZtekAudio.assign(st.sub, st.asgSrc, v)
+                }
+            }
+            else -> when (i) {                    // MAIN page
+                0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
+                1 -> {
+                    val t = (v * 4.999f).toInt().coerceIn(0, 4)
+                    if (t != st.driveType) {
+                        st.driveType = t
+                        ZtekAudio.fxSet(ZtekAudio.FX_DRIVE_TYPE, t.toFloat())
+                        ZtekAudio.fxSet(ZtekAudio.FX_DRIVE, 0.6f)
+                    }
+                }
+                2 -> ZtekAudio.setParam(ZtekAudio.AT_WAVE, v)
+                3 -> ZtekAudio.setParam(ZtekAudio.AT_CUTOFF, v)
+                4 -> ZtekAudio.setParam(ZtekAudio.AT_RESONANCE, v)
+                5 -> ZtekAudio.setParam(ZtekAudio.AT_ENVMOD, v)
+                6 -> ZtekAudio.setParam(ZtekAudio.AT_DECAY, v)
+            }
         }
         lcd.invalidate()
     }
 
-    // ---- 14 buttons ----
+    // ---- 14 buttons (FM-1 order) ----
     override fun onButton(i: Int, down: Boolean) {
-        when (SurfaceView.BTN_LABELS[i]) {
+        val lbl = SurfaceView.BTN_LABELS[i]
+        when (lbl) {
             "PLAY" -> if (down) {
                 st.playing = !st.playing
                 ZtekAudio.loopPlay(if (st.playing) 1 else 0)
             }
-            "REC" -> if (down) {
-                val s = st.selSlot
-                if (ZtekAudio.loopSlotRec(s)) { ZtekAudio.loopRecStop(s); st.recArmed = false }
-                else { ZtekAudio.loopRecStart(s, 1); st.recArmed = true }
-                st.pop(9)
+            "REC" -> {
+                recDown = down
+                if (down) {
+                    val s = st.selSlot
+                    if (ZtekAudio.loopSlotRec(s)) { ZtekAudio.loopRecStop(s); st.recArmed = false }
+                    else { ZtekAudio.loopRecStart(s, 1); st.recArmed = true }
+                    st.pop(9)
+                }
             }
             "SEQ" -> if (down) {
-                st.seqOn = !st.seqOn
-                ZtekAudio.acidPlay(if (st.seqOn) 1 else 0)
+                val now = System.currentTimeMillis()
+                if (now - lastSeqTap < 350) {           // double-tap SEQ: generate + SEQ+ page
+                    ZtekAudio.acidGenerate((Math.random() * 1e9).toInt())
+                    setPage(if (st.page == 3) 0 else 3)
+                    lastSeqTap = 0L
+                } else {
+                    lastSeqTap = now
+                    st.seqOn = !st.seqOn
+                    ZtekAudio.acidPlay(if (st.seqOn) 1 else 0)
+                }
             }
-            "GEN" -> if (down) ZtekAudio.acidGenerate((Math.random() * 1e9).toInt())
-            "TAP" -> if (down) tapTempo()
-            "SCL" -> if (down) {
-                scale = (scale + 1) % 8
-                ZtekAudio.setScale(scale)
-                ZtekAudio.acidGenerate((Math.random() * 1e9).toInt())
+            "ENV" -> {
+                envDown = down
+                if (down) {
+                    if (recDown) setPage(11)                       // REC+ENV = ENV/tools page
+                    else if (lfoDown) ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_ARTICULATION)
+                    else ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_TIME)   // ENV alone = mutate TIME
+                }
             }
-            "R-" -> if (down) { root = (root - 1).coerceIn(24, 72); ZtekAudio.setRoot(root) }
-            "R+" -> if (down) { root = (root + 1).coerceIn(24, 72); ZtekAudio.setRoot(root) }
-            "ERS" -> if (down) { ZtekAudio.loopErase(st.selSlot); st.recArmed = false }
-            "DRV" -> if (down) {
+            "LFO" -> {
+                lfoDown = down
+                if (down) {
+                    if (recDown) setPage(10)                       // REC+LFO = LFO page
+                    else if (envDown) ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_ARTICULATION)
+                    else ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_PITCH)  // LFO alone = mutate PITCH
+                }
+            }
+            "HOME" -> if (down) {
+                if (recDown) setPage(12) else setPage(0)           // REC+HOME = ASSIGN page
+            }
+            "OCT-" -> if (down) { root = (root - 1).coerceIn(24, 72); ZtekAudio.setRoot(root) }
+            "OCT+" -> if (down) { root = (root + 1).coerceIn(24, 72); ZtekAudio.setRoot(root) }
+            "SEL" -> if (down) {
+                st.engine = (st.engine + 1) % 5
+                ZtekAudio.setEngine(st.engine)
+            }
+            "GLO" -> if (down) {
                 st.driveType = (st.driveType + 1) % 5
                 ZtekAudio.fxSet(ZtekAudio.FX_DRIVE_TYPE, st.driveType.toFloat())
                 ZtekAudio.fxSet(ZtekAudio.FX_DRIVE, 0.6f)
                 st.encVals[1] = st.driveType / 4f
             }
-            "DLY" -> if (down) {
-                st.dly = ((st.dly + 0.25f) % 1.0f)
-                ZtekAudio.fxSet(ZtekAudio.FX_DLY_MIX, st.dly)
-            }
-            "REV" -> if (down) {
-                st.rev = ((st.rev + 0.25f) % 1.0f)
-                ZtekAudio.fxSet(ZtekAudio.FX_REV_MIX, st.rev)
-            }
-            "POW" -> {
+            "ARP" -> {
                 if (down) ZtekAudio.punch(1, 8, 0.5f, 0.5f, 0.8f)
                 else { ZtekAudio.punch(0, 0, 0f, 0f, 0f); ZtekAudio.punchTail(0.3f) }
             }
-            "MUT" -> if (down) { ZtekAudio.allNotesOff(); st.curNote = -1 }
+            "SAVE" -> if (down) {
+                st.dly = (st.dly + 0.25f) % 1.0f
+                ZtekAudio.fxSet(ZtekAudio.FX_DLY_MIX, st.dly)
+            }
+            "EDIT" -> if (down) {
+                st.rev = (st.rev + 0.25f) % 1.0f
+                ZtekAudio.fxSet(ZtekAudio.FX_REV_MIX, st.rev)
+            }
+            "FX" -> if (down) { ZtekAudio.allNotesOff(); st.curNote = -1 }
         }
         syncSlots()
         lcd.invalidate()
@@ -162,24 +353,6 @@ class MainActivity : Activity(), SurfaceListener {
         }
         lcd.invalidate()
         surface.invalidate()
-    }
-
-    private fun tapTempo() {
-        val now = System.currentTimeMillis()
-        tapTimes[tapIdx % 8] = now
-        tapIdx++
-        if (tapIdx >= 4) {
-            val n = 8.coerceAtMost(tapIdx)
-            var span = 0L
-            for (i in 1 until n) span += tapTimes[(tapIdx - i) % 8] - tapTimes[(tapIdx - i - 1) % 8]
-            if (span > 0) {
-                bpm = (60000f * (n - 1) / span).coerceIn(30f, 300f)
-                ZtekAudio.setBpm(bpm)
-                st.bpm = bpm.roundToInt()
-            }
-        }
-        st.pop(9)
-        lcd.invalidate()
     }
 
     private fun syncSlots() {

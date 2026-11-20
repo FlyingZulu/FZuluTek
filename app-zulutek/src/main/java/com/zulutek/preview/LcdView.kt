@@ -34,6 +34,22 @@ class LcdState {
     val slotRec = BooleanArray(16)
     val popUntil = LongArray(10)      // per-widget pop animation (frame turquoise while it runs)
     fun pop(i: Int) { popUntil[i] = System.currentTimeMillis() + 1200 }
+
+    /* pages: 0 MAIN, 3 SEQ+ (advanced), 10 LFO, 11 ENV/TOOLS, 12 ASSIGN */
+    var page = 0
+    var sub = 0                       // selected sub-module on pages 10/11 (0..7), dst on 12
+    val pageNames = mapOf(0 to "MAIN", 3 to "SEQ+", 10 to "LFO", 11 to "ENV", 12 to "ASSIGN")
+    val srcVals = FloatArray(16)      // live source values 0..1 (16 bars)
+    var lfoSync = false
+    var lfoTrig = false
+    val seqkVals = FloatArray(5)      // TM LOCK, TM LEN, MUT, PLAY, RAND
+    var asgSrc = 255
+    var asgDepth = 0f
+    var noEntryUntil = 0L             // "sens interdit" pop animation (forbidden assignment)
+    var sugMsg = ""                   // suggestions shown under the no-entry sign
+    var hintUntil = 0L                // transient contextual hint (valid assignment)
+    var hintMsg = ""
+    var ludiqueOn = true              // mode ludique (option LUDIQUE, FM-1: OPTIONS > LUDIQUE)
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -109,13 +125,75 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             c.drawLine(x0 + 3f, 80f, x0 + 3f + 24f * v, 80f, frame)
         }
 
-        // ---- FX line, y 94..110 ----
-        text(c, 6f, 105f, "DLY", DIM, 9f)
-        text(c, 36f, 105f, "${(st.dly * 100).toInt()}", INK, 10f)
-        text(c, 90f, 105f, "REV", DIM, 9f)
-        text(c, 120f, 105f, "${(st.rev * 100).toInt()}", INK, 10f)
-        text(c, 170f, 105f, "SEL", DIM, 9f)
-        text(c, 200f, 105f, "${st.selSlot + 1}", if (st.recArmed) REC_RED else INK, 10f)
+        // ---- page line, y 94..110 ----
+        val pn = st.pageNames[st.page] ?: "MAIN"
+        text(c, 6f, 105f, pn, FLUO_TURQ, 10f)
+        when (st.page) {
+            3 -> {  // SEQ advanced: LOCK LEN MUT PLAY RAND
+                val nm = arrayOf("LCK", "LEN", "MUT", "PLY", "RND")
+                for (i in 0 until 5) {
+                    val x0 = 52f + i * 37f
+                    text(c, x0, 105f, nm[i], DIM, 8f)
+                    text(c, x0 + 14f, 105f, "${(st.seqkVals[i] * 100).toInt()}", INK, 9f)
+                }
+            }
+            10, 11 -> {  // LFO / ENV page: sub name + 16 source bars
+                val nm = if (st.page == 10) ZtekAudio.SRC_NAMES.getOrElse(st.sub) { "?" }
+                         else ZtekAudio.TOOL_NAMES.getOrElse(st.sub) { "?" }
+                text(c, 44f, 105f, "SUB", DIM, 8f)
+                text(c, 70f, 105f, "$nm ${st.sub}", INK, 9f)
+                if (st.page == 10) {
+                    text(c, 130f, 105f, if (st.lfoSync) "SYNC" else "sync", if (st.lfoSync) FLUO_PINK else DIM, 8f)
+                    text(c, 172f, 105f, if (st.lfoTrig) "TRIG" else "trig", if (st.lfoTrig) FLUO_PINK else DIM, 8f)
+                }
+                for (i in 0 until 16) {
+                    val x0 = 6f + i * 14.5f
+                    val h = st.srcVals[i] * 12f
+                    frame.color = if (i == st.sub && (st.page == 10 || st.page == 11 && st.sub < 8)) FLUO_YEL else DIM
+                    c.drawRect(x0, 116f - h, x0 + 11f, 116f, frame)
+                    if (st.srcVals[i] > 0.01f) {
+                        frame.color = FLUO_TURQ
+                        c.drawRect(x0, 116f - h, x0 + 11f, 116f, frame)
+                    }
+                }
+            }
+            12 -> {  // ASSIGN: dst, src, depth, option LUDIQUE
+                text(c, 44f, 105f, "DST", DIM, 8f)
+                text(c, 74f, 105f, "${st.sub}", INK, 9f)
+                text(c, 100f, 105f, "SRC", DIM, 8f)
+                text(c, 126f, 105f, if (st.asgSrc == 255) "OFF" else ZtekAudio.SRC_NAMES.getOrElse(st.asgSrc) { "?" }, INK, 9f)
+                text(c, 180f, 105f, "DPT ${(st.asgDepth * 100).toInt()}", INK, 9f)
+                text(c, 212f, 105f, if (st.ludiqueOn) "LUD" else "lud", if (st.ludiqueOn) FLUO_PINK else DIM, 8f)
+            }
+            else -> {
+                text(c, 44f, 105f, "DLY", DIM, 9f)
+                text(c, 72f, 105f, "${(st.dly * 100).toInt()}", INK, 10f)
+                text(c, 110f, 105f, "REV", DIM, 9f)
+                text(c, 138f, 105f, "${(st.rev * 100).toInt()}", INK, 10f)
+                text(c, 180f, 105f, "SEL", DIM, 9f)
+                text(c, 208f, 105f, "${st.selSlot + 1}", if (st.recArmed) REC_RED else INK, 10f)
+            }
+        }
+
+        // ---- "sens interdit" pop + suggestions (forbidden assignment, VCV-style typed patch) ----
+        if (now < st.noEntryUntil) {
+            // panneau "sens interdit": rond rouge plein + barre blanche horizontale (🚫)
+            val cx = 120f
+            val cy = 62f
+            val pulse = 1f + 0.15f * kotlin.math.sin(now / 40.0)
+            val r = 12f * pulse
+            mono.color = REC_RED
+            c.drawCircle(cx, cy, r, mono)                       // disque rouge plein
+            mono.color = INK
+            c.drawRect(cx - r, cy - 3f, cx + r, cy + 3f, mono)  // barre blanche horizontale
+            if (st.sugMsg.isNotEmpty()) text(c, 6f, 92f, st.sugMsg, AMBER, 9f)
+        } else if (now < st.hintUntil && st.hintMsg.isNotEmpty()) {
+            // contextual suggestion bubble (valid assignment): small turquoise "pop" + text below
+            frame.color = FLUO_TURQ
+            val pulse = 1f + 0.15f * kotlin.math.sin(now / 40.0)
+            c.drawCircle(120f, 62f, 6f * pulse, frame)
+            text(c, 6f, 92f, st.hintMsg, FLUO_TURQ, 9f)
+        }
 
         // ---- 16 slot keys, 2 rows of 8, y 118..238 (big, like the FM-1 white keys) ----
         for (i in 0 until 16) {

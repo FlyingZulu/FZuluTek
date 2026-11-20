@@ -151,3 +151,63 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAcidKnob(JNIEnv *
 {
     ztek_acid_knob(zte(NULL, h), which, v);
 }
+
+/* sequencer advanced (double-tap SEQ): k = 5..9 TM LOCK / TM LEN / MUT / PLAY / RAND */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSeqKnob(JNIEnv *, jclass, jlong h, jint k, jfloat v)
+{
+    ztek_seq_knob(zte(NULL, h), k, v);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSeqKnobGet(JNIEnv *, jclass, jlong h, jint k)
+{
+    return ztek_seq_knob_get(zte(NULL, h), k);
+}
+
+/* live mutation (ENV/LFO buttons): layer = ACID_MUT_TIME/PITCH/ARTICULATION */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSeqMutate(JNIEnv *, jclass, jlong h, jint layer)
+{
+    ztek_seq_mutate(zte(NULL, h), layer);
+}
+
+/* modulation: 16 sources x 4 knobs (pages LFO/ENV) */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeModKnob(JNIEnv *, jclass, jlong h, jint src, jint k, jfloat v)
+{
+    ztek_mod_knob(zte(NULL, h), src, k, v);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeModKnobGet(JNIEnv *, jclass, jlong h, jint src, jint k)
+{
+    return ztek_mod_knob_get(zte(NULL, h), src, k);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLfoOpt(JNIEnv *, jclass, jlong h, jint which, jint on)
+{
+    ztek_lfo_opt(zte(NULL, h), which, on);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeEnvLoop(JNIEnv *, jclass, jlong h, jint e, jint on)
+{
+    ztek_env_loop(zte(NULL, h), e, on);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSrcVal(JNIEnv *, jclass, jlong h, jint src)
+{
+    return ztek_src_val(zte(NULL, h), src);
+}
+
+/* ASSIGN matrix: dst 0..ZT_NDST-1, src 0..15 (255 = off), depth 0..1 */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssign(JNIEnv *, jclass, jlong h,
+    jint dst, jint src, jfloat depth)
+{
+    ztek_assign(zte(NULL, h), dst, src, depth);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssignSrc(JNIEnv *, jclass, jlong h, jint dst)
+{
+    return ztek_assign_src(zte(NULL, h), dst);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssignDepth(JNIEnv *, jclass, jlong h, jint dst)
+{
+    return ztek_assign_depth(zte(NULL, h), dst);
+}

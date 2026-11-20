@@ -180,11 +180,26 @@ captures MIDI-in, masques) + PoW! engagé — rappelable à tout moment. Icône 
 - Stockage : 16 kits × (settings + 16 snaps × 4 layers + MIDI) — heap côté APK, flash côté FM-1 (patch).
 - REC+PLAY sur la page KIT est inerte (la sauvegarde passe par SAVE).
 
-## Modulation (LFO/ENV) — socle commun, façon ZuluFx
+## Modulation (LFO/ENV) — socle commun, façon ZuluFx — rééquilibré 8/8 (voir docs/ZULUTEK-SEQ-PLUS.md)
 
 zuluTek partage **une seule section de modulation** entre basse/synth/drum (pas de LFO/ENV par branche,
-trop coûteux sur l'AC791N et contraire à « tout linkable ») : 2 LFO + ENV loopable + EF + LOG + 2 plugs
-N1 (page TOOLS), routés en ASSIGN vers n'importe quel paramètre (voix 0..7, FX 8..25, seq/LFO 26..33,
-marques S/L/E/X sur les knobs). À prévoir dans le patch FM-1 : ajouter les **16 mix des slots PoW!**
+trop coûteux sur l'AC791N et contraire à « tout linkable »). Depuis le pack SEQ+ :
+
+- **page LFO (REC+LFO) = 8 modules : 4 LFO + 4 labos** — LFO1..4 (SIN/TRI/SQ/SAW/S&H/DRUNK,
+  options LFO SYNC divisions d'horloge + LFO TRIG retrigger par note) et LABO1..4 (les anciennes
+  boîtes « réseau », 8 types : LINK, MYCELIUM, HUMUS, NET VINTAGE, CHAOS, OISEAUX, INSECTES, MARÉE).
+- **page ENV (REC+ENV) = 8 tools, l'enveloppe en premier : ENV1, ENV2 (bouclables) + EF, LOG,
+  SLEW, CMP, QUANT, ATT.**
+- Routage en **ASSIGN typé façon VCV Rack** (page ASSIGN) : 16 sources (sorties) vers 35
+  destinations (entrées : voix 0..7, FX 8..25, seq 26..34) — un câble ne va que out → in,
+  anti-boucle (un labo ne source que des sources d'index inférieur), panneau « sens interdit »
+  + suggestions à l'écran, **option LUDIQUE** désactivable (mode expert). Toute la section tourne
+  **par blocs de 32 échantillons** → coût DSP négligeable sur l'AC791N.
+- **Mutation live** : ENV seul = couche TIME, LFO seul = couche PITCH, ENV+LFO = ARTICULATION
+  (comme l'ATEK303 d'origine, `acid_mutate_burst_range` sur la page de 16 pas courante).
+- **SEQ+ (double-tap SEQ)** : TM LOCK / TM LEN / MUT / PLAY (NORM/REV/PING-PONG) / RAND —
+  détail dans `docs/ZULUTEK-SEQ-PLUS.md`.
+
+À prévoir dans le patch FM-1 : ajouter les **16 mix des slots PoW!**
 comme destinations de la matrice (`labApply` au-delà de `ZT_NDST`) pour qu'un LFO puisse aussi piloter
 les macros.
