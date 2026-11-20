@@ -13,6 +13,8 @@
 package com.zulutek.preview
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -175,6 +177,7 @@ class MainActivity : Activity(), SurfaceListener {
                     st.stripAuxLoop[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_AUX_LOOP)
                 }
             }
+            if (st.page == 17 && tickN % 8 == 0) linkRefreshLocal()   // page LINK : liste des samples locaux
             if (st.page == 12) {   // PATCH v3 : rebâtit toutes les vues depuis les bitsets du moteur
                 val idx = ZtekAudio.SRC_IDX
                 val words = Array(idx.size) { ZtekAudio.assignWords(idx[it]) }
@@ -274,6 +277,19 @@ class MainActivity : Activity(), SurfaceListener {
         ZuluLink.onPeersChanged = { handler.post { lcd.invalidate() } }
         ZuluLink.start("zulu-apk", ZuluLink.Role.CONSOLE)
 
+        /* liaison ZTF avec le FM-1 (page LINK 17) : callbacks worker -> UI via handler */
+        Fm1Usb.init(this)
+        Fm1Usb.onStatus = { s -> handler.post { st.linkStatus = s; lcd.invalidate() } }
+        Fm1Usb.onProgress = { s -> handler.post { st.linkProg = s; lcd.invalidate() } }
+        Fm1Usb.onFiles = { fs -> handler.post {
+            st.linkFiles.clear()
+            for (f in fs) st.linkFiles.add("${f.name}  ${f.size}o")
+            if (st.linkSel >= st.linkFiles.size) st.linkSel = 0
+            lcd.invalidate()
+        } }
+        Fm1UsbAudio.onStatus = { s -> handler.post { st.linkStatus = s; lcd.invalidate() } }
+        linkRefreshLocal()
+
         /* dans l'APK le LCD est tactile : POW maintenu + toucher = circuit bend
          * (bible : REC maintenu + toucher l'écran ; REC sert déjà au looper ici) */
         lcd.setOnTouchListener { _, ev ->
@@ -355,8 +371,131 @@ class MainActivity : Activity(), SurfaceListener {
     override fun onDestroy() {
         handler.removeCallbacks(tick)
         ZuluLink.stop()
+        Fm1UsbAudio.release()
+        Fm1Usb.release()
         ZtekAudio.stop()
         super.onDestroy()
+    }
+
+    // ---- page LINK (17) : liaison ZTF APK <-> FM-1 ------------------------------
+
+    private val encDefault = arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")
+    private val encLink = arrayOf("SEL", "TAB", "DST", "", "", "", "")
+
+    private fun linkRefreshLocal() {
+        st.linkLocal.clear()
+        for (f in SampleLibrary.list(this)) st.linkLocal.add(f.name)
+    }
+
+    private fun linkScan() {
+        st.linkStatus = "scan USB…"
+        Fm1Usb.scan()
+        Fm1Usb.ping()
+        Fm1Usb.refreshFiles()
+        linkRefreshLocal()
+    }
+
+    /** PLAY en page LINK : onglet 0 = pull du fichier FM-1 vers le téléphone,
+     *  onglet 1 = push du sample local vers ZSMP<linkDst> (ZSM1 µ-law, tronqué au max FM-1) */
+    private fun linkAction() {
+        if (!Fm1Usb.connected) { linkScan(); return }
+        if (st.linkTab == 0) {
+            if (st.linkSel >= st.linkFiles.size) { hint("aucun fichier"); return }
+            val name = st.linkFiles[st.linkSel].substringBefore(' ').trim()
+            val dest = java.io.File(SampleLibrary.pullDir(this), SampleLibrary.pullName(name))
+            Fm1Usb.run("PULL") {
+                val f = Fm1Usb.transport!!.fileIndexOf(name)
+                val data = Fm1Usb.transport!!.fileRead(f.index) { d, t ->
+                    Fm1Usb.onProgress("PULL $d/$t")
+                }
+                dest.parentFile?.mkdirs()
+                dest.writeBytes(data)
+                // si c'est un ZSM1, on prépare aussi un WAV écoutable à côté
+                val z = ZtfCodec.decodeZsm(data)
+                if (z != null) SampleLibrary.zsm1ToWav(z, java.io.File(dest.parentFile, dest.name + ".wav"))
+                handler.post {
+                    st.linkStatus = "PULL -> ${dest.name} (${data.size} o)"
+                    linkRefreshLocal(); lcd.invalidate()
+                }
+            }
+        } else {
+            if (st.linkSel >= st.linkLocal.size) { hint("aucun sample local (SEQ = importer)"); return }
+            val f = SampleLibrary.list(this).getOrNull(st.linkSel) ?: return
+            val pcm = SampleLibrary.decodeMono(f) ?: run {
+                handler.post { st.linkStatus = "WAV illisible: ${f.name}"; lcd.invalidate() }
+                return
+            }
+            val blob = SampleLibrary.encodeZsm1ForFm1(pcm, SampleLibrary.FM1_SR, 1)   // µ-law, max ~92 ms
+            val name = "ZSMP%02d".format(st.linkDst)
+            Fm1Usb.pushNamed(name, blob, "PUSH $name")
+        }
+    }
+
+    private fun linkLoad() {
+        if (st.linkTab != 0 || st.linkSel >= st.linkFiles.size) return
+        val name = st.linkFiles[st.linkSel].substringBefore(' ').trim()
+        Fm1Usb.run("LOAD") {
+            val f = Fm1Usb.transport!!.fileIndexOf(name)
+            val ok = Fm1Usb.transport!!.ztfLoad(f.index)
+            handler.post {
+                st.linkStatus = if (ok) "LOAD $name appliqué sur le FM-1" else "LOAD $name a échoué"
+                lcd.invalidate()
+            }
+        }
+    }
+
+    private fun linkDelete() {
+        if (st.linkTab != 0 || st.linkSel >= st.linkFiles.size) return
+        val name = st.linkFiles[st.linkSel].substringBefore(' ').trim()
+        Fm1Usb.run("RM") {
+            val f = Fm1Usb.transport!!.fileIndexOf(name)
+            Fm1Usb.transport!!.fileDelete(f.index)
+            handler.post { st.linkStatus = "$name supprimé"; lcd.invalidate() }
+            Fm1Usb.refreshFiles()
+        }
+    }
+
+    private fun linkAudioToggle() {
+        if (Fm1UsbAudio.captureOn || Fm1UsbAudio.playOn) {
+            Fm1UsbAudio.release()
+            st.linkAud = false
+        } else {
+            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 43)
+            }
+            val cap = Fm1UsbAudio.startCapture(this)
+            var play = false
+            if (st.linkTab == 1 && st.linkSel < st.linkLocal.size) {
+                val f = SampleLibrary.list(this).getOrNull(st.linkSel)
+                if (f != null) play = Fm1UsbAudio.playSample(this, f)
+            }
+            st.linkAud = cap || play
+        }
+        lcd.invalidate()
+    }
+
+    private fun linkImport() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/*"
+        }
+        try { startActivityForResult(intent, 4242) } catch (e: Exception) {
+            st.linkStatus = "SAF indisponible: ${e.message}"
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 4242 && resultCode == Activity.RESULT_OK) {
+            val uri: Uri? = data?.data
+            if (uri != null) {
+                val f = SampleLibrary.importUri(this, uri)
+                st.linkStatus = if (f != null) "importé: ${f.name}" else "import échoué"
+                linkRefreshLocal()
+                lcd.invalidate()
+            }
+        }
     }
 
     /* messages ZuluLink reçus (thread UI via handler.post) */
@@ -420,10 +559,17 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.xySet(0, 0f, 0f)
                 lcd.invalidate()
             }
-            "REC" -> when (st.page) { 1, in 6..16 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
+            "REC" -> when (st.page) { 1, in 6..17 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
+            "HOME" -> {   // long-HOME : page LINK (17) liaison ZTF avec le FM-1
+                st.page = if (st.page == 17) 0 else 17
+                if (st.page == 17) { setEncLabels(encLink); linkScan() }
+                else setEncLabels(encDefault)
+                lcd.invalidate()
+            }
             "DLY" -> {
                 val old = st.page
-                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 8; 8 -> 9; 9 -> 10; 10 -> 11; 11 -> 12; 12 -> 13; 13 -> 14; 14 -> 15; 15 -> 16; 16 -> 0; else -> old }
+                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 8; 8 -> 9; 9 -> 10; 10 -> 11; 11 -> 12; 12 -> 13; 13 -> 14; 14 -> 15; 15 -> 16; 16 -> 17; 17 -> 0; else -> old }
+                if (st.page == 17) { setEncLabels(encLink); linkScan() }
                 if (st.page == 12 && old == 11) {   // depuis MIX, la baie s'ouvre sur la boîte LOOP
                     st.patchView = 2
                     st.modBox = ZtekAudio.MOD_NAME.indexOf("LOOP")
@@ -709,6 +855,18 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
             return
         }
+        if (st.page == 17) {                  // page LINK : SEL=ligne TAB=onglet DST=slot ZSMP cible
+            when (i) {
+                0 -> {
+                    val n = (if (st.linkTab == 0) st.linkFiles.size else st.linkLocal.size).coerceAtLeast(1)
+                    st.linkSel = (v * (n - 0.001f)).toInt().coerceIn(0, n - 1)
+                }
+                1 -> st.linkTab = if (v > 0.5f) 1 else 0
+                2 -> st.linkDst = (v * 7.999f).toInt().coerceIn(0, 7)
+            }
+            lcd.invalidate()
+            return
+        }
         if (st.smpPage) {
             // page SMP : SEL = mode de stretch, K1..K4 = START/END/VOL/PITCH
             when (i) {
@@ -914,6 +1072,18 @@ class MainActivity : Activity(), SurfaceListener {
             }
             16 -> { // OPTIONS : REC=quitte
                 if (label == "REC") { st.page = 0; lcd.invalidate() }
+                return
+            }
+            17 -> { // LINK (ZTF) : REC=quitte PLAY=push/pull SEQ=import WAV SAVE=scan+ping ARP=LOAD FX=rm ENV=audio
+                when (label) {
+                    "REC" -> { st.page = 0; setEncLabels(encDefault); lcd.invalidate() }
+                    "PLAY" -> linkAction()
+                    "SEQ" -> linkImport()
+                    "SAVE" -> linkScan()
+                    "ARP" -> linkLoad()
+                    "FX" -> linkDelete()
+                    "ENV" -> linkAudioToggle()
+                }
                 return
             }
             11 -> { // MIX : PLAY=on/off slot, REC=rec arm, ERS=erase

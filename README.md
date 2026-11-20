@@ -7,10 +7,10 @@ Firmware ATEK303 personnalisé (dérivé GPL-3.0 d'Animatek — crédits : Anima
 code publié en GPL-3.0 + crédits Animatek, nouvelle clé de signature générée (l'actuelle
 reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
 
-## État des branches (maj 2026-11-20 ~09:45Z) — PR #2..#9 MERGÉES dans `main` (CI verte après chaque merge), seule PR #1 ouverte (session B)
+## État des branches (maj 2026-11-20 ~15:30Z) — PR #1..#9 MERGÉES dans `main` (CI verte), PR #10/#11/#12 ouvertes
 
-- **Mergées dans main** (ordre : #3 → #9 → #5 → #2 → #4 → #6 → #7 → #8 ; `gh pr merge` bloqué par le proxy → merges via `git merge --no-ff` + `git push origin main`, branches conservées) :
-  - **PR #3** `vibe/zulutek-seq-plus-c9ef18` — pack SEQ+ APK (modulation 8/8, ASSIGN typée LUDIQUE, presets, ARP page 13, MACRO page 14)
+- **Mergées dans main** (ordre : #3 → #9 → #5 → #2 → #4 → #6 → #7 → #8 puis **#1** `3ca9446` par la session B — baie v3 hiérarchique + DRUMS + choke MONO/POLY + OPTIONS(ECO/LDR) + mixeur 4 tranches + page DRUMS, CI verte run 44722534300 ; `gh pr merge` bloqué par le proxy → merges via `git merge --no-ff` + `git push origin main`, branches conservées) :
+  - **PR #3** `vibe/zulutek-seq-plus-c9ef18` — pack SEQ+ APK (modulation 8/8, ASSIGN typé LUDIQUE, presets, ARP page 13, MACRO page 14)
   - **PR #9** `vibe/zulutek-presets-parts-c9ef18` — presets usine pré-patchés **par partie** (BASSE/LEAD/DRUMS, 4 slots macro remplis chacun)
   - **PR #5** `vibe/zulutek-drum-analog-c9ef18` — drum machine analog v2 (8 pads PERKONS-like, comp bus Fac Smash)
   - **PR #2** `vibe/atek303-mojo-patch-c9ef18` — patches firmware 0001-0004
@@ -18,8 +18,13 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
   - **PR #6** `vibe/fm1-patch-arp-c9ef18` — patch 0006 arpégiateur FM-1
   - **PR #7** `vibe/fm1-patch-drums-c9ef18` — patch 0007 drum machine FM-1 (page DRUM 11)
   - **PR #8** `vibe/fm1-patch-looper-macro-c9ef18` — patch 0008 : page LOOP 12 + MACRO 13 FM-1, bus drum dans ASSIGN (dst 35..42), presets pré-patchés par partie (flash ZSP2)
-- **PR #1** `vibe/zulutek-midi-looper-c9ef18` (`85e342a`) — **ouverte, session B** : à rebaser sur main (conflits sur `dsp/midi_looper.c`, `ztek_engine.cpp`, `LcdView.kt`, `MainActivity.kt` — chevauchement avec le pack SEQ+ de #3).
-- ⚠️ la série de patches firmware **0001-0008 n'a jamais été buildée avec la toolchain JieLi** ni testée dans fm1-emu (`docs/FM1-EMULATEUR.md`) — à faire **avant tout flash**.
+  - **PR #1** `vibe/zulutek-midi-looper-c9ef18` (`3ca9446`) — session B : moteur de base + baie v3 + DRUMS + mixeur + OPTIONS
+- **ouvertes** :
+  - **PR #10** `vibe/ztf-link-design-c9ef18` — doc de conception liaison APK↔FM-1 « ZTF » (`docs/FM1-APK-LINK.md`, modes A/B, pont audio hybride)
+  - **PR #11** `vibe/fm1-patch-choke-eco-c9ef18` (autre session) — patch firmware **0009-choke-eco**
+  - **PR #12** `vibe/fm1-patch-link-c9ef18` — patch firmware **0010-link** : liaison ZTF côté FM-1 (companion 0x60/61/62, fichiers ZSMP/ZLUP/ZMAC, SysEx `F0 7D 'Z' 'T' …`, `usb_audio_out` + hook `app_usb_in`) — CI verte run 44754438124
+  - **branche `vibe/ztf-link-apk-c9ef18`** — **APK côté ZTF v1** : `ZtfCodec.kt`/`ZtfTransport.kt`/`Fm1Usb.kt`/`SampleLibrary.kt`/`Fm1UsbAudio.kt` + page LINK 17 (push/pull ZSMP/ZLUP/ZMAC, import WAV, pont audio UAC) + tests `tools/test_ztf_codec.py` — voir `docs/ZTF-LINK-APK.md`
+- ⚠️ la série de patches firmware **0001-0010 n'a jamais été buildée avec la toolchain JieLi** ni testée dans fm1-emu (`docs/FM1-EMULATEUR.md`) — à faire **avant tout flash**. Ordre des patches : 0001-0008 → 0009-choke (#11) → 0010-link (#12).
 
 <details><summary>Détail des PR mergées (archive)</summary>
 
