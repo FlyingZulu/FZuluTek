@@ -75,9 +75,12 @@ les **suggestions de destinations valides**. Sur un branchement valide, une peti
 turquoise éphémère propose des idées cohérentes selon la catégorie de la destination
 (ex. « LFO1 → CUTOFF », « ENV1 → DECAY », « LFO → TEMPO »).
 
-**Option LUDIQUE** (mode ludique/éducatif) : désactivable (encodeur ALG sur la page ASSIGN ;
-`OPTIONS > LUDIQUE` prévu sur le FM-1) pour les utilisateurs avancés — plus de conseils,
-plus de sens interdit animé (le typage out→in reste appliqué par le moteur).
+**Option LUDIQUE** (mode ludique/éducatif, dans **OPTIONS > LUDIQUE** sur le FM-1, encodeur
+ALG sur la page ASSIGN de l'APK) : désactivable pour les utilisateurs avancés — plus de
+conseils, plus de sens interdit animé (le typage out→in reste appliqué par le moteur).
+Portée : faciliter la découverte du fonctionnement d'une machine qui peut être complexe
+par endroits — **flow fluide au quotidien, labo expérimental toujours sous la main** pour
+mener des expériences plus poussées (les 4 labos + la matrice ASSIGN typée sont ce labo).
 
 ## 5. Fichiers touchés
 
