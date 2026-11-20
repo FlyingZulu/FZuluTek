@@ -53,6 +53,8 @@ notes/clavier ──► voix (AT_ENGINE: 0 ATEK303 · 1 PLUK · 2 FM · 3 SUB ·
 | gros buffers | section `.pool` (SRAM) | tas (heap), `FX_HOST` |
 | surface | vraie (app.c en C) | clone tactile Kotlin/C++ autour du même DSP |
 | persistance | flash (OBJ_OPTIONS OPT6, presets 480×8) | en mémoire (preview) |
+| **navigation boutons** (divergence documentée, note équipe B ~22:20Z) | boutons physiques = enum fixe `B_*` (14, plat.h) : **GLO = OPTIONS**, **dbl-tap GLO = DRUM(11)**, **dbl-tap ENV/LFO/ARP = pages 8/9/10**, **REC+PLAY = LOOP(12)**, **REC+SEQ = MACRO(13)**, **REC+EDIT = FINE(14)**, **REC seul relâché = UNDO**, **HOME = cycle pages son 0..3 / back**, **DLY = cycle 0..14**, SAVE = presets/bend | tactile : **REC+*** = entrées de pages du mode d'emploi (REC+EDIT=LOOP, REC+SEL=SNAP, REC+SAVE=KIT, REC+ARP=XY, REC+SEQ=MACRO, REC+LFO=LFO, REC+ENV=ENV, REC+OCT±=ASSIGN/PRESETS), **HOME court = cycle parties**, **HOME+REC / HOME+GLO = undo/redo globaux**, long-HOME = LINK(17). Pas de labels string côté FM-1 → la classe de bug « bras `when(label)` morts » (PR #18 APK) **n'existe pas côté firmware** (audit 2026-11-20 ~23:00Z : dispatch 100 % par enum `B_*`, `PAGE_NAME[NPAGES=15]` complet, toutes les pages 0..14 atteignables) |
+| pages | NPAGES=15 (0..14) + OPTIONS ; pas de SNAP/KIT/XY/SMP (APK-only) | 0..18 + KIT/SNAP/XY/SMP/LINK(17)/FINE(18) |
 
 ## Développement
 
