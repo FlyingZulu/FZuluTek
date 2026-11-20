@@ -19,3 +19,10 @@ façon VCV Rack (out→in, sens interdit + conseils, option HINTS).
 - `docs/ZULUTEK.md` — la bible ; `docs/ZULUTEK-MIDI-LOOPER.md` — le looper ;
   `docs/ZULUTEK-SEQ-PLUS.md` — le pack SEQ+ ; `docs/ZULUTEK-UI-STYLE.md` — charte graphique ;
   `docs/PRISE-EN-MAIN.md` — consignes (confidentialité ZuluLink, clé de signature, GPL).
+
+## Règles de session (anti-perte)
+
+Le bac à sable local est effacé entre les sessions : **push tôt, push souvent**
+(`git commit && git push origin <branche>` dès qu'une unité est testée), commit local
+fréquent, et à chaque session : README + mode d'emploi à jour + sauvegarde Notion
+(BIBLE ZULU). Voir la page « ⚠️ RÈGLES ANTI-PERTE » dans Notion.
