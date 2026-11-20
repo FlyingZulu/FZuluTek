@@ -1,5 +1,9 @@
 # zuluTek DRUMS — SPEC v2 (module `app-zulutek-drums`, branche `vibe/zulutek-drum-analog-c9ef18`)
 
+> **Archivé (PR #19, 2026-11-20)** : module plus buildé, dédoublonné avec la **page DRUMS 15 intégrée
+> à `app-zulutek`** (parité firmware FM-1, patch 0007). Ce fichier reste la spec d'origine du module
+> standalone.
+
 > ⚠️ **Anti-perte** : l'ancien code de la branche drum (PR #5 de `fm1-Zulu`) et `tr80x.hpp`
 > de ZuluFx sont **définitivement perdus** (dépôt supprimé 404, aucun objet git retrouvé).
 > Ce document + la page Notion « 🛠️ SPEC Drum Engine zuluTek » sont la spec écrite : si le code
