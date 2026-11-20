@@ -63,10 +63,10 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
   ⚠️ pas encore buildé avec la toolchain JieLi ni testé dans l'émulateur.
 - **PR #2** `vibe/atek303-mojo-patch-c9ef18` (`24d6d32`) — patches 0001-0004 (`git am`) : voix/FX/
   bass engines/looper portés sur `animatek/FM1-Animatek` (base main HEAD 8934f53).
-- **Branche drum** `vibe/zulutek-drum-analog-c9ef18` (basée sur seq-plus) — **reconstruction** du
-  module `app-zulutek-drums` (l'ancienne branche/PR #5 de `fm1-Zulu` était perdue avec le dépôt
-  supprimé) : drum machine analogique 8 pads + seq 16 steps, moteur C99 autonome
-  (`drum_engine.c`), APK `ZuluTekDrums-*.apk`. Voir `docs/ZULUTEK-DRUMS.md`.
+- **Module `app-zulutek-drums` archivé (PR #19)** : plus buildé (retiré de `settings.gradle` et des
+  artifacts CI). La référence drum est la **page DRUMS 15 intégrée à `app-zulutek`** (parité firmware
+  FM-1, patch 0007 page DRUM). Le dossier reste sur disque pour archive ; spec d'origine :
+  `docs/ZULUTEK-DRUMS.md`.
 
 </details>
 

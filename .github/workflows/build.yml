@@ -38,4 +38,3 @@ jobs:
             app-linktest/build/outputs/apk/debug/*.apk
             app-drums/build/outputs/apk/debug/*.apk
             app-zulutek/build/outputs/apk/debug/*.apk
-            app-zulutek-drums/build/outputs/apk/debug/*.apk
