@@ -1,0 +1,93 @@
+diff --git a/atek303/app/dsp/atek_voice.c b/atek303/app/dsp/atek_voice.c
+index 1b9dfbd..2071c2d 100644
+--- a/atek303/app/dsp/atek_voice.c
++++ b/atek303/app/dsp/atek_voice.c
+@@ -303,10 +303,13 @@ static const at_osc_t OSC_LIST[AT_NOSC] = {
+     {1, {0, 1, 3, 2, 0, 0, 0, 0}},             /* OCT UP: the saw an octave up at 100 % */
+     {1, {0, 1, 2, 3, 0, 0, 0, 0}},             /* FIFTH UP: the saw at +19 st, 50 % */
+     {1, {4, 1, 0, 0, 0, 0, 0, 0}},             /* SQR+SUB */
++    {0, {0, 1, 0, 0, 0, 2, 0, 0}},             /* GRIT: saw + white noise 25 % */
++    {0, {4, 0, 0, 0, 0, 0, 0, 0}},             /* SUB2: the sine two octaves down at 50 % */
++    {1, {0, 1, 0, 0, 0, 1, 0, 0}},             /* BUZZ: square + noise 10 % */
+     {1, {0, 1, 0, 0, 0, 0, 0, 0}},             /* SQUARE */
+ };
+ const char *const AT_OSC_NAME[AT_NOSC] = {"SAW", "SAW+SUB", "FAT", "DETUNE+SUB", "SHINE", "METAL", "GROWL", "BREATH",
+-    "WILD", "OCTAVES", "OCT UP", "FIFTH UP", "SQR+SUB", "SQUARE"};
++    "WILD", "OCTAVES", "OCT UP", "FIFTH UP", "SQR+SUB", "GRIT", "SUB2", "BUZZ", "SQUARE"};
+ int at_osc_index(float wave)
+ {
+     int k = (int)(clampf(wave, 0.0f, 1.0f) * (float)(AT_NOSC - 1) + 0.5f);
+@@ -356,17 +359,30 @@ static void filt_coeffs(at_voice_t *v, float cutoff)
+ static void filt_reset(at_voice_t *v) { v->y1 = v->y2 = v->y3 = v->y4 = v->fb_hp = v->fb_prev = 0.0f; }
+ static inline float filt_sample(at_voice_t *v, float in)
+ {
+-    float fb = v->f_k * diode(v->y4), x, b0 = v->f_b0;
+-    v->fb_hp = v->fb_hp_c * (v->fb_hp + fb - v->fb_prev);
+-    v->fb_prev = fb;
+-    x = v->f_drive * in - v->fb_hp;
+-    v->y1 += CAP_RATIO * b0 * diode(x - v->y1 + v->y2);
+-    v->y2 += b0 * diode(v->y1 - 2.0f * v->y2 + v->y3);
+-    v->y3 += b0 * diode(v->y2 - 2.0f * v->y3 + v->y4);
+-    v->y4 += b0 * diode(v->y3 - 2.0f * v->y4);
+-    if (!(fm_fabsf(v->y1) + fm_fabsf(v->y2) + fm_fabsf(v->y3) + fm_fabsf(v->y4) < 1e6f))   /* NaN or runaway */
++    float u = v->f_drive * in, x, b0 = v->f_b0, m = v->f_morph, lp;
++    if (v->f_model) {               /* zuluTek FILTER "NEW" (Neo-inspired): linear ladder cells,
++                                     the soft saturation in the feedback loop, not per cell */
++        float fb = v->f_k * fm_tanhf(v->y4);
++        x = u - fb;
++        v->y1 += b0 * (x - v->y1);
++        v->y2 += b0 * (v->y1 - v->y2);
++        v->y3 += b0 * (v->y2 - v->y3);
++        v->y4 += b0 * (v->y3 - v->y4);
++    } else {                        /* FILTER "ORG": the original ATEK diode ladder, untouched */
++        float fb = v->f_k * diode(v->y4);
++        v->fb_hp = v->fb_hp_c * (v->fb_hp + fb - v->fb_prev);
++        v->fb_prev = fb;
++        x = u - v->fb_hp;
++        v->y1 += CAP_RATIO * b0 * diode(x - v->y1 + v->y2);
++        v->y2 += b0 * diode(v->y1 - 2.0f * v->y2 + v->y3);
++        v->y3 += b0 * diode(v->y2 - 2.0f * v->y3 + v->y4);
++        v->y4 += b0 * diode(v->y3 - 2.0f * v->y4);
++    }
++    lp = v->y4;
++    if (!(fm_fabsf(v->y1) + fm_fabsf(v->y2) + fm_fabsf(v->y3) + fm_fabsf(lp) < 1e6f))   /* NaN or runaway */
+         filt_reset(v);
+-    return 2.0f * v->f_gcomp * v->y4;
++    /* the LP -> HP morph: the HP is the input minus the ladder's LP output */
++    return 2.0f * ((1.0f - m) * v->f_gcomp * lp + m * (u - lp));
+ }
+ 
+ /* ------------------------------------------------------------- Open303 --- */
+diff --git a/atek303/app/dsp/atek_voice.h b/atek303/app/dsp/atek_voice.h
+index b593397..23fdda3 100644
+--- a/atek303/app/dsp/atek_voice.h
++++ b/atek303/app/dsp/atek_voice.h
+@@ -33,7 +33,9 @@
+ 
+ /* the seven controls of the 303, 0..1 each. WAVE picks from the oscillator list (AT_OSC_NAME): 0 is SAW, 1 is SQUARE
+  * and the combinations of the extra layer lie between, at k / (AT_NOSC - 1) */
+-enum { AT_TUNING, AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT_DECAY, AT_ACCENT, AT_WAVE, AT_NPARAMS };
++enum { AT_TUNING, AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT_DECAY, AT_ACCENT, AT_WAVE, AT_ENGINE, AT_NPARAMS };
++/* AT_ENGINE picks the voice engine (0..1 -> AT_NENGINES-1, see bass_engines.h): 0 is the ATEK303
++ * voice itself, the rest are the bass engines in bass_engines.c (appended: the saved ids do not move) */
+ 
+ typedef struct {
+     float b0, b1, b2, a1, a2, x1, x2, y1, y2;
+@@ -83,6 +85,8 @@ typedef struct {
+ 
+     /* ATEK filter */
+     float f_cut, f_res, f_drive, f_b0, f_k, f_gcomp, y1, y2, y3, y4, fb_hp, fb_prev, fb_hp_c;
++    int f_model;                      /* zuluTek FILTER: 0 ORG (the original diode ladder), 1 NEW (Neo-inspired) */
++    float f_morph;                    /* zuluTek FILTER: LP -> HP morph, 0..1 */
+ 
+     /* the module's extras */
+     float acc_fast, acc_slow, drift_pitch, drift_cut;
+@@ -94,7 +98,7 @@ typedef struct {
+ void at_init(at_voice_t *v, float sr);
+ 
+ /* the oscillator list that WAVE walks: the 303's two waves at the ends and the extra layer's combinations between */
+-#define AT_NOSC 14
++#define AT_NOSC 17
+ extern const char *const AT_OSC_NAME[AT_NOSC];
+ int at_osc_index(float wave);                 /* WAVE's value to its entry */
+ 

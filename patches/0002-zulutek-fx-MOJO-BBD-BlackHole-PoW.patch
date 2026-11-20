@@ -1,0 +1,520 @@
+diff --git a/atek303/app/dsp/LICENSE-airwindows.txt b/atek303/app/dsp/LICENSE-airwindows.txt
+new file mode 100644
+index 0000000..98e2ae4
+--- /dev/null
++++ b/atek303/app/dsp/LICENSE-airwindows.txt
+@@ -0,0 +1,24 @@
++The MOJO drive's soft-clip curve in fx.c (sin(x |x|^1/4 pi/2) / |x|^1/4) is derived from
++Chris Johnson's airwindows plugins, released under the MIT license:
++
++The MIT License (MIT)
++
++Copyright (c) Chris Johnson (airwindows.com)
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in
++all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++THE SOFTWARE.
+diff --git a/atek303/app/dsp/fx.c b/atek303/app/dsp/fx.c
+index 890986d..504bb0a 100644
+--- a/atek303/app/dsp/fx.c
++++ b/atek303/app/dsp/fx.c
+@@ -11,10 +11,9 @@
+ #define FX_POOL __attribute__((section(".pool")))
+ #endif
+ 
+-const char *const FX_DRIVE_NAME[FX_DRIVE_TYPES] = {"OFF", "OVERDRIVE", "RAT", "FUZZ"};
++const char *const FX_DRIVE_NAME[FX_DRIVE_TYPES] = {"OFF", "OVERDRIVE", "RAT", "FUZZ", "MOJO"};
+ const char *const FX_MOD_NAME[FX_MOD_TYPES] = {"CHORUS", "FLANGER"};
+-const char *const FX_DLY_NAME[FX_DLY_TIMES] = {"1/16", "1/8T", "1/8", "1/8.", "1/4", "1/4."};
+-static const float DLY_STEPS[FX_DLY_TIMES] = {1.0f, 4.0f / 3.0f, 2.0f, 3.0f, 4.0f, 6.0f};   /* in sixteenths */
++
+ 
+ static float sr = 44100.0f;
+ static float par[FX_NPARAMS];
+@@ -36,6 +35,8 @@ static inline float hard_F(float x)
+ }
+ static struct {
+     float x1, pre_hp, pre_x, tone_y, tone_y2, dc_x, dc_y, gain_s, tone_c, pre_c;
++    float crush_q, crush_hold;                /* MOJO's bitcrusher: quantum and held sample */
++    int32_t crush_cnt, crush_d;
+ } dr;
+ static inline float adaa(float x, int hard)
+ {
+@@ -58,6 +59,27 @@ static inline float drive_sample(float x, int type)
+     } else if (type == 3) {                    /* FUZZ: lopsided: one half clips sooner */
+         bias = 0.25f;
+         y = adaa(g * x + bias, 1) - hard_f(bias);
++    } else if (type == 4) {                    /* MOJO: airwindows, MIT (see LICENSE-airwindows.txt),
++                                                  then its own bitcrusher (FX_CRUSH) for grit.
++                                                  sin(x |x|^1/4 pi/2) / |x|^1/4 flattens way out,
++                                                  softly, long before it would ever wavefold; the
++                                                  crush folds aliasing in and sharpens the acid edge. */
++        float gx = g * x;
++        float m = fm_sqrtf(fm_sqrtf(fm_fabsf(gx)));
++        if (m > 1e-12f)
++            y = fm_sinf(gx * m * 1.57079637f) / m * 0.987654321f;
++        else
++            y = gx * 1.5516901f;                /* the limit as m -> 0: x pi/2 * 0.98765 */
++        if (dr.crush_d > 1) {                   /* sample hold: lo-fi rate reduction */
++            if (dr.crush_cnt <= 0) {
++                dr.crush_cnt = dr.crush_d;
++                dr.crush_hold = y;
++            }
++            dr.crush_cnt--;
++            y = dr.crush_hold;
++        }
++        if (dr.crush_q > 0.0f)                 /* bit depth: the classic staircase */
++            y = flush(fm_floorf(y / dr.crush_q + 0.5f) * dr.crush_q);
+     } else {                                   /* OVERDRIVE: soft, a little asymmetric */
+         bias = 0.12f;
+         y = adaa(g * x + bias, 0) - soft_f(bias);
+@@ -99,6 +121,7 @@ static inline float mod_read(const float *b, float delay)   /* delay in samples,
+ static int16_t dly_buf[2][DLY_N] FX_POOL;
+ static struct {
+     uint32_t w;
++    uint32_t rng;                          /* the BBD's clock hiss */
+     float len, lp[2], hp[2];
+ } dl;
+ static inline float dly_read(const int16_t *b, float delay)
+@@ -120,21 +143,24 @@ static inline int16_t to16(float x)
+     x = clampf(x * 16384.0f, -32767.0f, 32767.0f);
+     return (int16_t)x;
+ }
++float fx_dly_ms(float t01)                 /* BBD TIME 0..1 -> free ms, 10 .. the buffer's ~600 */
++{
++    float t = clampf(t01, 0.0f, 1.0f);
++    return fm_minf(10.0f * fm_exp2f(6.0f * t), 1000.0f * (float)(DLY_N - 4u) / sr);
++}
+ float fx_delay_seconds(void)
+ {
+-    int t = (int)par[FX_DLY_TIME];
+-    float s = DLY_STEPS[t < 0 ? 0 : t >= FX_DLY_TIMES ? FX_DLY_TIMES - 1 : t] * sixteenth;
+-    return fm_minf(s, (float)(DLY_N - 4u) / sr);
++    return fx_dly_ms(par[FX_DLY_TIME]) * 0.001f;
+ }
+ 
+ /* ------------------------------------------------------------------- reverb --- */
+ /* Dattorro's plate, his lengths (at 29761 Hz) scaled to 44.1 kHz */
+ #define RS(n) ((uint32_t)((float)(n) * 1.48181f + 0.5f))
+-enum { R_PRE, R_IN1, R_IN2, R_IN3, R_IN4, R_AP1L, R_D1L, R_AP2L, R_D2L, R_AP1R, R_D1R, R_AP2R, R_D2R, R_NLINES };
++enum { R_PRE, R_IN1, R_IN2, R_IN3, R_IN4, R_IN5, R_IN6, R_AP1L, R_D1L, R_AP2L, R_D2L, R_AP1R, R_D1R, R_AP2R, R_D2R, R_NLINES };
+ #define PRE_MAX 2205u                          /* 50 ms */
+-#define EXC 24u                                /* the tank modulation's excursion, in samples */
++#define EXC 48u                                /* the tank modulation's excursion, in samples (Black Hole swirl) */
+ static uint32_t r_len[R_NLINES], r_off[R_NLINES], r_pos[R_NLINES];
+-#define RV_N (PRE_MAX + 33400u)              /* the lines below add up to 35588 */
++#define RV_N (PRE_MAX + 35200u)              /* the lines below add up to ~37123 */
+ #ifdef FX_RV_Q                                 /* the plate's lines in 16 bits, FX_RV_Q a unit (a smaller build) */
+ typedef int16_t rv_t;
+ static inline float rv_ld(rv_t v) { return (float)v * (1.0f / (float)FX_RV_Q); }
+@@ -187,7 +213,7 @@ static inline float rap_mod(int k, float x, float g, float delay)   /* the tank'
+ }
+ static void reverb_init(void)
+ {
+-    static const uint32_t L[R_NLINES] = {PRE_MAX, 142, 107, 379, 277, 672, 4453, 1800, 3720, 908, 4217, 2656, 3163};
++    static const uint32_t L[R_NLINES] = {PRE_MAX, 142, 107, 379, 277, 556, 441, 672, 4453, 1800, 3720, 908, 4217, 2656, 3163};
+     uint32_t off = 0;
+     int k;
+     for (k = 0; k < R_NLINES; k++) {
+@@ -200,6 +226,201 @@ static void reverb_init(void)
+ }
+ 
+ /* -------------------------------------------------------------------- API --- */
++/* ------------------------------------------------------------- punch-in FX --- */
++/* PoW! (as in ZuluFx): REC + FX arms the 16 white keys as momentary slots; REC + a key opens the slot's
++ * page (K1 type, K2/K3 its settings, K4 the mix = ZuluFx's POW level). The ring always records the
++ * master (~93 ms); while a slot is held, its type reads it back its own way or processes it. */
++#define PN_N 4096u
++static float pn_buf[PN_N] FX_POOL;
++static struct {
++    int on, type;
++    float a, b, mix;                   /* K2, K3, K4 */
++    uint32_t w;                        /* write pos */
++    float rd_f;                        /* loop offset (REPEAT family) or head (REVERSE/STOP/SCRATCH) */
++    float L, cyc;                      /* loop length, its per-pass gain (ECHO) */
++    float rate, ph;                    /* head speed, SCRATCH/GATE phase */
++    float lp, t;                       /* LPF/BUILD: low-pass state, the sweep's time */
++    float hold;                        /* CRUSH: the held sample */
++    int32_t hold_cnt;
++    float tail, tail0;                 /* release tail (circuit bend): remaining / total seconds */
++} pn;
++const char *const PUNCH_TYPE_NAME[PN_NTYPES] = {"OFF", "REPEAT", "1/16 REP", "1/8 DOWN", "1/8 UP", "1/8 SHRINK",
++                                                "BUILD", "STRETCH", "ECHO", "REVERSE", "STOP", "SCRATCH",
++                                                "LPF", "CRUSH", "GATE"};
++const uint8_t PUNCH_USES[PN_NTYPES] = {0, 1, 0, 0, 0, 1, 3, 0, 1, 2, 1, 3, 3, 3, 3};   /* bit0: uses a (K2), bit1: uses b (K3) */
++/* the loop reads the last L samples (Amenity's slices are tempo divisions: L from the sixteenth) */
++static uint32_t punch_div(float beats)      /* a beat division in samples, clamped to the ring */
++{
++    float L = beats * sixteenth * sr;
++    if (L < 32.0f)
++        L = 32.0f;
++    if (L > (float)PN_N)
++        L = (float)PN_N;
++    return (uint32_t)L;
++}
++void fx_punch(int on, int type, float a, float b, float mix)
++{
++    if (on && !pn.on) {                        /* a new punch: the heads at the write pos, the loop fresh */
++        pn.rd_f = 0.0f;
++        pn.rate = 1.0f;
++        pn.ph = 0.0f;
++        pn.lp = 0.0f;
++        pn.t = 0.0f;
++        pn.cyc = 1.0f;
++        pn.L = 0.0f;
++        pn.hold_cnt = 0;
++        pn.hold = 0.0f;
++    }
++    pn.on = on;
++    if (type >= 0 && type < PN_NTYPES)
++        pn.type = type;
++    pn.a = clampf(a, 0.0f, 1.0f);
++    pn.b = clampf(b, 0.0f, 1.0f);
++    pn.mix = clampf(mix, 0.0f, 1.0f);
++    if (on)
++        pn.tail = 0.0f;
++}
++/* circuit bend release: the effect stays in but its mix fades out over `t` seconds (its own tail length) */
++void fx_punch_off_tail(float t)
++{
++    if (pn.on && t > 0.0f) {
++        pn.tail = t;
++        pn.tail0 = t;
++    } else {
++        pn.on = 0;
++        pn.tail = 0.0f;
++    }
++}
++/* the REPEAT family: loop the last L samples at `speed`, L and the gain changing per pass */
++static float punch_loop(uint32_t L0, float speed, int shrink, int grow, int echo)
++{
++    if (pn.L < 32.0f || pn.L > (float)PN_N)
++        pn.L = (float)L0;
++    pn.rd_f += speed;
++    while (pn.rd_f >= pn.L) {
++        pn.rd_f -= pn.L;
++        if (shrink)                            /* 1/8 SHRINK: the loop shrinks every pass */
++            pn.L *= 1.0f - 0.3f * pn.a;
++        if (grow)                              /* STRETCH: it grows, tape-stretch style */
++            pn.L *= 1.0f + 0.1f * pn.a;
++        if (pn.L < 32.0f)
++            pn.L = 32.0f;
++        if (pn.L > (float)PN_N)
++            pn.L = (float)PN_N;
++        if (echo)                              /* ECHO: every pass quieter */
++            pn.cyc *= 1.0f - 0.7f * pn.a;
++    }
++    return pn_buf[(pn.w + PN_N - (uint32_t)pn.L + (uint32_t)pn.rd_f) % PN_N] * pn.cyc;
++}
++static float punch_sample(float x)
++{
++    float wet = x;
++    pn_buf[pn.w] = flush(x);
++    if (++pn.w >= PN_N)
++        pn.w = 0;
++    switch (pn.type) {
++    case 0:                                    /* OFF: the ring records, nothing sounds */
++        break;
++    case 1:                                    /* REPEAT (ZuluFx): loop the last L samples, L = K2 free */
++        wet = punch_loop((uint32_t)(32.0f * fm_exp2f(7.0f * pn.a)) + 1u, 1.0f, 0, 0, 0);
++        break;
++    case 2:                                    /* 1/16 REPEAT (Amenity): the loop is a sixteenth, in tempo */
++        wet = punch_loop(punch_div(1.0f), 1.0f, 0, 0, 0);
++        break;
++    case 3:                                    /* 1/8 DOWN: an eighth loop, read at half speed (an octave down) */
++        wet = punch_loop(punch_div(2.0f), 0.5f, 0, 0, 0);
++        break;
++    case 4:                                    /* 1/8 UP: an eighth loop at double speed */
++        wet = punch_loop(punch_div(2.0f), 2.0f, 0, 0, 0);
++        break;
++    case 5:                                    /* 1/8 SHRINK: the loop shrinks every pass (K2 how fast) */
++        wet = punch_loop(punch_div(2.0f), 1.0f, 1, 0, 0);
++        break;
++    case 6: {                                  /* BUILD (Amenity): a low-pass opening up (K2 how far, K3 the time) */
++        float start = 100.0f * fm_exp2f(4.0f * pn.a), hz, c, f;
++        pn.t += 1.0f / sr;
++        f = pn.t / (0.2f + 2.8f * pn.b);
++        if (f > 1.0f)
++            f = 1.0f;
++        hz = start * fm_exp2f(f * fm_log2f(18000.0f / start));
++        c = onepole_c(hz);
++        pn.lp += c * (x - pn.lp);
++        wet = pn.lp;
++        break;
++    }
++    case 7:                                    /* STRETCH (Amenity): a sixteenth loop growing every pass */
++        wet = punch_loop(punch_div(1.0f), 1.0f, 0, 1, 0);
++        break;
++    case 8:                                    /* ECHO (Amenity): a quarter loop, every pass quieter (K2) */
++        wet = punch_loop(punch_div(4.0f), 1.0f, 0, 0, 1);
++        break;
++    case 9:                                    /* REVERSE (ZuluFx): the buffer backwards, K3 the speed */
++        pn.rate = 0.25f + 1.5f * pn.b;
++        pn.rd_f -= pn.rate;
++        if (pn.rd_f < 0.0f)
++            pn.rd_f += (float)PN_N;
++        wet = pn_buf[(uint32_t)pn.rd_f];
++        break;
++    case 10:                                   /* STOP (ZuluFx, tape stop): the head slows to 0, K2 the length */
++        pn.rate -= 1.0f / (pn.a * 2.5f * sr + 1.0f);
++        if (pn.rate < 0.0f)
++            pn.rate = 0.0f;
++        pn.rd_f += pn.rate;
++        if (pn.rd_f >= (float)PN_N)
++            pn.rd_f -= (float)PN_N;
++        wet = pn_buf[(uint32_t)pn.rd_f];
++        break;
++    case 11:                                   /* SCRATCH (ZuluFx): the head's speed wobbles (K2 depth, K3 rate) */
++        pn.ph += (5.0f + 35.0f * pn.b) / sr;
++        if (pn.ph >= 1.0f)
++            pn.ph -= 1.0f;
++        pn.rate = 1.0f + (2.0f * pn.a - 1.0f) * 0.9f * fm_sin_turns(pn.ph);
++        if (pn.rate < 0.0f)
++            pn.rate = 0.0f;
++        pn.rd_f += pn.rate;
++        if (pn.rd_f >= (float)PN_N)
++            pn.rd_f -= (float)PN_N;
++        wet = pn_buf[(uint32_t)pn.rd_f];
++        break;
++    case 12: {                                 /* LPF (ZuluFx): a low-pass sweeping down (K2 how dark, K3 time) */
++        float end = 100.0f * fm_exp2f(6.0f * pn.a), hz, c, f;
++        pn.t += 1.0f / sr;
++        f = pn.t / (0.2f + 2.8f * pn.b);
++        if (f > 1.0f)
++            f = 1.0f;
++        hz = 18000.0f * fm_exp2f(f * fm_log2f(end / 18000.0f));
++        c = onepole_c(hz);
++        pn.lp += c * (x - pn.lp);
++        wet = pn.lp;
++        break;
++    }
++    case 13: {                                 /* CRUSH (ZuluFx): K2 the bits (8..1), K3 the sample hold */
++        float q = fm_exp2f(-(8.0f - 7.0f * pn.a)), y = x;
++        int32_t d = 1 + (int32_t)(7.0f * pn.b + 0.5f);
++        if (d > 1) {
++            if (pn.hold_cnt <= 0) {
++                pn.hold_cnt = d;
++                pn.hold = y;
++            }
++            pn.hold_cnt--;
++            y = pn.hold;
++        }
++        wet = flush(fm_floorf(y / q + 0.5f) * q);
++        break;
++    }
++    default: {                                 /* GATE (ZuluFx): the master chopped (K2 the rate, K3 the duty) */
++        float rate = 2.0f * fm_exp2f(4.0f * pn.a), g;
++        pn.ph += rate / sr;
++        if (pn.ph >= 1.0f)
++            pn.ph -= 1.0f;
++        g = pn.ph < pn.b ? 1.0f : 0.0f;
++        wet = g * x;
++        break;
++    }
++    }
++    return wet;
++}
++
+ void fx_init(float rate)
+ {
+     int i;
+@@ -211,16 +432,23 @@ void fx_init(float rate)
+     par[FX_LEVEL] = 0.6f;
+     par[FX_MOD_RATE] = 0.3f;
+     par[FX_MOD_DEPTH] = 0.5f;
+-    par[FX_DLY_TIME] = 3.0f;                   /* 1/8 dotted: the acid classic */
++    par[FX_DLY_TIME] = 0.7f;                   /* BBD, free: ~185 ms */
+     par[FX_DLY_FEEDBACK] = 0.45f;
+     par[FX_DLY_TONE] = 0.5f;
+     par[FX_REV_DECAY] = 0.6f;
+     par[FX_REV_DAMP] = 0.4f;
+     par[FX_REV_PRE] = 0.2f;
++    par[FX_CRUSH] = 0.45f;                     /* MOJO: some grit at the default, DRIVE stays its gain */
++    par[FX_HOLD] = 0.0f;                       /* MOJO: no sample hold by default */
+     reverb_init();
+     dr.x1 = 0.0f;
+     dl.len = fx_delay_seconds() * sr;
++    dl.rng = 0x2545F491u;
+     rv.bw = 0.9995f;
++    pn.on = 0;
++    pn.type = 0;
++    pn.w = 0;
++    pn.mix = 1.0f;
+ }
+ 
+ void fx_set(int p, float v)
+@@ -236,7 +464,9 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+     uint32_t i;
+     int dtype = (int)par[FX_DRIVE_TYPE], mtype = (int)par[FX_MOD_TYPE];
+     float level = 1.2f * par[FX_LEVEL] * par[FX_LEVEL];      /* 0.6: about the dry level */
+-    float mmix = par[FX_MOD_MIX], dmix = par[FX_DLY_MIX], rmix = par[FX_REV_MIX];
++    float mmix = par[FX_MOD_MIX], dmix = par[FX_DLY_MIX];
++    float rmix = par[FX_REV_MIX];
++    rmix = 0.5f * (1.0f - fm_cosf(FM_PI * rmix));   /* the reverb enters gradually (smoothstep) */
+     float fb = 0.95f * par[FX_DLY_FEEDBACK];
+     float dlp = onepole_c(800.0f * fm_exp2f(4.0f * par[FX_DLY_TONE]));   /* 800 Hz .. 12.8 kHz */
+     float dhp = onepole_c(120.0f);
+@@ -246,10 +476,19 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+     float base = mtype ? 0.0006f * sr : 0.007f * sr;
+     float depth = (mtype ? 0.004f : 0.004f) * sr * par[FX_MOD_DEPTH];
+     float mfb = mtype ? 0.6f : 0.0f;
+-    float decay = 0.25f + 0.65f * par[FX_REV_DECAY];         /* up to 0.9: long, never endless */
+-    float damp = onepole_c(1500.0f * fm_exp2f(3.5f * (1.0f - par[FX_REV_DAMP])));   /* 1.5 .. 17 kHz */
++    float decay = 0.30f + 0.695f * par[FX_REV_DECAY];        /* up to 0.995: Black Hole long tails, never endless */
++    float damp = onepole_c(700.0f * fm_exp2f(4.0f * (1.0f - par[FX_REV_DAMP])));   /* 700 Hz .. 11 kHz, darker */
+     uint32_t pre = (uint32_t)(par[FX_REV_PRE] * (float)(PRE_MAX - 1u));
+-    dr.gain_s = 1.0f + (dtype == 3 ? 120.0f : dtype == 2 ? 60.0f : 12.0f) * par[FX_DRIVE] * par[FX_DRIVE];
++    dr.gain_s = 1.0f + (dtype == 3 ? 120.0f : dtype == 2 ? 60.0f : dtype == 4 ? 3.0f : 12.0f) * par[FX_DRIVE] * par[FX_DRIVE];
++    /* MOJO's bitcrusher, on its own two knobs: BIT the depth (11 -> 5 bits), HOLD the sample hold (1 -> 8) */
++    if (dtype == 4) {
++        float d = par[FX_CRUSH] * par[FX_CRUSH];
++        dr.crush_q = fm_exp2f(-(11.0f - 6.0f * d));
++        dr.crush_d = 1 + (int32_t)(7.0f * par[FX_HOLD] + 0.5f);
++    } else {
++        dr.crush_q = 0.0f;
++        dr.crush_d = 1;
++    }
+     dr.tone_c = onepole_c(700.0f * fm_exp2f(4.1f * par[FX_TONE]));
+     dr.pre_c = onepole_c(300.0f);
+     if (dtype < 0 || dtype >= FX_DRIVE_TYPES)
+@@ -275,12 +514,23 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+             l = x + mmix * (wl - x * (mtype ? 0.0f : 0.5f));
+             r = x + mmix * (wr - x * (mtype ? 0.0f : 0.5f));
+         }
+-        /* DELAY: ping-pong; the left line feeds the right and back; the input enters on the left */
++        /* DELAY: ping-pong bucket-brigade; the left line feeds the right and back; the input enters on the left */
+         if (dmix > 0.0f) {
+             float a, b, mono = 0.5f * (l + r);
+             dl.len += (target - dl.len) * 0.0004f;          /* turning TIME glides, like tape */
+-            a = dly_read(dly_buf[0], dl.len);
+-            b = dly_read(dly_buf[1], dl.len);
++            /* the BBD: the delay steps in 4096 stages (MN3005-style) and the clock hisses a little */
++            {
++                float stage = dl.len * (1.0f / 4096.0f), qlen, hiss;
++                if (stage < 1.0f)
++                    stage = 1.0f;
++                qlen = fm_floorf(dl.len / stage + 0.5f) * stage;
++                dl.rng ^= dl.rng << 13;
++                dl.rng ^= dl.rng >> 17;
++                dl.rng ^= dl.rng << 5;
++                hiss = ((float)(dl.rng >> 8) * (2.0f / 16777216.0f) - 1.0f) * 0.015f;
++                a = dly_read(dly_buf[0], qlen) + hiss;
++                b = dly_read(dly_buf[1], qlen) + hiss;
++            }
+             /* the loop's tone: darker every pass, no mud */
+             dl.lp[0] += dlp * (b - dl.lp[0]);
+             dl.hp[0] += dhp * (dl.lp[0] - dl.hp[0]);
+@@ -304,8 +554,10 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+             t = rap(R_IN2, t, 0.75f);
+             t = rap(R_IN3, t, 0.625f);
+             t = rap(R_IN4, t, 0.625f);
++            t = rap(R_IN5, t, 0.5f);                /* extra diffusion, Black Hole style */
++            t = rap(R_IN6, t, 0.5f);
+             ex = (float)EXC * 0.5f * (1.0f + fm_sin_turns(rv.ph));
+-            rv.ph += 1.0f / sr;                        /* 1 Hz */
++            rv.ph += 2.5f / sr;                        /* 2.5 Hz swirl */
+             if (rv.ph >= 1.0f)
+                 rv.ph -= 1.0f;
+             /* left half of the tank */
+@@ -334,6 +586,20 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+             l += rmix * 0.5f * yl;
+             r += rmix * 0.5f * yr;
+         }
++        /* PUNCH-IN (PoW!): the ring always records; while a slot is held its effect is in, mixed by K4 */
++        {
++            float wet = punch_sample(0.5f * (l + r));
++            if (pn.on && pn.type > 0) {
++                float m = pn.mix;
++                if (pn.tail > 0.0f) {          /* release tail: fade the effect out over its own length */
++                    m *= pn.tail / pn.tail0;
++                    pn.tail -= 1.0f / sr;
++                    if (pn.tail <= 0.0f) { pn.tail = 0.0f; pn.on = 0; m = 0.0f; }
++                }
++                l += m * (wet - l);
++                r += m * (wet - r);
++            }
++        }
+         outl[i] = l;
+         outr[i] = r;
+     }
+diff --git a/atek303/app/dsp/fx.h b/atek303/app/dsp/fx.h
+index 8c4e05d..eb4204b 100644
+--- a/atek303/app/dsp/fx.h
++++ b/atek303/app/dsp/fx.h
+@@ -4,12 +4,15 @@
+  * ATEK303's effects for the FM-1, the classic acid chain, mono in, stereo out:
+  *
+  *   DRIVE   a pedal after the 303: OVERDRIVE (soft, asymmetric), RAT (op-amp gain into hard diode
+- *           clipping, with its pre-emphasis) or FUZZ (huge gain, lopsided). Antiderivative
+- *           anti-aliasing on the clipper, so a square through it doesn't fizz; TONE and LEVEL after.
++ *           clipping, with its pre-emphasis), FUZZ (huge gain, lopsided) or MOJO (airwindows' soft
++ *           curve, MIT, plus a bitcrusher: BIT the depth, HOLD the sample hold, see LICENSE-airwindows.txt).
++ *           Antiderivative anti-aliasing on the clipper, so a square through it doesn't fizz;
++ *           TONE and LEVEL after (on MOJO, the page's knobs 3 and 4 are BIT and HOLD).
+  *   MOD     CHORUS (two voices of a modulated 7 ms delay, left and right a quarter turn apart) or
+  *           FLANGER (a short modulated delay fed back).
+- *   DELAY   ping-pong, synced to the tempo (1/16 .. 1/4 dotted), each repeat darker (a low-pass in
+- *           the loop) and without mud (a high-pass); turning TIME bends the pitch like tape.
++ *   DELAY   ping-pong bucket-brigade (BBD): TIME is free, 10..~600 ms, not synced to the tempo; the
++ *           delay steps in 4096 "stages" like an MN3005 and the clock hisses a little; each repeat
++ *           darker (a low-pass in the loop) and without mud (a high-pass); TIME glides like tape.
+  *   REVERB  Dattorro's plate (J. Dattorro, "Effect Design Part 1", JAES 1997), with its modulated
+  *           tank and a pre-delay.
+  *
+@@ -19,21 +22,35 @@
+ #include <stdint.h>
+ 
+ enum {
+-    FX_DRIVE_TYPE, FX_DRIVE, FX_TONE, FX_LEVEL,          /* type: 0 off, 1 overdrive, 2 rat, 3 fuzz */
++    FX_DRIVE_TYPE, FX_DRIVE, FX_TONE, FX_LEVEL,          /* type: 0 off, 1 overdrive, 2 rat, 3 fuzz, 4 mojo */
+     FX_MOD_TYPE, FX_MOD_RATE, FX_MOD_DEPTH, FX_MOD_MIX,  /* type: 0 chorus, 1 flanger */
+-    FX_DLY_TIME, FX_DLY_FEEDBACK, FX_DLY_TONE, FX_DLY_MIX,   /* time: 0..5, see FX_DLY_NAME */
++    FX_DLY_TIME, FX_DLY_FEEDBACK, FX_DLY_TONE, FX_DLY_MIX,   /* BBD time: 0..1, free, fx_dly_ms() */
+     FX_REV_DECAY, FX_REV_DAMP, FX_REV_PRE, FX_REV_MIX,
++    FX_CRUSH,                                  /* MOJO only: bitcrusher bit depth (appended: the saved ids do not move) */
++    FX_HOLD,                                   /* MOJO only: bitcrusher sample hold, in samples */
+     FX_NPARAMS
+ };
+-#define FX_DRIVE_TYPES 4
++#define FX_DRIVE_TYPES 5
+ #define FX_MOD_TYPES 2
+-#define FX_DLY_TIMES 6
+ extern const char *const FX_DRIVE_NAME[FX_DRIVE_TYPES];
+ extern const char *const FX_MOD_NAME[FX_MOD_TYPES];
+-extern const char *const FX_DLY_NAME[FX_DLY_TIMES];
++
++/* PUNCH-IN (PoW!): REC + FX arms the 16 white keys as momentary FX slots; REC + a key opens the slot's
++ * settings page (K1 the type, K2/K3 its settings, K4 the mix). The ring below always records the master;
++ * while a slot is held, its type reads it back its own way. */
++#define PN_NTYPES 15
++extern const char *const PUNCH_TYPE_NAME[PN_NTYPES];   /* OFF, REPEAT, 1/16 REP, 1/8 DOWN/UP/SHRINK, BUILD, STRETCH,
++                                                          * ECHO, REVERSE, STOP, SCRATCH, LPF, CRUSH, GATE — the ZuluFx
++                                                          * names (TEMPS/TEXTURE) plus Amenity's white-key rolls */
++extern const uint8_t PUNCH_USES[PN_NTYPES];   /* which settings each type uses: bit0 K2 (a), bit1 K3 (b);
++                                                 * a knob the type does not use is free (the page gives it
++                                                 * the dry/wet) */
++void fx_punch(int on, int type, float a, float b, float mix);   /* between blocks */
++void fx_punch_off_tail(float t);   /* circuit bend release: keep the effect in, fading over t seconds */
+ 
+ void fx_init(float sr);
+-void fx_set(int param, float value);   /* knobs 0..1; the types and TIME as their index */
+-void fx_tempo(float sixteenth_s);      /* the sequencer's step, for the delay's sync */
++void fx_set(int param, float value);   /* knobs 0..1; the types as their index */
++void fx_tempo(float sixteenth_s);      /* kept for the API; the delay is free now, no sync */
++float fx_dly_ms(float t01);            /* BBD TIME 0..1 -> free ms, 10..~600 */
+ float fx_delay_seconds(void);          /* the delay time it plays (clamped to the buffer) */
+ void fx_process(const float *in, float *l, float *r, uint32_t n);
