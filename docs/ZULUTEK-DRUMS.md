@@ -1,38 +1,129 @@
-# zuluTek DRUMS — drum machine analogique (module `app-zulutek-drums`)
+# zuluTek DRUMS — SPEC v2 (module `app-zulutek-drums`, branche `vibe/zulutek-drum-analog-c9ef18`)
 
-> **Historique** : la branche `vibe/zulutek-drum-analog-c9ef18` (PR #5 de l'ancien dépôt
-> `fm1-Zulu`, 31 fichiers) était **perdue** avec la suppression de ce dépôt (objets introuvables
-> partout : refs, packs locaux, objets unreachable). Ce module est donc une **reconstruction**
-> neuve sur la branche `vibe/zulutek-drum-analog-c9ef18` (basée sur `seq-plus`), pas un
-> cherry-pick de l'ancien code.
+> ⚠️ **Anti-perte** : l'ancien code de la branche drum (PR #5 de `fm1-Zulu`) et `tr80x.hpp`
+> de ZuluFx sont **définitivement perdus** (dépôt supprimé 404, aucun objet git retrouvé).
+> Ce document + la page Notion « 🛠️ SPEC Drum Engine zuluTek » sont la spec écrite : si le code
+> saute encore, on reconstruit from here. **À mettre à jour à chaque changement.**
+>
+> APK : `ZuluTekDrums-*.apk`. Moteur C99 autonome + moteurs basse/lead réutilisés (vendored).
 
-## Contenu
+## 0. Référence design : Erica Synths PĒRKONS HD-01 (fiche AudioFanzine, lien utilisateur)
 
-- **Moteur natif C99 autonome** `app-zulutek-drums/src/main/cpp/drum_engine.{h,c}` — aucune
-  dépendance au moteur ztek : 8 voix « analogiques » style 808/909 :
-  `KICK` (sinus à pitch env 150→45 Hz + click), `SNARE` (bruit HP + tonalité 185 Hz),
-  `HAT`/`HAT-O` (bruit HP, decay 35/220 ms), `CLAP` (3 bursts de bruit), `TOM` (pitch env
-  210→95 Hz), `CONGA` (sinus + bruit), `COWBELL` (2 carrés 845/560 Hz + bruit).
-- **Séquenceur 16 steps** par pad, tempo BPM + swing (décalage des steps impairs),
-  patterns par défaut 4-on-the-floor / backbeat / 8th hats, CLEAR + RAND (densité réglable).
-- **Flux audio** : Oboe côté natif (`oboe::oboe` via prefab), mono → stéréo, blocs de 256.
-- **UI Kotlin** : `DrumGridView` (rangée 16 steps + grille 4×4 pads, step courante allumée),
-  `DrumsActivity` (PLAY/STOP, TEMPO, LEVEL du pad sélectionné, SWING, STEP édition, CLEAR,
-  RAND, RESET). APK nommée `ZuluTekDrums-<buildType>.apk`, signature conditionnelle (status quo
-  `signing/zulu.p12`, mot de passe inchangé).
-- **Icônes** : tambour pixel art généré en CI par `tools/make_icon.py` (les PNG sont
-  gitignorés comme ceux de `app-zulutek` — aucun binaire ne transite par le dépôt).
+Notre cible : une mini-PĒRKONS logicielle.
+- **4 voix hybrides** chez Erica (moteur numérique + filtre multimode analogique + overdrive)
+  → chez nous : **8 pads, chaque pad = moteur custom + moteur basse/lead, crossfade HYB**.
+- 8 commandes par voix → chez nous : **4 params shapables (P0..P3) + HYB + LEVEL + MUT + MODE**.
+- Séquenceur 4 pistes, 16 pas : sens NORM/REV/PING-PONG/RANDOM, groove/shuffle (= SWING),
+  **probabilités par pas (10/25/50/90%) et ODDS1 (1/2,1/3,1/4,1/8) / ODDS2** → chez nous :
+  **COND = 1:1, 1:2, 1:3, 1:4, 1:8, FILL** (ODDS1/FILL) + proba via MUT, slide micro-timing.
+- **P-LOCKS** (valeur de potard fixe par step) → snapshot des 4 params dans la voix au hit
+  (`dr_voice_t.par`), façon Elektron.
+- 64 kits / 64 patterns → chez nous : **kits ZULU / 808 / 909** (params par défaut des pads) +
+  patterns par pad éditables, RAND.
+- Delay BBD, LFO morphable, MIDI → plus tard (FX page PATCH côté app-zulutek, ZuluLink).
 
-## Build / test
+## 1. Philosophie (demandes FlyingZulu, 2026-11-20)
 
-- CI : `gradle assembleDebug` build automatiquement le module (inclus dans `settings.gradle`),
-  artefact `zulu-apk-<run>` inclut `app-zulutek-drums/build/outputs/apk/debug/*.apk`.
-- Host : `gcc -std=c99 -Wall -Wextra -fsyntax-only drum_engine.c` + test de rendu
-  (énergie non nulle, seq avance, hits, rand) — fait, RC=0. Bridge : `g++ -fsyntax-only`
-  avec stubs jni/oboe — OK.
+- Drums **analogiques inspirés Elektron/PĒRKONS** (punch, drive, hybridation), pas de samples.
+- **Kick/snare style Mutable Instruments** (Braids/Elements, GPL-3.0, crédits Émilie Gillet) :
+  kick = sinus + pitch env exp + drive tanh + click ; snare = bruit + corps sinus + drive.
+- **Hybridation entre tous les modèles** : chaque pad somme le moteur custom ET un moteur
+  basse/lead existant (`bass_engines.c` vendored depuis app-zulutek : KICK→SUB, SNARE/HAT/CLAP/
+  COWBELL→8BIT, TOM/PERC→PLUK Karplus-Strong, FM→FM), mix réglable **HYB 0..1** par pad.
+- Piocher dans ZuluFx : `audio_engine.cpp` case 5 (kick glide+tanh+click), case 6 (snare
+  bruit/corps), case 7 (hat 6 carrés 263/400/421/474/587/845 Hz + HP + bright).
+- **Kits ZULU/808/909** (sélecteur façon ZuluFx) : 808 = kick grave long decay drop profond,
+  snare sec ; 909 = kick aigu click+drive, snare dense, hat métal. Table `KITPAR[3][8][4]`.
+- Séquenceur **inspiré du séquenceur MIDI loop** (`dsp/midi_looper.c`) : horloge `clk64` en
+  1/64 de mesure (1 mesure 4/4 = 64, 1 step = 4), steps `{on, vel 0..127, cond, slide int8}`,
+  modes NORM/REV/PING-PONG par pad, swing (steps impairs), REC live overdub, quantize.
+- Licences : jamais de décompilation de binaires proprio ; GPL/MIT OK avec crédits.
 
-## Liens
+## 2. Les 8 pads × 4 params (+ HYB, LEVEL, MUT, MODE)
 
-- Presets « partie DRUMS » du moteur ztek (PR #3, page PRESETS) : partie 2 = DRUMS.
-- À faire ensuite : porter cette drum machine sur le firmware FM-1 (patch 0006, 27 touches =
-  8 pads + steps), et brancher les sorties drum dans la baie de patch (page 12 PATCH).
+| pad | custom | bass engine (HYB) | P0 | P1 | P2 | P3 |
+|---|---|---|---|---|---|---|
+| 0 KICK | Mutable sinus+pitch env+drive+click | SUB | TUNE 40–200 Hz | DECAY | DROP | DRIVE |
+| 1 SNARE | Mutable bruit+corps+drive | 8BIT | TONE 150–400 Hz | DECAY | NOISE mix | DRIVE |
+| 2 HAT | ZuluFx 6-carrés+HP | 8BIT | BRIGHT | DECAY 0.02–0.4 | METAL | — |
+| 3 CLAP | 3 bursts bruit HP | 8BIT | — | DECAY | BURST 1..3 | SPC |
+| 4 TOM | sinus pitch env | PLUK | TUNE | DECAY | DROP | — |
+| 5 PERC | modal (sinus + harmonique ~3.9×) | PLUK | TUNE | DECAY | INHARM | NOISE |
+| 6 COWBELL | 2 carrés 845/560 + bruit | 8BIT | DETUNE | DECAY | — | — |
+| 7 FM | Braids FM drum (porteuse+modulateur+fb) | FM | RATIO | DECAY | INDEX | FEEDBK |
+
+## 3. Séquenceur (clone du MIDI loop)
+
+- `clk64` master en 1/64, avance au BPM ; 16 steps/mesure ; **step 0 joue dès le départ**
+  (`step` init à -1).
+- Steps `dr_step_t {on, vel, cond, slide}` ; **COND** = ALWAYS/1:2/1:3/1:4/1:8/FILL (FILL =
+  joue seulement si un autre pad est actif sur ce step) ; **slide** -8..+8 en 1/64.
+- Modes par pad NORM/REV/PING-PONG ; **MUT** 0..255 (re-roll vel au passage) ; **swing** 0..50 %.
+- **REC live** : hit manuel enregistré à la position courante (overdub).
+- Patterns défaut : kick 0,4,8,12 ; snare 4,12 ; hat pairs ; clap 12 ; perc 6,14.
+- `trig_count[8]` : compteur de triggers (tests/UI).
+
+## 4. Fichiers
+
+- `app-zulutek-drums/src/main/cpp/drum_engine.{h,c}` — moteur C99 (inclut `bass_engines.h`).
+- `jni_bridge.cpp` — Oboe prefab, mono→stéréo 256 ; natives DrumsAudio (hit, setStep/getStep
+  packé en jlong, setParam/getParam, setHyb, setKit, setPadMode/Mut, setLevel/Bpm/Swing/Master,
+  play/rec, getCurStep/getClk64, clear/rand/reset).
+- `CMakeLists.txt` — compile aussi `bass_engines.c` + `atek_voice.c` vendored depuis
+  `app-zulutek/src/main/cpp/dsp` (`-DFX_HOST`).
+- Kotlin : `DrumsAudio.kt`, `DrumGridView.kt` (steps vélocité/cond/slide + pads 4×4),
+  `DrumsActivity.kt` (PLAY/REC/STEP, TEMPO, SWING, KIT, P0..P3, HYB, LVL, COND, MODE, MUT).
+- `settings.gradle` inclut le module ; CI build + artefact ; icône tambour en CI
+  (`tools/make_icon.py`), res gitignorées ; signature status quo.
+
+## 5. Vérifs host (faits 2026-11-20, RC=0)
+
+- `gcc -std=c99 -Wall -Wextra -fsyntax-only -I. -Idsp -DFX_HOST drum_engine.c` + test :
+  seq avance (clk64), step 0 au départ, **COND 1:2 = 31 triggers/4 mesures (attendu 32)**,
+  1:1 = 63 (64), **FILL = 2 (step avec kick oui, step seul non)**, REC live enregistre,
+  kits changent les params (kick TUNE 0.45/0.25/0.58), **hybridation hyb0≠hyb1 sur les 8 pads**.
+- `g++ -std=c++17 -fsyntax-only` bridge (stubs jni/oboe) → RC=0.
+- CI `gradle assembleDebug` → `ZuluTekDrums-debug.apk`.
+
+## 5b. Mises à jour v2.1 (2026-11-20 ~03:20Z, demandes FlyingZulu)
+
+- **P0 = PITCH sur les 8 voies** (règle 808/909/PĒRKONS) : KICK 40–200 Hz, SNARE corps 150–400 Hz,
+  HAT multiplieur des 6 carrés, CLAP fc du BP 400–3600 Hz (one-pole LP+HP), TOM 80–300 Hz,
+  PERC 200–1000 Hz, COWBELL base 845 Hz ×2^((P0−.5)·2), FM porteuse 60–400 Hz (RATIO en P2,
+  INDEX en P3). Test host : KICK 140→700 Hz, TOM 155→590 Hz entre P0=0 et P0=1 ✓.
+- **8 knobs par voie, 2 pages de 4** (façon 8 commandes/voix PĒRKONS) : page 1 = P0..P3 (custom),
+  page 2 = P4 HYB, P5 B.WAVE, P6 B.RES (moteur basse/lead), P7 LEVEL. UI APK : bouton PAGE 1/2.
+  P-locks : les 8 knobs snapshotés dans la voix au hit (`dr_voice_t.par[8]`).
+- **Compresseur de bus inspiré AUV3 Fac Smash** (et section compression PĒRKONS) : follower de
+  crête linéaire (atk ~3 éch, rel ~8 ms, cheap FM-1 sans powf), soft-knee, THR/RATIO/MAKEUP ;
+  **ratio 20 = SMASH radical** (limiteur dur au seuil + tanh de saturation). Mesuré host :
+  OFF peak 1.43/RMS .391 → ratio 4 peak .51 → ratio 20 peak .21 → SMASH thr .15 mk 2 peak .18/RMS .077.
+- **Layout FM-1 (proposé, en discussion)** : 16 blanches = 16 steps, 8 noires = 8 pads,
+  K1–K4 = 4 knobs page courante, PRESET = page 1/2, SELECT = pad/step, ALG = swing,
+  PLAY = transport, REC = REC live, ENV = COND, LFO = MODE, EDIT = kit ZULU/808/909,
+  SAVE = comp ON/OFF (page COMP : THR/RATIO/MAKEUP), GLO = HYB, ARP = CLEAR, SEQ = RAND/RESET.
+- **Budget DSP FM-1** : mesuré host 0,29 µs/éch pour 8 voix custom (pire cas) ; astuces ECO :
+  hyb=0 par défaut, bass engine à demi-rate, -Os, comp linéaire ; bass_engines.c/atek_voice.c
+  déjà en flash (basse/lead) → +~7 Ko seulement ; RAM 8 bass_t = 73 Ko → 2 bass_t partagés en ECO.
+
+## 5c. Mises à jour v2.2 (2026-11-20 ~03:35Z)
+
+- **12 knobs par voie = 3 pages de 4** (demande FlyingZulu) : page 3 = **P8 PAN, P9 SEND DELAY,
+  P10 SEND REVERB, P11 SEND COMP** (contribution au détecteur du compresseur, ducking ciblé).
+  Le render passe en **stéréo** (`drum_render(d, outL, outR, n)`, pan law cos/sin par voie).
+- **Delay bus partagé** (ring `DR_DLY_MAX` = 16384 éch ≈ 0,34 s ; 8192 en `DR_FM1_ECO`), params
+  globaux time/fb/wet ; send par voie en P9. Test host : écho OK à 0,24–0,34 s.
+- **Reverb courte et économe** : 2 allpass Schroeder en série (211 + 331 éch ≈ 12 ms, g=0,5),
+  ~2 Ko de RAM, wet global ; send par voie en P10. Test host : queue diffuse OK.
+- **Pad ELIXIR** (ex-PERC) : 5 sous-sons légers/aériens via **P2 = TYPE** : BELL (partiel 2,76×),
+  CHIME (1×+3,01×), KALIMBA (1×+4× + attaque), GLASS (bruit HP cristallin + sinus 8×),
+  PING (FM aigu mod 3,5×). Test host : les 5 rendent, P0=PITCH 200–1000 Hz.
+- Tests host v2.2 RC=0 : PAN gauche/droite OK (eL 51.7/eR 0 et inverse), DELAY OK, REVERB OK,
+  ELIXIR 5/5 OK, COND 1:2 régression 31/32, compile C99 -Wall OK, bridge stubs OK.
+
+## 6. À faire ensuite (PAS pushé sans aval utilisateur)
+
+- Push branche `vibe/zulutek-drum-analog-c9ef18` v2 + maj PR #5 (après aval).
+- Porter sur FM-1 (patch 0006 : 27 touches = pads + steps) ; sortie drum dans baie PATCH (page 12).
+- RATCHETS par pas (x2..x5 façon PĒRKONS), polyrythmie (longueur de pattern par pad 1..64),
+  pattern chain, LFO morphable, delay BBD (fx.c de app-zulutek).
