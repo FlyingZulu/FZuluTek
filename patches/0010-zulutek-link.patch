@@ -1,0 +1,743 @@
+From 63bce14cd667a856778aa67dc3c2d0397dc51b36 Mon Sep 17 00:00:00 2001
+From: t <z@z>
+Date: Fri, 20 Nov 2026 14:30:50 +0000
+Subject: [PATCH] =?UTF-8?q?feat(atek303):=20patch=200010=20zuluTek=20?=
+ =?UTF-8?q?=E2=80=94=20liaison=20APK<->FM-1=20ZTF=20(sur=200009-choke)=20:?=
+ =?UTF-8?q?=20companion=20files=20ZSMP/ZLUP/ZMAC=20+=20presets,=20params,?=
+ =?UTF-8?q?=20SysEx=20ZTF,=20usb=5Faudio=5Fout=20+=20app=5Fusb=5Fin,=20zml?=
+ =?UTF-8?q?=20import/export,=20zmac=20blob?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ atek303/app/app.c        |  46 ++++++
+ atek303/app/app.h        |  14 ++
+ atek303/app/fm1.toml     |   7 +-
+ atek303/app/ztek_link.c  | 300 +++++++++++++++++++++++++++++++++++++++
+ atek303/app/ztek_link.h  |  68 +++++++++
+ atek303/app/ztek_loop.c  | 141 ++++++++++++++++++
+ atek303/app/ztek_loop.h  |   5 +
+ atek303/app/ztek_macro.c |  36 +++++
+ atek303/app/ztek_macro.h |   4 +
+ 9 files changed, 618 insertions(+), 3 deletions(-)
+ create mode 100644 atek303/app/ztek_link.c
+ create mode 100644 atek303/app/ztek_link.h
+
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index d41d4a5..fcc477c 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -63,6 +63,7 @@
+ #include "ztek_drum.h"     /* patch 0007: drum machine, page DRUM (11) */
+ #include "ztek_loop.h"     /* patch 0008: MIDI looper, page LOOP (12) */
+ #include "ztek_macro.h"    /* patch 0008: macros 16 slots, page MACRO (13) */
++#include "ztek_link.h"     /* patch 0009: liaison APK <-> FM-1 ZTF (companion files/params + SysEx) */
+ 
+ /* the Animatek palette, as on the VCV Rack modules (UZZ-VCV-RACK src/ui/CommonWidgets.hpp, AcidEditor.hpp):
+  * the screens are slate, the values in the displays' blue, the selection in the logo's blue */
+@@ -1105,6 +1106,7 @@ void app_init(void)
+     zdr_init((float)SR);                  /* patch 0007: drum machine */
+     zml_init((float)SR);                  /* patch 0008: MIDI looper */
+     zmac_init();                          /* patch 0008: macros */
++    zlk_init();                           /* patch 0009: liaison APK <-> FM-1 ZTF */
+     int i;
+     at_init(&voice, SR);
+     options_load();
+@@ -1215,6 +1217,50 @@ void  zml_gate(int on, int note, int accent, int slide) { at_gate(&voice, on, no
+ void  zml_param(int key, float v) { if (key >= 0 && key < AT_NPARAMS) { set.param[key] = v; at_set(&voice, key, v); } }
+ void  zml_say(const char *a, const char *b) { app_say(a, b); }
+ void  zmac_say(const char *a, const char *b) { app_say(a, b); }
++
++/* ---- patch 0009: accesseurs + hooks companion/ZTF pour ztek_link.c ---- */
++float *zlk_at_params(void) { return set.param; }
++float *zlk_fx_params(void) { return set.fx; }
++void  zlk_at_set(int k, float v) { if (k >= 0 && k < AT_NPARAMS) { set.param[k] = v; at_set(&voice, k, v); } }
++void  zlk_fx_set(int k, float v) { if (k >= 0 && k < FX_NPARAMS) { set.fx[k] = v; fx_set(k, v); } set_dirty = 1; }
++int   zlk_tempo(void) { return set.tempo; }
++void  zlk_tempo_set(int b) { set.tempo = (uint16_t)(b < 30 ? 30 : b > 300 ? 300 : b); set_dirty = 1; }
++int   zlk_page(void) { return set.page; }
++void  zlk_page_set(int p) { set.page = (uint8_t)(p < 0 ? 0 : p >= NPAGES ? NPAGES - 1 : p); ui.edit = ui.list = 0; ui.redraw = 1; }
++void  zlk_play(void) { post(EV_PLAY, 0, 0); }
++void  zlk_note_on(int note, int vel) { post(EV_NOTE_ON, (uint32_t)note, (uint32_t)(vel ? vel : 100)); }
++void  zlk_note_off(int note) { post(EV_NOTE_OFF, (uint32_t)note, 0); }
++float zlk_loop_gain(void) { return zml_gain_get(); }
++void  zlk_loop_gain_set(float g) { zml_gain(g); }
++float zlk_swing(void) { return zdr_mod_get(1); }
++void  zlk_swing_set(float v) { zdr_mod_set(1, v); }
++uint32_t zlk_data_free(void) { return 0xD4000u - 0xD2000u; }   /* estimation: ce qui reste sous la zone app */
++
++int app_sysex(const uint8_t *p, uint32_t n) { return zlk_sysex(p, n); }
++int app_file(int i, plat_file_info_t *f) { return zlk_file(i, f); }
++int app_file_read(int i, uint32_t off, void *dst, uint32_t n) { return zlk_file_read(i, off, dst, n); }
++int app_file_begin(int i, uint32_t size) { return zlk_file_begin(i, size); }
++int app_file_write(int i, uint32_t off, const void *src, uint32_t n) { return zlk_file_write(i, off, src, n); }
++int app_file_commit(int i, uint32_t size, uint32_t crc) { return zlk_file_commit(i, size, crc); }
++int app_file_delete(int i) { return zlk_file_delete(i); }
++int app_file_busy(void) { return zlk_file_busy(); }
++int app_param(int i, plat_param_t *p) { return zlk_param(i, p); }
++const char *app_param_group(int g) { return zlk_param_group(g); }
++int32_t app_param_get(int i) { return zlk_param_get(i); }
++int32_t app_param_set(int i, int32_t v) { return zlk_param_set(i, v); }
++void app_usb_in(const int32_t *lr, uint32_t n) { zml_usb_feed(lr, n); }   /* patch 0009 + patch fm1-base: audio USB entrant */
++void app_file_changed(uint32_t obj)              /* un objet store réécrit par l'ordinateur (presets/ZSEQ) */
++{
++    int b;
++    if (obj >= OBJ_PRESETS_A && obj <= OBJ_PRESETS_D) {
++        b = (int)(obj - OBJ_PRESETS_A);
++        plat_store_load(obj, &presets[b * PRESETS_PER_OBJ], sizeof(preset_t) * PRESETS_PER_OBJ);
++        ui.redraw = 1;
++    } else if (obj == OBJ_ZSEQ) {
++        zsp_flash_load();
++        ui.redraw = 1;
++    }
++}
+ int  app_preset_used_raw(int slot) { return presets[slot].used; }
+ void app_preset_set_used_raw(int slot, int raw) { presets[slot].used = (unsigned)raw; set_dirty = 1; }
+ 
+diff --git a/atek303/app/app.h b/atek303/app/app.h
+index a7aa222..762445e 100644
+--- a/atek303/app/app.h
++++ b/atek303/app/app.h
+@@ -28,6 +28,20 @@ void app_backup_flush(void);
+ void app_backup_hold(int on);
+ void app_backup_restored(void);
+ 
++/* patch 0009: liaison APK (Android) <-> FM-1 « ZTF » — services companion + SysEx propre.
++ * Transport : USB-MIDI (même câble que l'audio USB et le backup). Voir docs/FM1-APK-LINK.md. */
++#define APP_COMPANION_EXTRAS "app=zuluTek;link=ztf;v=1"
++#define APP_SYSEX                                          /* app_sysex(): frames ZTF F0 7D 'Z' 'T' .. F7 */
++#define APP_FILES                                          /* fichiers ZSMP00..07 / ZLUP00..07 / ZMAC (ztek_link.c) */
++#define APP_FILE_OBJS { {OBJ_PRESETS_A, PLAT_FK_PRESET, PLAT_FF_READ|PLAT_FF_WRITE, "PRESETS_A"}, \
++                        {OBJ_PRESETS_B, PLAT_FK_PRESET, PLAT_FF_READ|PLAT_FF_WRITE, "PRESETS_B"}, \
++                        {OBJ_PRESETS_C, PLAT_FK_PRESET, PLAT_FF_READ|PLAT_FF_WRITE, "PRESETS_C"}, \
++                        {OBJ_PRESETS_D, PLAT_FK_PRESET, PLAT_FF_READ|PLAT_FF_WRITE, "PRESETS_D"}, \
++                        {OBJ_ZSEQ, PLAT_FK_SETTINGS, PLAT_FF_READ|PLAT_FF_WRITE, "ZSEQ"} }
++#define APP_PARAMS                                         /* table des params ztek_link.c (miroir live APK) */
++#define APP_USB_IN                                         /* hook audio USB entrant (patch fm1-base uac tap) */
++void app_usb_in(const int32_t *lr, uint32_t n);
++
+ void app_init(void);
+ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12);
+ void app_panic(void);
+diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+index 1d56d06..58cdf9d 100644
+--- a/atek303/app/fm1.toml
++++ b/atek303/app/fm1.toml
+@@ -6,11 +6,12 @@ usb_manufacturer = "Animatek"
+ usb_product = "ATEK303 FM-1"
+ ble = false                    # sin radio de momento
+ usb_audio_in = true            # el 303 se graba por USB
+-usb_audio_out = false
+-backup = true                  # copia y restauración de los presets por USB (tools/fm1_backup.py --magic AT64)
++usb_audio_out = true           # patch 0009: el telefono juega DENTRO del FM-1 (puente audio hibrido APK -> FM-1)
++backup = true
++companion = true               # patch 0009: services companion (files/params) + ZTF, liaison APK <-> FM-1
+ words = "words.tsv"
+ include = ["dsp"]
+-o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c"]   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
++o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c", "ztek_link.c"]   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper ; patch 0009: + ztek_link (ZTF/companion) (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
+ # el sitio
+ title = "ATEK303"              # el nombre que ve la gente (si no, firmware.json saldría como «Animatek»)
+ tagline = "The ATEK303 acid voice on the M-VAVE FM-1"
+diff --git a/atek303/app/ztek_link.c b/atek303/app/ztek_link.c
+new file mode 100644
+index 0000000..d4bbb2e
+--- /dev/null
++++ b/atek303/app/ztek_link.c
+@@ -0,0 +1,300 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_link.c — voir ztek_link.h. C99, pas d'allocation dynamique.
++ * Les fichiers vivent en flash (zone data, copies A/B via plat_file_t) ; à chaque commit on
++ * relit et on applique (sample -> ring looper, slot -> looper, macros). */
++#include <string.h>
++#include "ztek_link.h"
++#include "ztek_loop.h"
++#include "ztek_macro.h"
++#include "dsp/fx.h"
++
++#define ZLK_NSMP 8
++#define ZLK_NLUP 8
++#define ZLK_NFILE (ZLK_NSMP + ZLK_NLUP + 1)          /* + ZMAC */
++
++/* copies A/B dans la zone data (0x97000..0xD3FFF libre sous la zone app 0xD4000..) :
++ * samples 0xB0000.., loops 0xC0000.., ZMAC 0xD0000.. ; n = 0x1000 (1 secteur A + 1 secteur B) */
++#define ZLK_SMP_BASE 0xB0000u
++#define ZLK_LUP_BASE 0xC0000u
++#define ZLK_MAC_A    0xD0000u
++#define ZLK_MAC_B    0xD1000u
++#define ZLK_FN       0x1000u
++
++static const plat_file_t zlk_files[ZLK_NFILE] = {
++    { ZLK_SMP_BASE + 0u * 0x2000u, ZLK_SMP_BASE + 0u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_SMP_BASE + 1u * 0x2000u, ZLK_SMP_BASE + 1u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_SMP_BASE + 2u * 0x2000u, ZLK_SMP_BASE + 2u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_SMP_BASE + 3u * 0x2000u, ZLK_SMP_BASE + 3u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_SMP_BASE + 4u * 0x2000u, ZLK_SMP_BASE + 4u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_SMP_BASE + 5u * 0x2000u, ZLK_SMP_BASE + 5u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_SMP_BASE + 6u * 0x2000u, ZLK_SMP_BASE + 6u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_SMP_BASE + 7u * 0x2000u, ZLK_SMP_BASE + 7u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_LUP_BASE + 0u * 0x2000u, ZLK_LUP_BASE + 0u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_LUP_BASE + 1u * 0x2000u, ZLK_LUP_BASE + 1u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_LUP_BASE + 2u * 0x2000u, ZLK_LUP_BASE + 2u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_LUP_BASE + 3u * 0x2000u, ZLK_LUP_BASE + 3u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_LUP_BASE + 4u * 0x2000u, ZLK_LUP_BASE + 4u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_LUP_BASE + 5u * 0x2000u, ZLK_LUP_BASE + 5u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_LUP_BASE + 6u * 0x2000u, ZLK_LUP_BASE + 6u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_LUP_BASE + 7u * 0x2000u, ZLK_LUP_BASE + 7u * 0x2000u + 0x1000u, ZLK_FN },
++    { ZLK_MAC_A, ZLK_MAC_B, ZLK_FN },
++};
++
++static const char *const ZLK_NAMES[ZLK_NFILE] = {
++    "ZSMP00", "ZSMP01", "ZSMP02", "ZSMP03", "ZSMP04", "ZSMP05", "ZSMP06", "ZSMP07",
++    "ZLUP00", "ZLUP01", "ZLUP02", "ZLUP03", "ZLUP04", "ZLUP05", "ZLUP06", "ZLUP07",
++    "ZMAC",
++};
++
++static int cur_file = -1;
++static uint32_t cur_size;
++
++void zlk_init(void)
++{
++    cur_file = -1;
++}
++
++/* applique un fichier commité (relit depuis la flash et applique au moteur) ; 0 ok */
++static int zlk_apply(int i)
++{
++    const plat_file_t *f = &zlk_files[i];
++    const uint8_t *d;
++    int sz;
++    if (i < 0 || i >= ZLK_NFILE) return -1;
++    sz = plat_file_size(f);
++    if (sz <= 0) return -1;
++    d = plat_file_data(f);
++    if (!d) return -1;
++    if (i < ZLK_NSMP) {                          /* ZSMPxx : 'ZSM1' sr u32 len u32 fmt u8 data */
++        uint32_t sr, len;
++        int fmt;
++        if (sz < 13 || d[0] != 'Z' || d[1] != 'S' || d[2] != 'M' || d[3] != '1') return -2;
++        sr = (uint32_t)d[4] | ((uint32_t)d[5] << 8) | ((uint32_t)d[6] << 16) | ((uint32_t)d[7] << 24);
++        len = (uint32_t)d[8] | ((uint32_t)d[9] << 8) | ((uint32_t)d[10] << 16) | ((uint32_t)d[11] << 24);
++        fmt = d[12];
++        if ((uint32_t)sz < 13u + len) return -3;
++        return zml_ring_import(i, fmt, sr, len, d + 13);
++    }
++    if (i < ZLK_NSMP + ZLK_NLUP)                  /* ZLUPxx : blob 'ZLS1' du slot */
++        return zml_slot_load(i - ZLK_NSMP, d, sz);
++    return zmac_load(d, sz);                     /* ZMAC */
++}
++
++/* ---- fichiers companion ------------------------------------------------------------ */
++
++int zlk_file(int i, plat_file_info_t *f)
++{
++    int sz;
++    if (!f) return -1;
++    if (i < 0 || i >= ZLK_NFILE) return -1;
++    sz = plat_file_size(&zlk_files[i]);
++    f->name = ZLK_NAMES[i];
++    f->kind = i < ZLK_NSMP ? PLAT_FK_SAMPLE : (i < ZLK_NSMP + ZLK_NLUP ? PLAT_FK_BANK : PLAT_FK_SETTINGS);
++    f->flags = PLAT_FF_READ | PLAT_FF_WRITE | PLAT_FF_DELETE | PLAT_FF_PLAYING;
++    f->size = sz > 0 ? (uint32_t)sz : 0u;
++    f->room = ZLK_FN - PLAT_FILE_HEAD;
++    return 0;
++}
++
++int zlk_file_read(int i, uint32_t off, void *dst, uint32_t n)
++{
++    if (i < 0 || i >= ZLK_NFILE) return -1;
++    return plat_file_read(&zlk_files[i], off, dst, n);
++}
++
++int zlk_file_begin(int i, uint32_t size)
++{
++    if (i < 0 || i >= ZLK_NFILE || size > ZLK_FN - PLAT_FILE_HEAD) return -1;
++    cur_file = i;
++    cur_size = size;
++    return plat_file_begin(&zlk_files[i], size);
++}
++
++int zlk_file_write(int i, uint32_t off, const void *src, uint32_t n)
++{
++    if (i != cur_file || i < 0 || i >= ZLK_NFILE) return -1;
++    if (off + n > cur_size) return -1;
++    return plat_file_write(&zlk_files[i], off, src, n);
++}
++
++int zlk_file_commit(int i, uint32_t size, uint32_t crc)
++{
++    int rc;
++    if (i != cur_file || i < 0 || i >= ZLK_NFILE) return -1;
++    rc = plat_file_commit(&zlk_files[i], size, crc);
++    if (rc == 0)
++        zlk_apply(i);                            /* commit ok -> on applique au moteur */
++    cur_file = -1;
++    return rc;
++}
++
++int zlk_file_delete(int i)
++{
++    if (i < 0 || i >= ZLK_NFILE) return -1;
++    return plat_file_delete(&zlk_files[i]);
++}
++
++int zlk_file_busy(void) { return 0; }            /* les fichiers ZTF sont sûrs même en jouant */
++
++/* ---- paramètres companion (APP_PARAMS) ---------------------------------------------- */
++
++enum { P_CUTOFF, P_RESO, P_ENVMOD, P_DECAY, P_WAVE, P_ENGINE, P_TEMPO, P_PAGE,
++       P_LOOPGAIN, P_DLYTIME, P_REVMIX, P_SWING, P_N };
++static const char *const ZLK_GRP[4] = { "VOICE", "SEQ", "LOOP", "DRUM" };
++static const char *const ZLK_PNAME[P_N] = { "CUTOFF", "RESO", "ENV MOD", "DECAY", "WAVE", "ENGINE",
++                                             "TEMPO", "PAGE", "LOOP GAIN", "DLY TIME", "REV MIX", "SWING" };
++
++int zlk_param(int i, plat_param_t *p)
++{
++    if (!p) return -1;
++    if (i < 0 || i >= P_N) return -1;
++    memset(p, 0, sizeof *p);
++    p->id = (uint16_t)i;
++    p->type = PLAT_PT_NUMBER;
++    p->group = (uint8_t)(i <= P_ENGINE ? 0 : (i <= P_PAGE ? 1 : (i <= P_REVMIX ? 2 : 3)));
++    p->name = ZLK_PNAME[i];
++    p->unit = 0;
++    if (i == P_TEMPO) { p->min = 30; p->max = 300; p->def = 120; }
++    else if (i == P_PAGE) { p->min = 0; p->max = 13; p->def = 0; }
++    else { p->min = 0; p->max = 1000; p->def = 500; }
++    return 0;
++}
++
++const char *zlk_param_group(int g) { return (g >= 0 && g < 4) ? ZLK_GRP[g] : 0; }
++
++static float zlk_param_f(int i)   /* valeur 0..1 (ou bpm/page en brut via get) */
++{
++    float *at = zlk_at_params(), *fx = zlk_fx_params();
++    switch (i) {
++    case P_CUTOFF: return at[AT_CUTOFF];
++    case P_RESO: return at[AT_RESONANCE];
++    case P_ENVMOD: return at[AT_ENVMOD];
++    case P_DECAY: return at[AT_DECAY];
++    case P_WAVE: return at[AT_WAVE];
++    case P_ENGINE: return at[AT_ENGINE];
++    case P_LOOPGAIN: return zlk_loop_gain();
++    case P_DLYTIME: return fx[FX_DLY_TIME];
++    case P_REVMIX: return fx[FX_REV_MIX];
++    case P_SWING: return zlk_swing();
++    default: return 0.5f;
++    }
++}
++
++int32_t zlk_param_get(int i)
++{
++    if (i == P_TEMPO) return zlk_tempo();
++    if (i == P_PAGE) return zlk_page();
++    if (i < 0 || i >= P_N) return 0;
++    return (int32_t)(zlk_param_f(i) * 1000.0f + 0.5f);
++}
++
++int32_t zlk_param_set(int i, int32_t v)
++{
++    float f;
++    if (i < 0 || i >= P_N) return 0;
++    if (i == P_TEMPO) { zlk_tempo_set((int)v); return zlk_tempo(); }
++    if (i == P_PAGE) { zlk_page_set((int)v); return zlk_page(); }
++    if (v < 0) v = 0;
++    if (v > 1000) v = 1000;
++    f = (float)v / 1000.0f;
++    switch (i) {
++    case P_CUTOFF: zlk_at_set(AT_CUTOFF, f); break;
++    case P_RESO: zlk_at_set(AT_RESONANCE, f); break;
++    case P_ENVMOD: zlk_at_set(AT_ENVMOD, f); break;
++    case P_DECAY: zlk_at_set(AT_DECAY, f); break;
++    case P_WAVE: zlk_at_set(AT_WAVE, f); break;
++    case P_ENGINE: zlk_at_set(AT_ENGINE, f); break;
++    case P_LOOPGAIN: zlk_loop_gain_set(f); break;
++    case P_DLYTIME: zlk_fx_set(FX_DLY_TIME, f); break;
++    case P_REVMIX: zlk_fx_set(FX_REV_MIX, f); break;
++    case P_SWING: zlk_swing_set(f); break;
++    default: break;
++    }
++    return (int32_t)(f * 1000.0f + 0.5f);
++}
++
++/* ---- frames ZTF (APP_SYSEX) ---------------------------------------------------------- */
++
++static void zlk_reply(const uint8_t *body, uint32_t n)
++{
++    uint8_t f[40];
++    if (n > 32) n = 32;
++    f[0] = 0xF0; f[1] = 0x7D; f[2] = 'Z'; f[3] = 'T';
++    memcpy(f + 4, body, n);
++    f[4 + n] = 0xF7;
++    plat_sysex_send(f, 5u + n);
++}
++
++static void put32(uint8_t *p, uint32_t v)
++{ p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24); }
++
++int zlk_sysex(const uint8_t *p, uint32_t n)
++{
++    uint8_t r[36];
++    if (!p || n < 4) return 0;
++    if (p[0] != 0x7D || p[1] != 'Z' || p[2] != 'T') return 0;    /* pas ZTF : on ne prend pas */
++    switch (p[3]) {
++    case 'P':                                          /* PING -> PONG + nom + version + libre */
++        r[0] = 'P';
++        memcpy(r + 1, "zuluTek", 7);
++        r[8] = 1;                                      /* version du protocole ZTF */
++        put32(r + 9, zlk_data_free());
++        zlk_reply(r, 13);
++        return 1;
++    case 'R':                                          /* GET param idx */
++        if (n < 5) return 1;
++        r[0] = 'R'; r[1] = p[4];
++        put32(r + 2, (uint32_t)zlk_param_get((int)p[4]));
++        zlk_reply(r, 6);
++        return 1;
++    case 'W':                                          /* SET param idx val */
++        if (n < 9) return 1;
++        {
++            uint32_t v = (uint32_t)p[5] | ((uint32_t)p[6] << 8) | ((uint32_t)p[7] << 16) | ((uint32_t)p[8] << 24);
++            int32_t now = zlk_param_set((int)p[4], (int32_t)v);
++            r[0] = 'W'; r[1] = p[4];
++            put32(r + 2, (uint32_t)now);
++            zlk_reply(r, 6);
++        }
++        return 1;
++    case 'G':                                          /* GET page */
++        r[0] = 'G'; r[1] = (uint8_t)zlk_page();
++        zlk_reply(r, 2);
++        return 1;
++    case 'S':                                          /* SET page */
++        if (n < 5) return 1;
++        zlk_page_set((int)p[4]);
++        r[0] = 'S'; r[1] = p[4];
++        zlk_reply(r, 2);
++        return 1;
++    case 'T':                                          /* TRIG note vel */
++        if (n < 6) return 1;
++        zlk_note_on((int)p[4], (int)p[5]);
++        r[0] = 'T'; r[1] = p[4];
++        zlk_reply(r, 2);
++        return 1;
++    case 'O':                                          /* note OFF */
++        if (n < 5) return 1;
++        zlk_note_off((int)p[4]);
++        r[0] = 'O'; r[1] = p[4];
++        zlk_reply(r, 2);
++        return 1;
++    case 'Y':                                          /* PLAY/STOP */
++        zlk_play();
++        r[0] = 'Y';
++        zlk_reply(r, 1);
++        return 1;
++    case 'L':                                          /* LOAD fichier idx depuis la flash */
++        if (n < 5) return 1;
++        {
++            int rc = zlk_apply((int)p[4]);
++            r[0] = 'L'; r[1] = p[4]; r[2] = (uint8_t)(rc == 0 ? 0 : 1);
++            zlk_reply(r, 3);
++        }
++        return 1;
++    default:
++        return 1;                                      /* ZTF mais commande inconnue : on a pris */
++    }
++}
+diff --git a/atek303/app/ztek_link.h b/atek303/app/ztek_link.h
+new file mode 100644
+index 0000000..b7536c8
+--- /dev/null
++++ b/atek303/app/ztek_link.h
+@@ -0,0 +1,68 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_link: la liaison APK (Android) <-> FM-1 « ZTF » — patch 0009.
++ *
++ * Transport : USB-MIDI SysEx (le même câble que l'audio USB et le backup). Deux familles :
++ *   - les services companion du platform (fm1.toml companion = true) : cmd 0x60 capability,
++ *     0x61 files (APP_FILES ci-dessous + APP_FILE_OBJS = presets/ZSEQ en app.h), 0x62 params (APP_PARAMS) ;
++ *   - nos frames propres ZTF : F0 7D 'Z' 'T' cmd args.. F7 (reçues via APP_SYSEX -> app_sysex,
++ *     réponses via plat_sysex_send).
++ *
++ * Fichiers APP_FILES (zone data flash, copies A/B plat_file_t) :
++ *   ZSMP00..07  PLAT_FK_SAMPLE  blob 'ZSM1' : sr u32, len u32, fmt u8 (0 int16, 1 µ-law), data
++ *               -> zml_ring_import (le sample devient une boucle audio du slot)
++ *   ZLUP00..07  PLAT_FK_BANK    blob 'ZLS1' d'un slot looper -> zml_slot_load
++ *   ZMAC        PLAT_FK_SETTINGS blob 'ZMC1' des 16 macros -> zmac_load
++ *
++ * Commandes ZTF (après F0 7D 5A 54) :
++ *   'P' PING            -> réponse 'P' + "zuluTek" + version + octets libres zone data
++ *   'R' idx             -> réponse 'R' idx + valeur u32 (param i, 0..1000 ou brut)
++ *   'W' idx val(u32)    -> set param, réponse 'W' idx ok
++ *   'G'                 -> réponse 'G' + page courante
++ *   'S' page            -> set page, réponse 'S' ok
++ *   'T' note vel        -> note on (EV_NOTE_ON), réponse 'T' ok
++ *   'O' note            -> note off, réponse 'O' ok
++ *   'Y'                 -> PLAY/STOP (EV_PLAY), réponse 'Y' ok
++ *   'L' fileidx         -> réapplique le fichier idx depuis la flash (LOAD), réponse 'L' idx ok/err
++ *
++ * Le module est découplé d'app.c via les accesseurs zlk_* définis dans app.c. */
++#pragma once
++#include <stdint.h>
++#include "plat.h"
++
++void zlk_init(void);
++int  zlk_sysex(const uint8_t *p, uint32_t n);            /* 1 = frame ZTF prise en charge */
++
++/* fichiers companion (APP_FILES) — appelés par le platform */
++int  zlk_file(int i, plat_file_info_t *f);
++int  zlk_file_read(int i, uint32_t off, void *dst, uint32_t n);
++int  zlk_file_begin(int i, uint32_t size);
++int  zlk_file_write(int i, uint32_t off, const void *src, uint32_t n);
++int  zlk_file_commit(int i, uint32_t size, uint32_t crc);
++int  zlk_file_delete(int i);
++int  zlk_file_busy(void);
++
++/* paramètres companion (APP_PARAMS) */
++int         zlk_param(int i, plat_param_t *p);
++const char *zlk_param_group(int g);
++int32_t     zlk_param_get(int i);
++int32_t     zlk_param_set(int i, int32_t v);
++
++/* ---- fournis par app.c (patch 0009) ---- */
++float *zlk_at_params(void);
++float *zlk_fx_params(void);
++void  zlk_at_set(int k, float v);
++void  zlk_fx_set(int k, float v);
++int   zlk_tempo(void);
++void  zlk_tempo_set(int b);
++int   zlk_page(void);
++void  zlk_page_set(int p);
++void  zlk_play(void);
++void  zlk_note_on(int note, int vel);
++void  zlk_note_off(int note);
++float zlk_loop_gain(void);
++void  zlk_loop_gain_set(float g);
++float zlk_swing(void);
++void  zlk_swing_set(float v);
++uint32_t zlk_data_free(void);               /* octets libres estimés dans la zone data */
+diff --git a/atek303/app/ztek_loop.c b/atek303/app/ztek_loop.c
+index e58f581..38b9da7 100644
+--- a/atek303/app/ztek_loop.c
++++ b/atek303/app/ztek_loop.c
+@@ -272,3 +272,144 @@ int zml_sel(void) { return ml.sel; }
+ 
+ void zml_gain(float g) { ml.loop_gain = clamp01(g); }
+ float zml_gain_get(void) { return ml.loop_gain; }
++
++/* ---- patch 0009: import/export liaison APK <-> FM-1 ---------------------------------- */
++
++/* importe un sample reçu (fichier ZSMPxx) dans le ring resample d'un slot : le slot devient
++ * une boucle audio jouable. fmt 0 = int16, 1 = µ-law. ring_sr = fréquence d'échantillonnage du ring. */
++int zml_ring_import(int slot, int fmt, uint32_t ring_sr, uint32_t len, const void *data)
++{
++    ml_slot_t *s;
++    uint32_t cap, i;
++    float spu;
++    uint16_t l;
++    if (slot < 0 || slot >= ML_NSLOTS || !data) return -1;
++    cap = fmt ? (uint32_t)ML_RS_MAX * 2u : (uint32_t)ML_RS_MAX;
++    if (len > cap) len = cap;
++    if (len < 64) return -1;
++    s = &ml.slot[slot];
++    ml.rs_fmt = fmt ? 1 : 0;
++    ml.rs_decim = ring_sr > 0 ? ml.sr / (float)ring_sr : 1.0f;
++    if (ml.rs_decim < 1.0f) ml.rs_decim = 1.0f;
++    ml.rs_bits = 16;
++    ml.rs_rec = 0;
++    ml.rs_dst = slot;
++    ml.rs_cap = cap;
++    ml.rs_len = len;
++    ml.rs_pos = 0;
++    ml.rs_ph = 0.0f;
++    ml.rs_rph = 0.0f;
++    if (fmt) memcpy(ml.rs_ring.b, data, len);
++    else {
++        const int16_t *w = (const int16_t *)data;
++        for (i = 0; i < len; i++) ml.rs_ring.w[i] = w[i];
++    }
++    spu = (ml.sr / ml.rs_decim) / ((float)zml_tempo() * 16.0f / 60.0f);   /* éch. par 1/64 de mesure, au ring */
++    l = (uint16_t)(len / spu);
++    if (l < 16) l = 16;
++    s->len = l;
++    s->len_set = 1;
++    s->rs = 1;
++    s->on = 1;
++    s->rec = 0;
++    s->pos = 0.0f;
++    s->last_pos = 0.0f;
++    ml.sel = slot;
++    return 0;
++}
++
++static void put16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
++static uint32_t get16(const uint8_t *p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8); }
++
++/* blob 'ZLS1' explicite (little-endian) : sp, len, flags, notes, param events — relisable côté APK */
++int zml_slot_save(int slot, uint8_t *buf, int cap)
++{
++    ml_slot_t *s;
++    uint32_t n, i;
++    uint8_t *p;
++    if (slot < 0 || slot >= ML_NSLOTS || !buf) return -1;
++    s = &ml.slot[slot];
++    n = 16u + (uint32_t)s->n_note * 4u + (uint32_t)s->n_par * 8u;
++    if (cap < (int)n) return -1;
++    p = buf;
++    p[0] = 'Z'; p[1] = 'L'; p[2] = 'S'; p[3] = '1';
++    p[4] = (uint8_t)s->sp.pitch;
++    put16(p + 5, s->sp.pos);
++    p[7] = s->sp.mode; p[8] = s->sp.mut; p[9] = s->sp.src; p[10] = s->sp.fx; p[11] = s->sp.vol;
++    put16(p + 12, s->len);
++    p[14] = s->len_set; p[15] = s->on;
++    put16(p + 16, s->n_note);
++    p += 18;
++    for (i = 0; i < s->n_note; i++) {
++        put16(p, s->note[i].t);
++        p[2] = s->note[i].note; p[3] = s->note[i].vel; p[4] = s->note[i].dur;
++        p += 5;
++        n = 18u + (uint32_t)s->n_note * 5u + (uint32_t)s->n_par * 8u;
++    }
++    /* recalcule proprement la taille (notes en 5 o) */
++    n = 18u + (uint32_t)s->n_note * 5u + 2u + (uint32_t)s->n_par * 8u;
++    if (cap < (int)n) return -1;
++    put16(p, s->n_par);
++    p += 2;
++    for (i = 0; i < s->n_par; i++) {
++        put16(p, s->par[i].t);
++        p[2] = s->par[i].key; p[3] = 0;
++        memcpy(p + 4, &s->par[i].v, 4);
++        p += 8;
++    }
++    return (int)(18u + (uint32_t)s->n_note * 5u + 2u + (uint32_t)s->n_par * 8u);
++}
++
++int zml_slot_load(int slot, const uint8_t *buf, int len)
++{
++    ml_slot_t *s;
++    const uint8_t *p;
++    uint32_t n_note, n_par, i;
++    if (slot < 0 || slot >= ML_NSLOTS || !buf || len < 18) return -1;
++    if (buf[0] != 'Z' || buf[1] != 'L' || buf[2] != 'S' || buf[3] != '1') return -1;
++    s = &ml.slot[slot];
++    p = buf;
++    s->sp.pitch = (int8_t)p[4];
++    s->sp.pos = (uint16_t)get16(p + 5);
++    s->sp.mode = p[7]; s->sp.mut = p[8]; s->sp.src = p[9]; s->sp.fx = p[10]; s->sp.vol = p[11];
++    s->len = (uint16_t)get16(p + 12);
++    s->len_set = p[14]; s->on = p[15];
++    n_note = get16(p + 16);
++    p += 18;
++    if (n_note > ML_MAXEV) n_note = ML_MAXEV;
++    if ((uint32_t)len < 18u + n_note * 5u + 2u) return -1;
++    s->n_note = (uint16_t)n_note;
++    for (i = 0; i < n_note; i++) {
++        s->note[i].t = (uint16_t)get16(p);
++        s->note[i].note = p[2]; s->note[i].vel = p[3]; s->note[i].dur = p[4];
++        p += 5;
++    }
++    n_par = get16(p);
++    p += 2;
++    if (n_par > ML_MAXPEV) n_par = ML_MAXPEV;
++    if ((uint32_t)len < 18u + (uint32_t)s->n_note * 5u + 2u + n_par * 8u) return -1;
++    s->n_par = (uint16_t)n_par;
++    for (i = 0; i < n_par; i++) {
++        s->par[i].t = (uint16_t)get16(p);
++        s->par[i].key = p[2];
++        memcpy(&s->par[i].v, p + 4, 4);
++        p += 8;
++    }
++    s->rec = 0;
++    s->rs = 0;
++    s->pos = 0.0f;
++    s->last_pos = 0.0f;
++    s->n_act = 0;
++    return 0;
++}
++
++/* audio entrant USB (hook app_usb_in, patch fm1-base) : alimente le ring si un REC resample est armé */
++void zml_usb_feed(const int32_t *lr, uint32_t n)
++{
++    static float f[ZML_BUS_MAX];
++    uint32_t i;
++    if (!ml.rs_rec || !lr || n > ZML_BUS_MAX) return;
++    for (i = 0; i < n; i++)
++        f[i] = (float)lr[2u * i] / 8388608.0f;    /* 24-bit -> [-1, 1) */
++    ml_rs_feed(&ml, f, n);
++}
+diff --git a/atek303/app/ztek_loop.h b/atek303/app/ztek_loop.h
+index b2b5f51..ff51e9a 100644
+--- a/atek303/app/ztek_loop.h
++++ b/atek303/app/ztek_loop.h
+@@ -72,3 +72,8 @@ void  zml_set_leader(int on);                 /* OPTIONS > CHOKE LDR = ON/OFF */
+ void  zml_set_eco(int on);                    /* OPTIONS > ECO (resample ring au plus bas) */
+ int   zml_get_choke(int slot);
+ int   zml_choke_master(int grp);
++/* patch 0009: import/export pour la liaison APK <-> FM-1 (fichiers companion ZSMP/ZLUP) */
++int  zml_ring_import(int slot, int fmt, uint32_t ring_sr, uint32_t len, const void *data); /* 0 ok ; fmt 0 int16 1 µ-law */
++int  zml_slot_save(int slot, uint8_t *buf, int cap);        /* blob 'ZLS1' (little-endian explicite), octets écrits */
++int  zml_slot_load(int slot, const uint8_t *buf, int len);  /* 0 ok */
++void zml_usb_feed(const int32_t *lr, uint32_t n);           /* audio entrant USB (hook app_usb_in) -> ring si REC resample armé */
+diff --git a/atek303/app/ztek_macro.c b/atek303/app/ztek_macro.c
+index 34a571d..ec7c6df 100644
+--- a/atek303/app/ztek_macro.c
++++ b/atek303/app/ztek_macro.c
+@@ -126,3 +126,39 @@ int   zmac_sel(void) { return sel; }
+ int   zmac_used(int slot) { return (slot >= 0 && slot < ZMAC_N) ? mac[slot].used : 0; }
+ int   zmac_dst(int slot) { return (slot >= 0 && slot < ZMAC_N) ? mac[slot].dst : 0; }
+ float zmac_val(int slot) { return (slot >= 0 && slot < ZMAC_N) ? mac[slot].val : 0.0f; }
++
++/* ---- patch 0009: blob 'ZMC1' little-endian : 16 slots {dst i16, val f32, used u8} ---------- */
++int zmac_save(uint8_t *buf, int cap)
++{
++    int m;
++    uint8_t *p;
++    if (!buf || cap < 4 + ZMAC_N * 10) return -1;
++    p = buf;
++    p[0] = 'Z'; p[1] = 'M'; p[2] = 'C'; p[3] = '1';
++    p += 4;
++    for (m = 0; m < ZMAC_N; m++) {
++        int16_t d = (int16_t)mac[m].dst;
++        p[0] = (uint8_t)(d & 0xFF); p[1] = (uint8_t)((uint16_t)d >> 8);
++        memcpy(p + 2, &mac[m].val, 4);
++        p[6] = (uint8_t)(mac[m].used ? 1 : 0);
++        p += 10;
++    }
++    return 4 + ZMAC_N * 10;
++}
++
++int zmac_load(const uint8_t *buf, int len)
++{
++    int m;
++    const uint8_t *p;
++    if (!buf || len < 4 + ZMAC_N * 10) return -1;
++    if (buf[0] != 'Z' || buf[1] != 'M' || buf[2] != 'C' || buf[3] != '1') return -1;
++    p = buf + 4;
++    for (m = 0; m < ZMAC_N; m++) {
++        int16_t d = (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
++        mac[m].dst = d;
++        memcpy(&mac[m].val, p + 2, 4);
++        mac[m].used = p[6] ? 1 : 0;
++        p += 10;
++    }
++    return 0;
++}
+diff --git a/atek303/app/ztek_macro.h b/atek303/app/ztek_macro.h
+index ac32fc8..36038b9 100644
+--- a/atek303/app/ztek_macro.h
++++ b/atek303/app/ztek_macro.h
+@@ -47,3 +47,7 @@ int   zmac_sel(void);
+ int   zmac_used(int slot);
+ int   zmac_dst(int slot);
+ float zmac_val(int slot);
++
++/* patch 0009: blob 'ZMC1' (liaison APK <-> FM-1, fichier companion ZMAC) */
++int   zmac_save(uint8_t *buf, int cap);        /* octets écrits, -1 si cap trop petit */
++int   zmac_load(const uint8_t *buf, int len);   /* 0 ok */
+-- 
+2.47.3
+

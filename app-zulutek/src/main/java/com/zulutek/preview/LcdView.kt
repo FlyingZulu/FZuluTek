@@ -74,6 +74,7 @@ class LcdState {
     val kitFilled = BooleanArray(16)
     val loopParam = FloatArray(6)       // PITCH POS MODE MUT SRC VOL du slot édité
     var sirenOn = false
+    var sirenMode = false
     var xyOn = false
     var xyX = 0.5f
     var xyY = 0.5f
@@ -146,13 +147,46 @@ class LcdState {
     var polyArmed = false                           // POLY pressé : le prochain pad tapé sera désigné leader
     var ecoOn = false                               // OPTIONS > ECO ON : LCD throttlé + blink figé
     var optRow = 0                                  // page OPTIONS (9) : ligne sélectionnée
-    var mixStrip = 0                                // page MIX (6) : tranche sélectionnée (0..3, 4=master)
+    var mixStrip = 0                                // page MIX (11) : tranche sélectionnée (0..3, 4=master)
     val stripCut = FloatArray(4)                    // filtre traversant par tranche
     val stripFmode = IntArray(4)                    // 0 LP, 1 neutre, 2 HP
     val stripVol = FloatArray(4)
+    val stripPan = FloatArray(4)
     val stripMut = BooleanArray(4)
+    val stripSolo = BooleanArray(4)
+    val stripLdr = BooleanArray(4)                  // choke général de la tranche
     val stripAuxPow = FloatArray(4)                 // départ post-fader PoW!
     val stripAuxLoop = FloatArray(4)                // départ post-fader Loop
+    val stripAux1 = FloatArray(4)
+    val stripAux2 = FloatArray(4)
+    val stripAux3 = FloatArray(4)
+    val stripAux4 = FloatArray(4)
+    val masterAux = FloatArray(2)
+    var mixMode = 0                                 // 0 = MUT, 1 = SOLO (bascule OP5, noire 5)
+    var mixSub = 0                                  // 0 global, 1..3 sous-menu voie, 4 = master
+    var mixSubStrip = 0                             // tranche du sous-menu
+    var punchOv = -1                                // overlay PUNCH du slot PoW! (-1 = fermé)
+    val punchTypeS = IntArray(16).apply { fill(8) } // type PoW! par slot (défaut ECHO)
+    val punchAS = FloatArray(16).apply { fill(0.5f) }
+    val punchBS = FloatArray(16).apply { fill(0.5f) }
+    val punchMS = FloatArray(16).apply { fill(0.8f) }
+    var sirenWave = 0
+    var sirenLvl = 0.3f
+    var sirenRate = 0.5f
+    var sirenFb = 0f
+    var sirenMix = 0f
+
+    // menu FX (page 5, REC+FX) : fxView 0 = pedalboard, 1 = sirène (ALG bascule sur la vue principale)
+    var fxView = 0
+    var fxSub = 0            // 0 = vue d'ensemble, 1 = sous-menu chaîne, 2 = sous-menu slot
+    var fxChainSel = 0       // pédale sélectionnée (OP1..OP4)
+    var fxSlotSel = 0        // slot en édition (sous-menu slot)
+    var fxBlockSel = 0       // bloc (preset du board) sélectionné
+    val fxSlotType = IntArray(12)
+    val fxSlotP = Array(12) { FloatArray(4) }
+    val fxSlotMix = FloatArray(12)
+    val fxChainMix = FloatArray(4)
+    val fxChainOrder = IntArray(4)
     val drumPat = BooleanArray(ZtekAudio.DR_NPADS * 16)  // grille 16 steps par pad
     val drumLvl = FloatArray(ZtekAudio.DR_NPADS)     // niveau par pad
     var drumSwing = 0f                              // swing du séquenceur drums
@@ -183,7 +217,13 @@ class LcdState {
             5 -> "S${rel / 7 + 1}." +                              // LOOP : 16 slots x 7
                     arrayOf("PITCH", "POS", "MOD", "MUT", "SRC", "FX", "VOL").getOrElse(rel % 7) { "?" }
             6 -> arrayOf("FX", "MASTER", "POW!", "AUX1", "AUX2").getOrElse(rel) { "?" }   // OUT
-            else -> "AUX${rel + 1}"                                                        // AUX (libres)
+            7 -> "AUX${rel + 1}"                                                        // AUX (libres)
+            else -> {                                                                   // MIX : 13 x 4 + 3 master
+                if (rel < ZtekAudio.MIX_N * 4)
+                    ZtekAudio.STRIP_NAMES[rel / ZtekAudio.MIX_N] + "." +
+                        ZtekAudio.MIX_PAR_NAMES.getOrElse(rel % ZtekAudio.MIX_N) { "?" }
+                else arrayOf("GAIN", "AUX1", "AUX2").getOrElse(rel - ZtekAudio.MIX_N * 4) { "?" }
+            }
         }
     }
 
@@ -519,13 +559,13 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             return
         }
 
-        // ---- page POW! (5) : réglages punch-in, maintenu sur une touche blanche ----
-        if (st.page == 5) {
-            text(c, 6f, 15f, "POW!", REC_RED, 12f)
-            text(c, 60f, 15f, "slot ${st.selSlot + 1}", DIM, 9f)
+        // ---- menu FX (5, REC+FX) : vue 0 = PEDALBOARD, vue 1 = SIRENE (ALG bascule) ----
+        if (st.page == 5 && st.fxView == 1) {
+            text(c, 6f, 15f, "SIREN", REC_RED, 12f)
+            text(c, 70f, 15f, if (st.sirenOn) "ON" else "OFF", if (st.sirenOn) REC_RED else DIM, 9f)
             text(c, 6f, 40f, "TYPE", DIM, 9f)
-            text(c, 60f, 40f, st.punchNames[st.punchType], FLUO_YEL, 12f)
-            val bars = arrayOf("a" to st.punchA, "b" to st.punchB, "MIX" to st.punchMix)
+            text(c, 60f, 40f, ZtekAudio.SIREN_WAVES[st.sirenWave.coerceIn(0, 3)], FLUO_YEL, 12f)
+            val bars = arrayOf("RATE" to st.sirenRate, "DEPTH" to st.sirenLvl, "FB" to st.sirenFb, "MIX" to st.sirenMix)
             for (i in bars.indices) {
                 val y0 = 60f + i * 40f
                 text(c, 6f, y0 + 12f, bars[i].first, DIM, 9f)
@@ -534,8 +574,83 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 c.drawLine(62f, y0 + 10f, 62f + 168f * bars[i].second, y0 + 10f, frame)
                 text(c, 200f, y0 + 15f, "${(bars[i].second * 100).toInt()}", INK, 9f)
             }
-            text(c, 6f, 200f, "K1=type K2=a K3=b K4=mix PRE=slot", DIM, 8f)
-            text(c, 6f, 214f, "maintenir une touche blanche = PoW!  long-REV = quitter", DIM, 8f)
+            text(c, 6f, 224f, "SEL=ON/OFF  ALG=type(4)  K1=RATE K2=DEPTH K3=FB K4=MIX", DIM, 8f)
+            text(c, 6f, 236f, "clavier chromatique  ALG=retour pedalboard  REC=quitte", DIM, 8f)
+            c.restore()
+            return
+        }
+        if (st.page == 5) {   // vue PEDALBOARD
+            text(c, 6f, 15f, "FX", FLUO_TURQ, 12f)
+            text(c, 40f, 15f, "PEDALBOARD", FLUO_TURQ, 9f)
+            text(c, 190f, 15f, "ALG=SIREN", DIM, 8f)
+            if (st.fxSub == 0) {
+                // vue d'ensemble : 4 chaînes dans l'ordre d'exécution, 3 slots chacune
+                for (ci in 0 until 4) {
+                    val ch = st.fxChainOrder[ci]
+                    val x0 = 6f + ci * 59f
+                    val sel = ch == st.fxChainSel
+                    box(c, x0, 24f, x0 + 55f, 118f, if (sel) FLUO_TURQ else DIM)
+                    text(c, x0 + 3f, 36f, "CH${ch + 1}${if (ci < 3) "→" else ""}", if (sel) INK else DIM, 8f)
+                    for (k in 0 until 3) {
+                        val s = ch * 3 + k
+                        val t = st.fxSlotType[s].coerceIn(0, ZtekAudio.NCAT - 1)
+                        val y0 = 42f + k * 22f
+                        text(c, x0 + 3f, y0 + 9f, ZtekAudio.FXT_NAMES[t].take(7), if (t == 0) DIM else FLUO_YEL, 7f)
+                        frame.color = if (t == 0) Color.argb(255, 50, 50, 50) else FLUO_PINK
+                        c.drawLine(x0 + 3f, y0 + 14f, x0 + 3f + 46f * st.fxSlotMix[s].coerceIn(0f, 1f), y0 + 14f, frame)
+                    }
+                    // dry/wet de la pédale (SEL)
+                    frame.color = FLUO_TURQ
+                    c.drawLine(x0 + 3f, 112f, x0 + 3f + 46f * st.fxChainMix[ch].coerceIn(0f, 1f), 112f, frame)
+                    text(c, x0 + 3f, 118f, "DW${(st.fxChainMix[ch] * 9).toInt()}", DIM, 7f)
+                }
+                // blocs (presets du board)
+                text(c, 6f, 134f, "BLOCS", DIM, 8f)
+                for (b in 0 until 8) {
+                    val x0 = 50f + b * 24f
+                    val used = ZtekAudio.fxblockUsed(b) == 1
+                    box(c, x0, 128f, x0 + 20f, 144f, if (b == st.fxBlockSel) FLUO_TURQ else if (used) FLUO_YEL else DIM)
+                    text(c, x0 + 6f, 139f, "${b + 1}", if (b == st.fxBlockSel || used) INK else DIM, 8f)
+                }
+                text(c, 6f, 158f, "OP1..4=pédale  SEL=dry/wet pédale  K1..K3=dry/wet slots  PRE=bloc", DIM, 8f)
+                text(c, 6f, 170f, "Shift+OPx=sous-menu pédale  PLAY=bloc load/save  REC=quitte", DIM, 8f)
+            } else if (st.fxSub == 1) {
+                // sous-menu chaîne : la pédale et ses 3 slots
+                val ch = st.fxChainSel
+                text(c, 6f, 30f, "PÉDALE CH${ch + 1}   dry/wet SEL=${(st.fxChainMix[ch] * 100).toInt()}", FLUO_TURQ, 10f)
+                for (k in 0 until 3) {
+                    val s = ch * 3 + k
+                    val t = st.fxSlotType[s].coerceIn(0, ZtekAudio.NCAT - 1)
+                    val y0 = 44f + k * 44f
+                    val sel = st.fxSlotSel == s
+                    box(c, 6f, y0, 234f, y0 + 38f, if (sel) FLUO_TURQ else DIM)
+                    text(c, 12f, y0 + 14f, "SLOT ${k + 1}", DIM, 8f)
+                    text(c, 70f, y0 + 14f, ZtekAudio.FXT_NAMES[t], if (t == 0) DIM else FLUO_YEL, 10f)
+                    frame.color = FLUO_PINK
+                    c.drawLine(70f, y0 + 26f, 70f + 150f * st.fxSlotMix[s].coerceIn(0f, 1f), y0 + 26f, frame)
+                    text(c, 12f, y0 + 32f, "DW${(st.fxSlotMix[s] * 100).toInt()}", DIM, 8f)
+                }
+                text(c, 6f, 186f, "Shift+OP1/2/3 = sous-menu slot  ALG=échange ordre  SEL=chaîne", DIM, 8f)
+                text(c, 6f, 198f, "REC=retour", DIM, 8f)
+            } else {
+                // sous-menu slot : choix de l'effet (ALG) + réglages fins K1..K3, PRE=p3, K4=dry/wet
+                val s = st.fxSlotSel
+                val t = st.fxSlotType[s].coerceIn(0, ZtekAudio.NCAT - 1)
+                text(c, 6f, 30f, "SLOT ${s + 1} (CH${s / 3 + 1}.${s % 3 + 1})", FLUO_TURQ, 10f)
+                text(c, 6f, 52f, "EFFET", DIM, 9f)
+                text(c, 70f, 52f, ZtekAudio.FXT_NAMES[t], FLUO_YEL, 12f)
+                text(c, 200f, 52f, "ALG", DIM, 8f)
+                val kn = arrayOf("K1" to st.fxSlotP[s][0], "K2" to st.fxSlotP[s][1], "K3" to st.fxSlotP[s][2],
+                                 "PRE" to st.fxSlotP[s][3], "K4 DW" to st.fxSlotMix[s])
+                for (i in kn.indices) {
+                    val y0 = 66f + i * 30f
+                    text(c, 6f, y0 + 12f, kn[i].first, DIM, 9f)
+                    box(c, 60f, y0, 234f, y0 + 18f, DIM)
+                    frame.color = if (i == 4) FLUO_PINK else FLUO_TURQ
+                    c.drawLine(62f, y0 + 9f, 62f + 168f * kn[i].second.coerceIn(0f, 1f), y0 + 9f, frame)
+                }
+                text(c, 6f, 226f, "ALG=effet  K1..K3=réglages  PRE=p3  K4=dry/wet  REC=retour", DIM, 8f)
+            }
             c.restore()
             return
         }
@@ -597,56 +712,99 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         }
 
         if (st.page == 11) {
-            // ---- table de mixage : 4 tranches + bandeau master (BUS + AUX libres + VU) ----
+            // ---- page MAIN MIX : 4 tranches (K1..K4=VOL, SEL=voie, PRE=filtre, ALG=CUT) + 16 pads PoW! en bas ----
             text(c, 6f, 15f, "MIX", FLUO_TURQ, 12f)
-            text(c, 52f, 15f, if (st.mixStrip < 4) "tr ${ZtekAudio.STRIP_NAMES[st.mixStrip]}" else "MASTER", DIM, 8f)
+            // mode MUT/SOLO (OP5, noire 5) : fixe en solo, oscillant en mute
+            val modeCol = if (st.mixMode == 1) FLUO_YEL else if (blink) FLUO_YEL else DIM
+            text(c, 46f, 15f, if (st.mixMode == 1) "SOLO" else "MUT", modeCol, 9f)
+            val subNames = arrayOf("", "VOL/PAN/P·L", "AUX1..4", "MUT/SOLO/LDR", "MASTER")
+            text(c, 92f, 15f, if (st.mixSub == 0) "tr ${ZtekAudio.STRIP_NAMES[st.mixStrip]}"
+                else "${ZtekAudio.STRIP_NAMES[st.mixSubStrip]} ${subNames[st.mixSub]}", DIM, 8f)
+            if (st.sirenOn) text(c, 200f, 15f, "SIREN", REC_RED, 9f)
             val fmNames = arrayOf("LP", "·", "HP")
-            for (s in 0 until 4) {
-                val x0 = 6f + (s % 2) * 116f
-                val y0 = 22f + (s / 2) * 90f
-                val sel = s == st.mixStrip
-                val mut = st.stripMut[s]
-                box(c, x0, y0, x0 + 110f, y0 + 86f, if (sel) FLUO_TURQ else if (mut) DIM else FLUO_YEL)
-                text(c, x0 + 4f, y0 + 13f, ZtekAudio.STRIP_NAMES[s], if (mut) DIM else INK, 10f)
-                if (mut) text(c, x0 + 76f, y0 + 13f, "MUT", REC_RED, 8f)
-                // filtre traversant en tête (pré-fader) : mode LP/·/HP + cutoff
-                val fm = st.stripFmode[s].coerceIn(0, 2)
-                text(c, x0 + 4f, y0 + 27f, "FLT ${fmNames[fm]}", if (fm == 1) DIM else FLUO_TURQ, 8f)
-                frame.color = if (fm == 1) Color.argb(255, 60, 60, 60) else FLUO_TURQ
-                c.drawLine(x0 + 50f, y0 + 23f, x0 + 50f + 56f * st.stripCut[s].coerceIn(0f, 1f), y0 + 23f, frame)
-                // fader VOL
-                text(c, x0 + 4f, y0 + 42f, "VOL", DIM, 8f)
-                box(c, x0 + 34f, y0 + 34f, x0 + 106f, y0 + 42f, DIM)
-                frame.color = if (mut) DIM else FLUO_YEL
-                c.drawLine(x0 + 36f, y0 + 38f, x0 + 36f + 68f * st.stripVol[s].coerceIn(0f, 1f), y0 + 38f, frame)
-                // départs auxiliaires post-fader : P = PoW!, L = Loop
-                text(c, x0 + 4f, y0 + 56f, "aux", DIM, 8f)
-                val aux = arrayOf("P" to st.stripAuxPow[s], "L" to st.stripAuxLoop[s])
-                var ax = x0 + 30f
-                for ((nm, av) in aux) {
-                    frame.color = if (av > 0.02f) FLUO_PINK else Color.argb(255, 50, 50, 50)
-                    c.drawLine(ax, y0 + 64f, ax + 28f * av.coerceIn(0f, 1f), y0 + 64f, frame)
-                    text(c, ax, y0 + 78f, nm, if (av > 0.02f) INK else DIM, 8f)
-                    ax += 40f
+            if (st.mixSub == 0) {
+                // page globale : 4 tranches en 2x2 (VOL + PAN + FLT + flags)
+                for (s in 0 until 4) {
+                    val x0 = 6f + (s % 2) * 116f
+                    val y0 = 22f + (s / 2) * 78f
+                    val sel = s == st.mixStrip
+                    val mut = st.stripMut[s] || (st.stripSolo.any { it } && !st.stripSolo[s])
+                    box(c, x0, y0, x0 + 110f, y0 + 72f, if (sel) FLUO_TURQ else if (mut) DIM else FLUO_YEL)
+                    text(c, x0 + 4f, y0 + 13f, ZtekAudio.STRIP_NAMES[s], if (mut) DIM else INK, 10f)
+                    if (st.stripMut[s]) text(c, x0 + 66f, y0 + 13f, "MUT", REC_RED, 8f)
+                    if (st.stripSolo[s]) text(c, x0 + 66f, y0 + 13f, "SOL", FLUO_PINK, 8f)
+                    if (st.stripLdr[s]) text(c, x0 + 88f, y0 + 13f, "LDR", FLUO_TURQ, 8f)
+                    val fm = st.stripFmode[s].coerceIn(0, 2)
+                    text(c, x0 + 4f, y0 + 26f, "FLT ${fmNames[fm]}", if (fm == 1) DIM else FLUO_TURQ, 8f)
+                    frame.color = if (fm == 1) Color.argb(255, 60, 60, 60) else FLUO_TURQ
+                    c.drawLine(x0 + 46f, y0 + 22f, x0 + 46f + 60f * st.stripCut[s].coerceIn(0f, 1f), y0 + 22f, frame)
+                    // VOL (K du canal) + PAN
+                    text(c, x0 + 4f, y0 + 40f, "VOL", DIM, 8f)
+                    box(c, x0 + 30f, y0 + 32f, x0 + 106f, y0 + 40f, DIM)
+                    frame.color = if (mut) DIM else FLUO_YEL
+                    c.drawLine(x0 + 32f, y0 + 36f, x0 + 32f + 72f * st.stripVol[s].coerceIn(0f, 1f), y0 + 36f, frame)
+                    text(c, x0 + 4f, y0 + 54f, "PAN", DIM, 8f)
+                    box(c, x0 + 30f, y0 + 47f, x0 + 106f, y0 + 53f, DIM)
+                    frame.color = FLUO_TURQ
+                    val px = x0 + 30f + 76f * st.stripPan[s].coerceIn(0f, 1f)
+                    c.drawLine(px, y0 + 45f, px, y0 + 55f, frame)
+                    text(c, x0 + 4f, y0 + 68f, "P${(st.stripAuxPow[s] * 9).toInt()} L${(st.stripAuxLoop[s] * 9).toInt()} A${(st.stripAux1[s] * 9).toInt()}${(st.stripAux2[s] * 9).toInt()}${(st.stripAux3[s] * 9).toInt()}${(st.stripAux4[s] * 9).toInt()}", DIM, 7f)
+                }
+            } else {
+                // sous-menu voie/master : grosses barres K1..K4 du contexte
+                val s = if (st.mixSub == 4) -1 else st.mixSubStrip
+                val labels = when (st.mixSub) {
+                    1 -> arrayOf("VOL" to st.stripVol[s], "PAN" to st.stripPan[s], "P>POW" to st.stripAuxPow[s], "L>LOOP" to st.stripAuxLoop[s])
+                    2 -> arrayOf("AUX1" to st.stripAux1[s], "AUX2" to st.stripAux2[s], "AUX3" to st.stripAux3[s], "AUX4" to st.stripAux4[s])
+                    3 -> arrayOf("MUT" to if (st.stripMut[s]) 1f else 0f, "SOLO" to if (st.stripSolo[s]) 1f else 0f, "LDR" to if (st.stripLdr[s]) 1f else 0f, "FLT" to st.stripFmode[s] / 2f)
+                    else -> arrayOf("GAIN" to st.mixGain / 2f, "AUX1" to st.masterAux[0], "AUX2" to st.masterAux[1], "VU" to st.masterPeak)
+                }
+                text(c, 6f, 30f, if (st.mixSub == 4) "MASTER" else "VOIE ${ZtekAudio.STRIP_NAMES[s]} - p${st.mixSub}", FLUO_TURQ, 10f)
+                for (i in 0 until 4) {
+                    val y0 = 44f + i * 42f
+                    text(c, 6f, y0 + 14f, labels[i].first, DIM, 9f)
+                    box(c, 70f, y0, 234f, y0 + 22f, DIM)
+                    frame.color = if (i == 2 && st.mixSub == 3) REC_RED else FLUO_TURQ
+                    c.drawLine(72f, y0 + 11f, 72f + 160f * labels[i].second.coerceIn(0f, 1f), y0 + 11f, frame)
+                    text(c, 200f, y0 + 17f, "${(labels[i].second.coerceIn(0f, 1f) * 100).toInt()}", INK, 9f)
                 }
             }
-            // bandeau master : BUS + départs aux libres du master (AUX1/AUX2, assignables dans la baie) + VU
-            val msel = st.mixStrip == 4
-            text(c, 6f, 210f, "BUS", if (msel) FLUO_TURQ else DIM, 8f)
-            box(c, 30f, 202f, 140f, 214f, if (msel) FLUO_TURQ else DIM)
-            frame.color = FLUO_TURQ
-            c.drawLine(32f, 208f, 32f + 106f * (st.mixGain / 2f).coerceIn(0f, 1f), 208f, frame)
-            text(c, 6f, 226f, "AUX", DIM, 8f)
-            for (a in 0..1) {
-                val x0 = 30f + a * 82f
-                box(c, x0, 218f, x0 + 76f, 230f, if (st.auxN[a] > 0) FLUO_TURQ else DIM)
-                text(c, x0 + 4f, 227f, "AUX${a + 1}▶${st.auxN[a]}", if (st.auxN[a] > 0) INK else DIM, 9f)
+            // 16 pads PoW! en bas (momentanés ; Shift+pad = réglages PUNCH du slot)
+            text(c, 6f, 182f, "POW!", REC_RED, 8f)
+            for (p in 0 until 16) {
+                val x0 = 34f + (p % 8) * 25f
+                val y0 = 176f + (p / 8) * 22f
+                box(c, x0, y0, x0 + 22f, y0 + 18f,
+                    if (st.punchOv == p) FLUO_TURQ else if (p == st.selSlot) FLUO_YEL else DIM)
+                text(c, x0 + 7f, y0 + 13f, "${p + 1}", if (st.punchOv == p || p == st.selSlot) INK else DIM, 8f)
             }
-            text(c, 196f, 226f, "VU", DIM, 8f)
-            box(c, 214f, 218f, 236f, 230f, DIM)
+            // bandeau master : BUS + AUX libres + VU
+            text(c, 6f, 226f, "BUS", DIM, 8f)
+            box(c, 30f, 218f, 110f, 230f, DIM)
+            frame.color = FLUO_TURQ
+            c.drawLine(32f, 224f, 32f + 76f * (st.mixGain / 2f).coerceIn(0f, 1f), 224f, frame)
+            text(c, 120f, 226f, "AUX${(st.masterAux[0] * 9).toInt()}/${(st.masterAux[1] * 9).toInt()}", DIM, 8f)
+            text(c, 190f, 226f, "VU", DIM, 8f)
+            box(c, 208f, 218f, 236f, 230f, DIM)
             frame.color = if (st.masterPeak > 0.85f) REC_RED else FLUO_TURQ
-            c.drawLine(216f, 224f, 216f + 18f * st.masterPeak.coerceIn(0f, 1f), 224f, frame)
-            text(c, 6f, 238f, "SEL=tranche(4=master) K1=vol/bus K2=mut K3=filtre K4=cut PRE=auxP ALG=auxL", DIM, 8f)
+            c.drawLine(210f, 224f, 210f + 24f * st.masterPeak.coerceIn(0f, 1f), 224f, frame)
+            text(c, 6f, 240f, "K1..K4=VOL  SEL=voie PRE=FLT ALG=CUT  OP1..4=voies OP5=mode Shift= combos  Shift+pad=PUNCH", DIM, 7f)
+            // overlay PUNCH du slot (Shift+slot)
+            if (st.punchOv >= 0) {
+                val p = st.punchOv
+                box(c, 20f, 40f, 220f, 170f, FLUO_YEL)
+                text(c, 30f, 58f, "PUNCH slot ${p + 1}", INK, 11f)
+                text(c, 30f, 76f, "TYPE ${st.punchNames[st.punchTypeS[p].coerceIn(0, 14)]}", FLUO_YEL, 10f)
+                val bars = arrayOf("a" to st.punchAS[p], "b" to st.punchBS[p], "MIX" to st.punchMS[p])
+                for (i in bars.indices) {
+                    val y0 = 88f + i * 24f
+                    text(c, 30f, y0 + 12f, bars[i].first, DIM, 8f)
+                    box(c, 60f, y0, 210f, y0 + 14f, DIM)
+                    frame.color = FLUO_TURQ
+                    c.drawLine(62f, y0 + 7f, 62f + 146f * bars[i].second, y0 + 7f, frame)
+                }
+                text(c, 30f, 162f, "K1=type K2=a K3=b K4=mix  REC=ferme", INK, 8f)
+            }
             c.restore()
             return
         }
@@ -756,15 +914,12 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             return
         }
 
-        // ---- page OPTIONS (16) : OPTIONS > ECO = OFF/ON, CHOKE LDR = ON/OFF ----
+        // ---- page OPTIONS (16) : OPTIONS > ECO = OFF/ON (CHOKE LDR déplacé en LDR par tranche, page MIX) ----
         if (st.page == 16) {
             text(c, 6f, 15f, "OPTIONS", FLUO_TURQ, 12f)
-            text(c, 6f, 60f, "ECO", if (st.optRow == 0) FLUO_TURQ else DIM, 10f)
+            text(c, 6f, 60f, "ECO", FLUO_TURQ, 10f)
             text(c, 90f, 60f, if (st.ecoOn) "ON" else "OFF", if (st.ecoOn) FLUO_YEL else INK, 10f)
-            text(c, 6f, 90f, "CHOKE LDR", if (st.optRow == 1) FLUO_TURQ else DIM, 10f)
-            text(c, 110f, 90f, if (st.loopLeader == 1 && st.drumLeader == 1) "ON" else "OFF",
-                if (st.loopLeader == 1 && st.drumLeader == 1) FLUO_YEL else INK, 10f)
-            text(c, 6f, 232f, "SEL=ligne  K1=ON/OFF  long-SCL=quitte", DIM, 8f)
+            text(c, 6f, 232f, "K1=ON/OFF ECO   REC=quitte", DIM, 8f)
             c.restore()
             return
         }

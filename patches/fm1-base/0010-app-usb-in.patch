@@ -1,0 +1,37 @@
+SPDX-License-Identifier: GPL-3.0-or-later
+Copyright (C) 2026 FlyingZulu
+
+Patch fm1-base (à appliquer APRÈS `herramientas/clonar-terceros.sh`, dans le clone de
+charlesvestal/fm1-base) — pont audio hybride APK -> FM-1 (patch 0010 zuluTek).
+
+But : donner à l'app l'audio entrant USB (usb_audio_out = true, uac_play) via le hook
+APP_USB_IN / app_usb_in(lr, n) déclaré dans attek303/app/app.h, pour que le firmware
+puisse échantillonner ce que le téléphone joue (ring resample du looper, patch 0008).
+
+Ce patch ajoute l'appel au hook dans device/uac_mix.h, juste avant uac_play(), en lisant
+les trames entrantes SANS les consommer via uac_in_peek() — fonction fournie par le patch
+jume patches/felucca-bsp/0010-uac-in-tap.patch (ring UAC-out du bsp). Les deux patches vont
+ensemble ; sans le patch bsp, uac_in_peek() n'existe pas et ce patch ne compile pas —
+appliquer les deux, ou aucun (sans APP_USB_IN le firmware zuluTek fonctionne quand même :
+app_usb_in n'est alors jamais appelé).
+
+--- a/device/uac_mix.h
++++ b/device/uac_mix.h
+@@
+ #if FELUCCA_UAC_OUT
++#if defined(APP_USB_IN)
++    extern uint32_t uac_in_peek(int32_t *dst, uint32_t n);   /* patch felucca-bsp: copie sans consommer */
++    {                                                        /* audio entrant USB -> hook app (échantillonnage) */
++        int32_t tb[512];
++        uint32_t got = uac_in_peek(tb, n > 256u ? 256u : n);
++        if (got)
++            app_usb_in(tb, got);
++    }
++#endif
+     uac_play(o, n, full ? play_q12 : (master * master >> 12) * play_q12 >> 12);   /* the computer's audio, at MASTER */
+ #else
+*** End of patch ***
+
+Note de revue : ce fichier est un patch texte à appliquer avec `git apply` dans le clone
+fm1-base (les contextes exacts seront validés au premier build JieLi ; uac_mix.h est inclus
+une seule fois par device/main_fm1.c).

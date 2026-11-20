@@ -260,6 +260,26 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSiren(JNIEnv *, j
     ztek_siren(zte(NULL, h), on, lvl, t, fb);
 }
 
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSirenWave(JNIEnv *, jclass, jlong h, jint w)
+{
+    ztek_siren_wave(zte(NULL, h), w);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSirenWaveGet(JNIEnv *, jclass, jlong h)
+{
+    return ztek_siren_wave_get(zte(NULL, h));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSirenMix(JNIEnv *, jclass, jlong h, jfloat m)
+{
+    ztek_siren_mix(zte(NULL, h), m);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSirenMixGet(JNIEnv *, jclass, jlong h)
+{
+    return ztek_siren_mix_get(zte(NULL, h));
+}
+
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumPlay(JNIEnv *, jclass, jlong h, jint on)
 {
     ztek_drum_play(zte(NULL, h), on);
@@ -632,6 +652,15 @@ ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixGetStrip(JNI
     return ztek_mix_get_strip(zte(NULL, h), strip, param);
 }
 
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixSetMaster(JNIEnv *, jclass, jlong h, jint param, jfloat v)
+{
+    ztek_mix_set_master(zte(NULL, h), param, v);
+}
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixGetMaster(JNIEnv *, jclass, jlong h, jint param)
+{
+    return ztek_mix_get_master(zte(NULL, h), param);
+}
+
 ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMasterPeak(JNIEnv *, jclass, jlong h)
 {
     return ztek_master_peak(zte(NULL, h));
@@ -678,4 +707,60 @@ ZTEK_JNI jlongArray JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssignWords
     jlongArray arr = env->NewLongArray(ZTEK_AWORDS);
     if (arr) env->SetLongArrayRegion(arr, 0, ZTEK_AWORDS, out);
     return arr;
+}
+
+/* ---- pedalboard FX (menu FX) ---- */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxslotSet(JNIEnv *, jclass, jlong h,
+    jint slot, jint type, jfloat p0, jfloat p1, jfloat p2, jfloat p3, jfloat mix)
+{
+    ztek_fxslot_set(zte(NULL, h), slot, type, p0, p1, p2, p3, mix);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxslotType(JNIEnv *, jclass, jlong h, jint slot)
+{
+    return ztek_fxslot_type(zte(NULL, h), slot);
+}
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxslotPar(JNIEnv *, jclass, jlong h, jint slot, jint k)
+{
+    return ztek_fxslot_par(zte(NULL, h), slot, k);
+}
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxslotMix(JNIEnv *, jclass, jlong h, jint slot)
+{
+    return ztek_fxslot_mix(zte(NULL, h), slot);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxchainOrder(JNIEnv *env, jclass, jlong h, jintArray order)
+{
+    jint tmp[ZTEK_NCHAIN] = {0,1,2,3};
+    if (!order) { ztek_fxchain_order(zte(NULL, h), tmp); return; }
+    jsize n = env->GetArrayLength(order);
+    if (n > ZTEK_NCHAIN) n = ZTEK_NCHAIN;
+    env->GetIntArrayRegion(order, 0, n, tmp);
+    ztek_fxchain_order(zte(NULL, h), tmp);
+}
+ZTEK_JNI jintArray JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxchainOrderGet(JNIEnv *env, jclass, jlong h)
+{
+    int o[ZTEK_NCHAIN];
+    ztek_fxchain_order_get(zte(NULL, h), o);
+    jintArray arr = env->NewIntArray(ZTEK_NCHAIN);
+    if (arr) { jint t[ZTEK_NCHAIN]; for (int i = 0; i < ZTEK_NCHAIN; i++) t[i] = o[i]; env->SetIntArrayRegion(arr, 0, ZTEK_NCHAIN, t); }
+    return arr;
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxchainMix(JNIEnv *, jclass, jlong h, jint chain, jfloat m)
+{
+    ztek_fxchain_mix(zte(NULL, h), chain, m);
+}
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxchainMixGet(JNIEnv *, jclass, jlong h, jint chain)
+{
+    return ztek_fxchain_mix_get(zte(NULL, h), chain);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxblockSave(JNIEnv *, jclass, jlong h, jint blk)
+{
+    ztek_fxblock_save(zte(NULL, h), blk);
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxblockLoad(JNIEnv *, jclass, jlong h, jint blk)
+{
+    ztek_fxblock_load(zte(NULL, h), blk);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxblockUsed(JNIEnv *, jclass, jlong h, jint blk)
+{
+    return ztek_fxblock_used(zte(NULL, h), blk);
 }
