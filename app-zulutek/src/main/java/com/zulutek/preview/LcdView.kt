@@ -180,7 +180,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             // panneau "sens interdit": rond rouge plein + barre blanche horizontale (🚫)
             val cx = 120f
             val cy = 62f
-            val pulse = 1f + 0.15f * kotlin.math.sin(now / 40.0)
+            val pulse = 1f + 0.15f * kotlin.math.sin(now / 40f)
             val r = 12f * pulse
             mono.color = REC_RED
             c.drawCircle(cx, cy, r, mono)                       // disque rouge plein
@@ -190,7 +190,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         } else if (now < st.hintUntil && st.hintMsg.isNotEmpty()) {
             // contextual suggestion bubble (valid assignment): small turquoise "pop" + text below
             frame.color = FLUO_TURQ
-            val pulse = 1f + 0.15f * kotlin.math.sin(now / 40.0)
+            val pulse = 1f + 0.15f * kotlin.math.sin(now / 40f)
             c.drawCircle(120f, 62f, 6f * pulse, frame)
             text(c, 6f, 92f, st.hintMsg, FLUO_TURQ, 9f)
         }
