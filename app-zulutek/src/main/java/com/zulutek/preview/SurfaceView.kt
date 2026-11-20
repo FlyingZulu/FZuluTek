@@ -41,10 +41,18 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         // 27 keys F3..G5: white keys (16) carry slot indices, black keys (11) MIDI notes
         val BLACK_NOTES = intArrayOf(54, 56, 58, 61, 63, 66, 68, 70, 73, 75, 78)
         val WHITE_NOTES = intArrayOf(53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79)
-        const val KEY_TOP = 150f
-        const val KEY_BOT = 270f
-        const val BLACK_H = 90f
     }
+
+    // layout selon st.viewCompact (OPTIONS > VUE = CLAV/AUTO) : clavier -30 %, contrôles agrandis (APK only)
+    private fun encH() = if (st.viewCompact) 96f else 72f
+    private fun encCy() = encH() / 2f
+    private fun encR() = if (st.viewCompact) 34f else 24f
+    private fun btnY0() = encH() + 4f
+    private fun btnRowH() = if (st.viewCompact) 36f else 30f
+    private fun btnH() = btnRowH() - 6f
+    private fun keyTop() = btnY0() + 2 * btnRowH() + 14f      // 150 plein, 186 compact
+    private fun keyBot() = 270f
+    private fun blackH() = (keyBot() - keyTop()) * 0.75f       // 90 plein, 63 compact
 
     private val mono = Paint().apply { typeface = Typeface.MONOSPACE; isAntiAlias = false; style = Paint.Style.FILL }
     private val frame = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 1f }
@@ -71,9 +79,9 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
 
     private fun zoneAt(x: Float, y: Float): Pair<Int, Int> {
         return when {
-            y < 72f -> 1 to ((x / width * 7f).toInt().coerceIn(0, 6))
-            y < 132f -> 2 to ((((y - 72f) / 30f).toInt() * 7 + (x / width * 7f).toInt()).coerceIn(0, 13))
-            y < KEY_TOP + BLACK_H -> {
+            y < encH() -> 1 to ((x / width * 7f).toInt().coerceIn(0, 6))
+            y < btnY0() + 2 * btnRowH() -> 2 to ((((y - btnY0()) / btnRowH()).toInt() * 7 + (x / width * 7f).toInt()).coerceIn(0, 13))
+            y < keyTop() + blackH() -> {
                 val w = whiteW()
                 for (bi in BLACK_NOTES.indices) {
                     val e = blackEntry(bi)
@@ -124,15 +132,15 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         // ---- encoders ----
         for (i in 0 until 7) {
             val cx = encX(i)
-            val cy = 36f
+            val cy = encCy()
             frame.color = if (st.popUntil[i] > System.currentTimeMillis()) LcdView.FLUO_TURQ else LcdView.DIM
-            c.drawCircle(cx, cy, 24f, frame)
+            c.drawCircle(cx, cy, encR(), frame)
             val v = st.encVals[i]
             frame.color = LcdView.FLUO_TURQ
             val a = -2.356f + v * 4.712f
-            c.drawLine(cx, cy, cx + 18f * cos(a), cy + 18f * sin(a), frame)
+            c.drawLine(cx, cy, cx + encR() * 0.75f * cos(a), cy + encR() * 0.75f * sin(a), frame)
             mono.color = LcdView.DIM; mono.textSize = 9f
-            c.drawText(st.encLabels[i], cx - 9f, 66f, mono)
+            c.drawText(st.encLabels[i], cx - 9f, encH() - 6f, mono)
         }
 
         // ---- 14 buttons, 2 rows of 7 ----
@@ -141,17 +149,17 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             val row = i / 7
             val col = i % 7
             val x0 = col * bw + 3f
-            val y0 = 76f + row * 30f
+            val y0 = btnY0() + row * btnRowH()
             val active = (i == 10 && st.playing) || (i == 11 && st.recArmed) || (i == 9 && st.seqOn) ||
                          (st.slotRec.getOrElse(st.selSlot) { false } && i == 11) ||
                          (i == 5 && st.sirenMode && (System.currentTimeMillis() / 260) % 2 == 0L) ||
                          ((i == 5 || i == 11) && st.loopRecArm >= 0 && (System.currentTimeMillis() / 260) % 2 == 0L)
             frame.color = if (active) LcdView.REC_RED else LcdView.DIM
-            c.drawRect(x0, y0, x0 + bw - 6f, y0 + 24f, frame)
+            c.drawRect(x0, y0, x0 + bw - 6f, y0 + btnH(), frame)
             mono.color = if (active) LcdView.INK else LcdView.DIM
             mono.textSize = 9f
             val labels = if (st.labelsZulu) ZULU_LABELS else BTN_LABELS
-            c.drawText(labels[i], x0 + 4f, y0 + 16f, mono)
+            c.drawText(labels[i], x0 + 4f, y0 + btnH() - 8f, mono)
         }
 
         // ---- keys: whites then blacks on top ----
@@ -169,13 +177,13 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                 i == st.selSlot -> LcdView.AMBER
                 else -> LcdView.DIM
             }
-            c.drawRect(x0 + 1f, KEY_TOP, x0 + w - 1f, KEY_BOT, frame)
+            c.drawRect(x0 + 1f, keyTop(), x0 + w - 1f, keyBot(), frame)
         }
         for (bi in BLACK_NOTES.indices) {
             val x0 = blackEntry(bi).first
             val note = BLACK_NOTES[bi]
             frame.color = if (note == st.curNote) LcdView.FLUO_PINK else Color.argb(255, 60, 60, 60)
-            c.drawRect(x0, KEY_TOP, x0 + w * 0.6f, KEY_TOP + BLACK_H, frame)
+            c.drawRect(x0, keyTop(), x0 + w * 0.6f, keyTop() + blackH(), frame)
         }
     }
 

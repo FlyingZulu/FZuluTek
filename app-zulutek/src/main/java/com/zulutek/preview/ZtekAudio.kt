@@ -516,6 +516,10 @@ object ZtekAudio {
     fun eco(): Int = if (handle != 0L) nativeGetEco(handle) else 0
     private external fun nativeSetEco(handle: Long, on: Int)
     private external fun nativeGetEco(handle: Long): Int
+    fun setLuxe(on: Int) { if (handle != 0L) nativeSetLuxe(handle, on) }     // OPTIONS > LUXE (APK only)
+    fun luxe(): Int = if (handle != 0L) nativeGetLuxe(handle) else 0
+    private external fun nativeSetLuxe(handle: Long, on: Int)
+    private external fun nativeGetLuxe(handle: Long): Int
 
     /* ---- pedalboard FX (menu FX, REC+FX) : 4 chaînes x 3 slots = 12 ---- */
     const val NCHAIN = 4

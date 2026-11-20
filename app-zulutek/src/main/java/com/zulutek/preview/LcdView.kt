@@ -150,7 +150,11 @@ class LcdState {
     var polyArmed = false                           // POLY pressé : le prochain pad tapé sera désigné leader
     var ecoOn = false                               // OPTIONS > ECO ON : LCD throttlé + blink figé
     var labelsZulu = false                          // OPTIONS > LABELS = ZULU (APK only, cosmétique)
-    var optRow = 0                                  // page OPTIONS (9) : ligne sélectionnée
+    var viewMode = 0                                // OPTIONS > VUE (APK only) : 0 PLEIN, 1 CLAV, 2 AUTO
+    var viewCompact = false                         // vue CLAV résolue (PLEIN/CLAV/AUTO + link up)
+    var luxeOn = false                              // OPTIONS > LUXE ON (APK only)
+    var monkeyUntil = 0L                            // pop singe 400 ms à la connexion link (VUE=AUTO)
+    var optRow = 0                                  // page OPTIONS (16) : ligne sélectionnée (SEL)
     var mixStrip = 0                                // page MIX (11) : tranche sélectionnée (0..3, 4=master)
     val stripCut = FloatArray(4)                    // filtre traversant par tranche
     val stripFmode = IntArray(4)                    // 0 LP, 1 neutre, 2 HP
@@ -409,6 +413,17 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         }
         // logo REC rouge clignotant en haut à droite (procédure REC armée)
         if (st.loopRecArm >= 0 && blink) { mono.color = REC_RED; c.drawCircle(226f, 11f, 5f, mono) }
+
+        // pop singe 400 ms à la connexion d'un lien (FM-1/ZTF ou peer ZuluLink) — OPTIONS > VUE = AUTO
+        if (now < st.monkeyUntil) {
+            val mx = 200f; val my = 24f
+            frame.color = FLUO_YEL; mono.color = FLUO_YEL
+            c.drawCircle(mx - 7f, my - 4f, 4f, frame)
+            c.drawCircle(mx + 7f, my - 4f, 4f, frame)
+            c.drawCircle(mx, my, 8f, frame)
+            c.drawCircle(mx - 3f, my - 2f, 1.2f, mono)
+            c.drawCircle(mx + 3f, my - 2f, 1.2f, mono)
+        }
 
         // ---- veille auto : décor PCB + Nyan Cat, puis écran éteint + lampe torche ----
         if (st.veillePhase > 0) {
@@ -964,14 +979,24 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             c.restore()
             return
         }
-        // ---- page OPTIONS (16) : OPTIONS > ECO = OFF/ON (CHOKE LDR déplacé en LDR par tranche, page MIX) ----
+        // ---- page OPTIONS (16) : liste — SEL=navigue, ALG=valeur live, REC/tout bouton=quitte, Shift=reset ----
         if (st.page == 16) {
             text(c, 6f, 15f, "OPTIONS", FLUO_TURQ, 12f)
-            text(c, 6f, 60f, "ECO", FLUO_TURQ, 10f)
-            text(c, 90f, 60f, if (st.ecoOn) "ON" else "OFF", if (st.ecoOn) FLUO_YEL else INK, 10f)
-            text(c, 6f, 80f, "LABELS", FLUO_TURQ, 10f)
-            text(c, 90f, 80f, if (st.labelsZulu) "ZULU" else "FM1", if (st.labelsZulu) FLUO_YEL else INK, 10f)
-            text(c, 6f, 232f, "K1=ECO  K2=LABELS   REC=quitte", DIM, 8f)
+            val names = arrayOf("ECO", "LABELS", "VUE", "LUXE")
+            val vals = arrayOf(
+                if (st.ecoOn) "ON" else "OFF",
+                if (st.labelsZulu) "ZULU" else "FM1",
+                arrayOf("PLEIN", "CLAV", "AUTO")[st.viewMode.coerceIn(0, 2)],
+                if (st.luxeOn) "ON" else "OFF")
+            val apkOnly = arrayOf(false, true, true, true)
+            for (r in 0..3) {
+                val y = 48f + r * 32f
+                val sel = r == st.optRow.coerceIn(0, 3)
+                text(c, 6f, y, (if (sel) ">" else " ") + " " + names[r], if (sel) FLUO_YEL else INK, 10f)
+                text(c, 96f, y, vals[r], if (sel) FLUO_YEL else INK, 10f)
+                if (apkOnly[r]) text(c, 156f, y, "APK", DIM, 8f)
+            }
+            text(c, 6f, 232f, "SEL=nav ALG=valeur REC=quitte Shift=reset", DIM, 8f)
             c.restore()
             return
         }

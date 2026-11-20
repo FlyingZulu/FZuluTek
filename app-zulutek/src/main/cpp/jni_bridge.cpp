@@ -94,6 +94,15 @@ ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeGetEco(JNIEnv *, 
     return ztek_get_eco(zte(NULL, h));
 }
 
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSetLuxe(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_set_luxe(zte(NULL, h), on);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeGetLuxe(JNIEnv *, jclass, jlong h)
+{
+    return ztek_get_luxe(zte(NULL, h));
+}
+
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePunch(JNIEnv *, jclass, jlong h,
     jint on, jint type, jfloat a, jfloat b, jfloat mix)
 {
