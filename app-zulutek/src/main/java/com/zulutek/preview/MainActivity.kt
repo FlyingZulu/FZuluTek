@@ -201,7 +201,7 @@ class MainActivity : Activity(), SurfaceListener {
                         st.fxSlotMix[s] = ZtekAudio.fxslotMix(s)
                     }
                     for (c in 0..3) st.fxChainMix[c] = ZtekAudio.fxchainMixGet(c)
-                    st.fxChainOrder.copyFrom(ZtekAudio.fxchainOrderGet())
+                    ZtekAudio.fxchainOrderGet().copyInto(st.fxChainOrder)
                 }
             }
             if (st.page == 12) {   // PATCH v3 : rebâtit toutes les vues depuis les bitsets du moteur
@@ -713,7 +713,7 @@ class MainActivity : Activity(), SurfaceListener {
                         val pos = ord.indexOf(st.fxChainSel)
                         val np = (pos + 1) % 4
                         val t = ord[pos]; ord[pos] = ord[np]; ord[np] = t
-                        st.fxChainOrder.copyFrom(ord)
+                        ord.copyInto(st.fxChainOrder)
                         ZtekAudio.fxchainOrder(ord)
                     }
                 }
