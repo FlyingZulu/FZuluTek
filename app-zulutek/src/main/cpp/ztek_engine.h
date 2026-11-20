@@ -98,6 +98,26 @@ void ztek_xy_hold(ztek_t *z, int holdMode);
 /* ---- sirène (mode SIREN, triple-tap GLO côté FM-1) -------------------------------- */
 void ztek_siren(ztek_t *z, int on, float lvl, float t, float fb);
 
+/* ---- page MIX + sous-page baie de patch (façon AUM) --------------------------------
+ * MIX : niveaux des 16 slots + aux (send vers PoW!) + gain du bus LOOP. */
+void ztek_mix_set_vol(ztek_t *z, int slot, float v);      /* ML_SP_VOL */
+void ztek_mix_set_aux(ztek_t *z, int slot, int on);       /* ML_SP_FX : slot -> PoW! */
+void ztek_mix_set_gain(ztek_t *z, float g);               /* loop_gain (page MIX) */
+float ztek_mix_get_gain(const ztek_t *z);
+
+/* baie de patch : src/dst en bitsets. src: 0 VOIX 1 SIREN 2 SMP/AIN 3 bus LOOP.
+ * dst: 0 chaîne FX 1 MASTER (direct) 2 entrée anneau PoW! */
+#define ZTEK_PSRC_VOIX 0
+#define ZTEK_PSRC_SIREN 1
+#define ZTEK_PSRC_SMP 2
+#define ZTEK_PSRC_LOOP 3
+#define ZTEK_PDST_FX 0
+#define ZTEK_PDST_MASTER 1
+#define ZTEK_PDST_POW 2
+void ztek_patch_set(ztek_t *z, int src, int dst, int on);
+int  ztek_patch_get(const ztek_t *z, int src, int dst);
+int  ztek_patch_compat(int src, int dst);           /* 0 = connexion impossible (estompée dans la baie) */
+
 #ifdef __cplusplus
 }
 #endif

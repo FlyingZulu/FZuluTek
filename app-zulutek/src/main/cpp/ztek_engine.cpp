@@ -98,6 +98,9 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     } snap[16], kit[16], undo_st[3], redo_st[3];
     int undo_n, redo_n;
 
+    /* baie de patch : patch[src] = bitset des dst */
+    uint32_t patch[4];
+
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) override
     {
         if (stream == out.get()) {
@@ -246,6 +249,10 @@ ztek_t *ztek_create(float sr)
     z->siren_ph = 0.0f; z->siren_f = 600.0f; z->siren_out = 0.0f; z->siren_sw = 0.0f;
     z->punch_on = 0; z->punch_type = 0; z->punch_a = z->punch_b = z->punch_mix = 0.0f;
     z->undo_n = 0; z->redo_n = 0;
+    z->patch[ZTEK_PSRC_VOIX] = 1u << ZTEK_PDST_FX;    /* voix -> FX par défaut */
+    z->patch[ZTEK_PSRC_SIREN] = 1u << ZTEK_PDST_FX;
+    z->patch[ZTEK_PSRC_SMP] = 1u << ZTEK_PDST_MASTER;  /* SMP/AIN -> master direct */
+    z->patch[ZTEK_PSRC_LOOP] = 1u << ZTEK_PDST_MASTER;
     memset(z->fxparam, 0, sizeof z->fxparam);
     memset(z->snap, 0, sizeof z->snap);
     memset(z->kit, 0, sizeof z->kit);
@@ -372,6 +379,44 @@ void ztek_loop_rs_start(ztek_t *z, int dst, uint16_t monmask, int fmt, int khz)
 void ztek_loop_rs_stop(ztek_t *z) { ml_rs_stop(&z->loop); }
 
 int ztek_loop_rs_rec(const ztek_t *z) { return z->loop.rs_rec; }
+
+/* ---- page MIX + baie de patch ------------------------------------------------------- */
+
+void ztek_mix_set_vol(ztek_t *z, int slot, float v) { ml_set_sp(&z->loop, slot, ML_SP_VOL, v); }
+void ztek_mix_set_aux(ztek_t *z, int slot, int on) { ml_set_sp(&z->loop, slot, ML_SP_FX, on ? 1.0f : 0.0f); }
+void ztek_mix_set_gain(ztek_t *z, float g) { z->loop.loop_gain = g < 0.0f ? 0.0f : g > 2.0f ? 2.0f : g; }
+float ztek_mix_get_gain(const ztek_t *z) { return z->loop.loop_gain; }
+
+/* table de compatibilité de la baie (comme VCV Rack/miRack : les ports incompatibles
+ * sont estompés) : lignes = sources (VOIX SIREN SMP LOOP), colonnes = dst (FX MASTER POW!).
+ * SIREN->POW! et LOOP->FX sont impossibles (la sirène n'entre pas dans l'anneau PoW! ;
+ * le bus LOOP est en événements -> voix, pas dans la chaîne FX). */
+static const uint8_t ZTEK_PATCH_COMPAT[4][3] = {
+    {1, 1, 1},   /* VOIX  -> FX, MASTER, POW! */
+    {1, 1, 0},   /* SIREN -> FX, MASTER       */
+    {1, 1, 1},   /* SMP   -> FX, MASTER, POW! */
+    {0, 1, 1},   /* LOOP  -> MASTER, POW! (aux) */
+};
+
+int ztek_patch_compat(int src, int dst)
+{
+    if (src < 0 || src > 3 || dst < 0 || dst > 2) return 0;
+    return ZTEK_PATCH_COMPAT[src][dst];
+}
+
+void ztek_patch_set(ztek_t *z, int src, int dst, int on)
+{
+    if (src < 0 || src > 3 || dst < 0 || dst > 2) return;
+    if (on && !ZTEK_PATCH_COMPAT[src][dst]) return;   /* connexion impossible : ignorée */
+    if (on) z->patch[src] |= (1u << dst);
+    else z->patch[src] &= ~(1u << dst);
+}
+
+int ztek_patch_get(const ztek_t *z, int src, int dst)
+{
+    if (src < 0 || src > 3 || dst < 0 || dst > 2) return 0;
+    return (z->patch[src] >> dst) & 1u;
+}
 
 void ztek_acid_generate(ztek_t *z, uint32_t seed)
 {
@@ -681,29 +726,67 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
         if (z->engine == 0) at_render(&z->voice, z->mono, blk);
         else bass_render(&z->bass, z->mono, blk);
 
-        /* 3b. sirène : deux sinus désaccordés, balayage lent 300..1400 Hz (période = siren_t) */
-        if (z->siren_on) {
+        /* sirène / SMP branchés selon la baie de patch : ->FX = pré-FX (dans mono) */
+        if (z->siren_on && (z->patch[ZTEK_PSRC_SIREN] & (1u << ZTEK_PDST_FX))) {
             float fsr = 1.0f / z->sr;
-            float period = 0.5f + 7.5f * z->siren_t;          /* s */
+            float period = 0.5f + 7.5f * z->siren_t;
             z->siren_sw += (float)blk / (z->sr * period);
             if (z->siren_sw >= 1.0f) z->siren_sw -= 1.0f;
             z->siren_f = 300.0f + 1100.0f * (0.5f + 0.5f * fm_sin_turns(z->siren_sw));
             for (uint32_t i = 0; i < blk; i++) {
                 z->siren_ph += z->siren_f * fsr;
                 if (z->siren_ph >= 1.0f) z->siren_ph -= 1.0f;
-                float s = fm_sin_turns(z->siren_ph) + 0.5f * fm_sin_turns(z->siren_ph * 2.003f + z->siren_fb);
-                z->siren_out = s * 0.5f * z->siren_lvl;
-                z->mono[i] += z->siren_out;
+                float sv = fm_sin_turns(z->siren_ph) + 0.5f * fm_sin_turns(z->siren_ph * 2.003f + z->siren_fb);
+                z->mono[i] += sv * 0.25f * z->siren_lvl;
+            }
+        }
+        /* SMP -> FX : le sample est mixé dans le bus pré-FX */
+        int smp_prefx = z->smp_play && z->smp_len > 0 &&
+                        (z->patch[ZTEK_PSRC_SMP] & (1u << ZTEK_PDST_FX));
+        if (smp_prefx) {
+            uint32_t s0 = (uint32_t)(z->smp_start * (float)z->smp_len);
+            uint32_t s1 = (uint32_t)(z->smp_end * (float)z->smp_len);
+            if (s1 <= s0) s1 = s0 + 1;
+            if (s1 > z->smp_len) s1 = z->smp_len;
+            float semis = (z->smp_pitch - 0.5f) * 48.0f;
+            float ratio = fm_exp2f(semis / 12.0f);
+            if (z->smp_mode == 3) ratio *= 0.5f;
+            uint32_t span = s1 - s0;
+            for (uint32_t i = 0; i < blk; i++) {
+                if (z->smp_delay > 0) { z->smp_delay--; continue; }
+                uint32_t pp = (uint32_t)z->smp_pos;
+                if (pp >= span) { z->smp_play = 0; break; }
+                float fr = (float)pp - fm_floorf((float)pp);
+                uint32_t p1 = pp + 1 < span ? pp + 1 : pp;
+                float x = z->smp[s0 + pp] + (z->smp[s0 + p1] - z->smp[s0 + pp]) * fr;
+                z->mono[i] += x * z->smp_vol * 0.9f;
+                z->smp_pos += (double)ratio;
             }
         }
 
-        /* 4. FX chain (mono in, stereo out) + the resample ring */
-        fx_process(z->mono, outL + done, outR + done, blk);
+        /* 4. FX chain (mono in, stereo out) — ou master direct si VOIX -> MASTER */
+        if (z->patch[ZTEK_PSRC_VOIX] & (1u << ZTEK_PDST_FX)) {
+            fx_process(z->mono, outL + done, outR + done, blk);
+        } else {
+            for (uint32_t i = 0; i < blk; i++) { outL[done + i] = z->mono[i]; outR[done + i] = z->mono[i]; }
+        }
         ml_rs_feed(&z->loop, z->mono, blk);
         ml_rs_render(&z->loop, outL + done, outR + done, blk);
 
-        /* 4b. SMP page: one-shot playback of the audio-in buffer, START..END, pitch/mode */
-        if (z->smp_play && z->smp_len > 0) {
+        /* sirène -> MASTER (direct, post-FX) */
+        if (z->siren_on && (z->patch[ZTEK_PSRC_SIREN] & (1u << ZTEK_PDST_MASTER))) {
+            float fsr = 1.0f / z->sr;
+            for (uint32_t i = 0; i < blk; i++) {
+                z->siren_ph += z->siren_f * fsr;
+                if (z->siren_ph >= 1.0f) z->siren_ph -= 1.0f;
+                float sv = fm_sin_turns(z->siren_ph) + 0.5f * fm_sin_turns(z->siren_ph * 2.003f + z->siren_fb);
+                outL[done + i] += sv * 0.25f * z->siren_lvl;
+                outR[done + i] += sv * 0.25f * z->siren_lvl;
+            }
+        }
+
+        /* 4b. SMP page: one-shot playback (post-FX si SMP -> MASTER, pré-FX sinon géré plus haut) */
+        if (z->smp_play && z->smp_len > 0 && !smp_prefx) {
             uint32_t s0 = (uint32_t)(z->smp_start * (float)z->smp_len);
             uint32_t s1 = (uint32_t)(z->smp_end * (float)z->smp_len);
             if (s1 <= s0) s1 = s0 + 1;

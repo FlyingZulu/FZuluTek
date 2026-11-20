@@ -65,6 +65,19 @@ class MainActivity : Activity(), SurfaceListener {
             if (st.page == 1) {   // page LOOP : rafraîchit PITCH/POS/MODE/MUT/SRC/VOL
                 for (k in 0 until 6) st.loopParam[k] = ZtekAudio.loopGetSp(st.selSlot, k)
             }
+            if (st.page == 6) {   // MIX : niveaux/aux/gain
+                st.mixGain = ZtekAudio.mixGetGain()
+                for (i in 0 until 16) {
+                    st.slotVol[i] = ZtekAudio.loopGetSp(i, ZtekAudio.ML_SP_VOL)
+                    st.slotAux[i] = ZtekAudio.loopGetSp(i, 5) > 0.5f   // ML_SP_FX
+                }
+            }
+            if (st.page == 7) {   // PATCH : état des connexions + compatibilité depuis le moteur
+                for (r in 0 until 4) for (d in 0 until 3) {
+                    st.patchGrid[r * 3 + d] = ZtekAudio.patchGet(r, d) == 1
+                    st.patchOk[r * 3 + d] = ZtekAudio.patchCompat(r, d) == 1
+                }
+            }
             val peers = ZuluLink.peersSnapshot()
             st.linkPeers = peers.count { !it.lost }
             st.linkName = peers.firstOrNull { !it.lost }?.name?.take(6)?.let { ":$it" } ?: ""
@@ -124,7 +137,15 @@ class MainActivity : Activity(), SurfaceListener {
             val by = ev.y / s / LcdView.H
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    if (st.page == 4) {          // page XY : le LCD tactile devient le pad
+                    if (st.page == 7) {          // baie de patch : tap cellule = toggle connexion
+                        val r = ((by * LcdView.H - 52f) / 44f).toInt().coerceIn(0, 3)
+                        val d = ((bx * LcdView.W - 96f) / 46f).toInt().coerceIn(0, 2)
+                        if (by * LcdView.H >= 52f && by * LcdView.H <= 52f + 4 * 44f) {
+                            st.patchRow = r; st.patchCol = d
+                            togglePatch(r, d)
+                        }
+                        lcd.invalidate()
+                    } else if (st.page == 4) {   // page XY : le LCD tactile devient le pad
                         val now = System.currentTimeMillis()
                         if (now - lastLcdTap < 350) {   // double-tap = HOLD/MOM
                             st.xyHold = !st.xyHold
@@ -239,7 +260,12 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.xySet(0, 0f, 0f)
                 lcd.invalidate()
             }
-            "REC" -> if (st.page == 1) { st.page = 0; lcd.invalidate() } else ZtekAudio.redo()
+            "REC" -> when (st.page) { 1, 6, 7 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
+            "DLY" -> {
+                val old = st.page
+                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 6; else -> old }
+                if (st.page != old) lcd.invalidate()
+            }
             "REV" -> if (st.page == 1) {
                 // resample : enregistre les slots actifs dans le slot sélectionné (ring µ-law 32 kHz)
                 var mask = 0
@@ -267,6 +293,24 @@ class MainActivity : Activity(), SurfaceListener {
                        st.xyTargetNames[0] = st.targetName(xyT[0]); st.xyTargetNames[1] = st.targetName(xyT[1]) }
                 3 -> { st.xyX = v; if (st.xyOn) ZtekAudio.xySet(1, st.xyX, st.xyY) }
                 4 -> { st.xyY = v; if (st.xyOn) ZtekAudio.xySet(1, st.xyX, st.xyY) }
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 7) {                     // baie de patch : SEL=rangée(source) ALG=colonne(dest)
+            when (i) {
+                0 -> st.patchRow = (v * 3.999f).toInt().coerceIn(0, 3)
+                2 -> st.patchCol = (v * 2.999f).toInt().coerceIn(0, 2)
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 6) {                     // MIX : SEL=slot K1=vol PRE=aux>POW ALG=gain bus
+            when (i) {
+                0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
+                3 -> { st.slotVol[st.selSlot] = v; ZtekAudio.mixSetVol(st.selSlot, v) }
+                1 -> { val on = if (v > 0.5f) 1 else 0; st.slotAux[st.selSlot] = on == 1; ZtekAudio.mixSetAux(st.selSlot, on) }
+                2 -> { st.mixGain = v * 2f; ZtekAudio.mixSetGain(st.mixGain) }
             }
             lcd.invalidate()
             return
@@ -390,6 +434,10 @@ class MainActivity : Activity(), SurfaceListener {
             }
             5 -> { // POW! : REC = quitter
                 if (label == "REC") { st.page = 0; ZtekAudio.punch(0, 0, 0f, 0f, 0f); lcd.invalidate() }
+                return
+            }
+            6, 7 -> { // MIX / PATCH : PLAY bascule la connexion au curseur (page 7)
+                if (label == "PLAY" && st.page == 7) togglePatch(st.patchRow, st.patchCol)
                 return
             }
         }
@@ -547,6 +595,16 @@ class MainActivity : Activity(), SurfaceListener {
         }
         st.pop(9)
         lcd.invalidate()
+    }
+
+    /* bascule la connexion source r -> destination d dans la baie de patch
+     * (les connexions incompatibles sont estompées et ignorées, façon VCV Rack/miRack) */
+    private fun togglePatch(r: Int, d: Int) {
+        if (ZtekAudio.patchCompat(r, d) == 0) return
+        val on = 1 - ZtekAudio.patchGet(r, d)
+        ZtekAudio.patchSet(r, d, on)
+        st.patchGrid[r * 3 + d] = on == 1
+        st.pop(9)
     }
 
     private fun syncSlots() {

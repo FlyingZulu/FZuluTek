@@ -88,6 +88,22 @@ class LcdState {
     val punchNames = arrayOf("OFF", "REPEAT", "1/16REP", "1/8DN", "1/8UP", "SHRINK", "BUILD",
         "STRETCH", "ECHO", "REVERSE", "STOP", "SCRATCH", "LPF", "CRUSH", "GATE")
 
+    // page MIX (6) + sous-page baie de patch (7)
+    var mixGain = 1f
+    val slotVol = FloatArray(16)
+    val slotAux = BooleanArray(16)          // send vers PoW!
+    val patchGrid = BooleanArray(12)        // 4 sources x 3 dests, index = row*3+col
+    val patchOk = BooleanArray(12)          // compatibilité (VCV Rack/miRack : l'incompatible est estompé)
+    var patchRow = 0                        // curseur : SELECT = rangée (source)
+    var patchCol = 0                        // ALGO = colonne (destination)
+    val patchSrcNames = arrayOf("VOIX", "SIREN", "SMP", "LOOP")
+    val patchDstNames = arrayOf("FX", "MASTER", "POW!")
+    val patchCableColors = intArrayOf(
+        Color.rgb(255, 45, 160), Color.rgb(255, 238, 0), Color.rgb(0, 255, 224),
+        Color.rgb(255, 60, 60), Color.rgb(255, 160, 40), Color.rgb(150, 80, 255),
+        Color.rgb(60, 220, 90), Color.rgb(60, 160, 255), Color.rgb(255, 120, 200),
+        Color.rgb(120, 200, 255), Color.rgb(220, 255, 120), Color.rgb(255, 200, 90))
+
     val targetNames = arrayOf(
         "TUN", "CUT", "RES", "ENV", "DEC", "ACC", "WAV", "ENG",
         "DRVT", "DRV", "TONE", "LVL", "MODT", "RATE", "DEPT", "MIX",
@@ -343,6 +359,80 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             }
             text(c, 6f, 200f, "K1=type K2=a K3=b K4=mix PRE=slot", DIM, 8f)
             text(c, 6f, 214f, "maintenir une touche blanche = PoW!  long-REV = quitter", DIM, 8f)
+            c.restore()
+            return
+        }
+
+        // ---- page MIX (6) : niveaux des 16 slots, aux -> PoW!, gain du bus LOOP ----
+        if (st.page == 6) {
+            text(c, 6f, 15f, "MIX", FLUO_TURQ, 12f)
+            text(c, 60f, 15f, "AUX>POW", DIM, 9f)
+            for (i in 0 until 16) {
+                val col = i / 8
+                val row = i % 8
+                val x0 = 6f + col * 116f
+                val y0 = 26f + row * 24f
+                val sel = i == st.selSlot
+                box(c, x0, y0, x0 + 70f, y0 + 18f, if (sel) FLUO_TURQ else DIM)
+                text(c, x0 + 3f, y0 + 13f, "${i + 1}${if (st.slotAux[i]) "*" else " "}", INK, 9f)
+                frame.color = if (st.slotOn[i]) FLUO_YEL else Color.argb(255, 60, 60, 60)
+                c.drawLine(x0 + 34f, y0 + 14f, x0 + 34f + 32f * st.slotVol[i], y0 + 14f, frame)
+            }
+            text(c, 6f, 224f, "MIX", DIM, 9f)
+            box(c, 40f, 216f, 234f, 232f, DIM)
+            frame.color = FLUO_TURQ
+            c.drawLine(42f, 224f, 42f + 188f * (st.mixGain / 2f).coerceIn(0f, 1f), 224f, frame)
+            text(c, 6f, 240f - 4f, "SEL=slot K1=vol PRE=aux ALG=MIX long-DLY=PATCH long-REC=quitte", DIM, 8f)
+            c.restore()
+            return
+        }
+
+        // ---- sous-page baie de patch (7) : grille sources x destinations, curseur SEL/ALGO ----
+        if (st.page == 7) {
+            text(c, 6f, 15f, "PATCH", FLUO_TURQ, 12f)
+            text(c, 70f, 15f, "SEL=rangée ALG=colonne", DIM, 8f)
+            // colonnes (destinations)
+            for (d in 0 until 3) {
+                val x0 = 96f + d * 46f
+                text(c, x0, 34f, st.patchDstNames[d], if (d == st.patchCol) FLUO_YEL else DIM, 9f)
+            }
+            // rangées (sources) + câbles ; l'incompatible est estompé, le compatible lumineux
+            val DIMC = Color.argb(255, 70, 70, 70)
+            for (r in 0 until 4) {
+                val y0 = 52f + r * 44f
+                val rowOk = st.patchOk.getOrElse(r * 3) { true }
+                text(c, 6f, y0 + 12f, st.patchSrcNames[r],
+                    if (r == st.patchRow) FLUO_YEL else if (rowOk) INK else DIMC, 10f)
+                box(c, 88f, y0, 238f, y0 + 30f, DIMC)
+                for (d in 0 until 3) {
+                    val x0 = 96f + d * 46f
+                    val ok = st.patchOk[r * 3 + d]
+                    val on = st.patchGrid[r * 3 + d]
+                    // destination : estompée si incompatible, lumineuse sinon
+                    if (!ok) {
+                        frame.color = DIMC
+                        c.drawRect(x0 + 4f, y0 + 8f, x0 + 34f, y0 + 22f, frame)
+                        if (r == st.patchRow && d == st.patchCol)
+                            text(c, x0 + 12f, y0 + 22f, "×", DIMC, 10f)   // sens interdit
+                    } else {
+                        if (on) {
+                            frame.color = st.patchCableColors[(r * 3 + d) % st.patchCableColors.size]
+                            frame.strokeWidth = 2.5f
+                            c.drawLine(x0, y0 + 15f, x0 + 38f, y0 + 15f, frame)
+                            frame.strokeWidth = 1f
+                        } else {
+                            frame.color = Color.argb(255, 150, 150, 150)
+                            c.drawRect(x0 + 4f, y0 + 8f, x0 + 34f, y0 + 22f, frame)
+                        }
+                        // curseur
+                        if (r == st.patchRow && d == st.patchCol) {
+                            frame.color = if (blink) FLUO_PINK else INK
+                            c.drawRect(x0 - 2f, y0 + 2f, x0 + 40f, y0 + 28f, frame)
+                        }
+                    }
+                }
+            }
+            text(c, 6f, 236f, "PLAY/tap cellule = connecte/déconnecte  long-DLY=retour MIX  long-REC=quitte", DIM, 8f)
             c.restore()
             return
         }

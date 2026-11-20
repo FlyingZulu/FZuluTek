@@ -152,6 +152,15 @@ object ZtekAudio {
     fun loopRsStop() { if (handle != 0L) nativeLoopRsStop(handle) }
     fun loopRsRec(): Boolean = handle != 0L && nativeLoopRsRec(handle)
 
+    /* page MIX + baie de patch (src: 0 VOIX 1 SIREN 2 SMP 3 LOOP ; dst: 0 FX 1 MASTER 2 POW!) */
+    fun mixSetVol(slot: Int, v: Float) { if (handle != 0L) nativeMixSetVol(handle, slot, v) }
+    fun mixSetAux(slot: Int, on: Int) { if (handle != 0L) nativeMixSetAux(handle, slot, on) }
+    fun mixSetGain(g: Float) { if (handle != 0L) nativeMixSetGain(handle, g) }
+    fun mixGetGain(): Float = if (handle != 0L) nativeMixGetGain(handle) else 1f
+    fun patchSet(src: Int, dst: Int, on: Int) { if (handle != 0L) nativePatchSet(handle, src, dst, on) }
+    fun patchGet(src: Int, dst: Int): Int = if (handle != 0L) nativePatchGet(handle, src, dst) else 0
+    fun patchCompat(src: Int, dst: Int): Int = if (handle != 0L) nativePatchCompat(handle, src, dst) else 0
+
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeStart(handle: Long): Boolean
@@ -199,4 +208,11 @@ object ZtekAudio {
     private external fun nativeLoopRsStart(handle: Long, dst: Int, monmask: Int, fmt: Int, khz: Int)
     private external fun nativeLoopRsStop(handle: Long)
     private external fun nativeLoopRsRec(handle: Long): Boolean
+    private external fun nativeMixSetVol(handle: Long, slot: Int, v: Float)
+    private external fun nativeMixSetAux(handle: Long, slot: Int, on: Int)
+    private external fun nativeMixSetGain(handle: Long, g: Float)
+    private external fun nativeMixGetGain(handle: Long): Float
+    private external fun nativePatchSet(handle: Long, src: Int, dst: Int, on: Int)
+    private external fun nativePatchGet(handle: Long, src: Int, dst: Int): Int
+    private external fun nativePatchCompat(handle: Long, src: Int, dst: Int): Int
 }
