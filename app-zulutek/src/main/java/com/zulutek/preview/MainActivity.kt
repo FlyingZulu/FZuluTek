@@ -76,6 +76,25 @@ class MainActivity : Activity(), SurfaceListener {
     }
     private fun setEncLabels(labels: Array<String>) { st.encLabels = labels }
 
+    /* page FINE (18) — 4 knobs façon Shruthi, idem firmware patch 0012 (page 14 FM-1) */
+    private fun syncFineBank() {
+        val b = st.fineBank.coerceIn(0, ZtekAudio.FINE_BANKS.size - 1)
+        st.fineBank = b
+        val opts = ZtekAudio.FINE_BANK_OPT[b]
+        setEncLabels(arrayOf("BNK", "PRE", "ALG",
+            ZtekAudio.FINE_OPT_NAMES[opts[0]], ZtekAudio.FINE_OPT_NAMES[opts[1]],
+            ZtekAudio.FINE_OPT_NAMES[opts[2]], ZtekAudio.FINE_OPT_NAMES[opts[3]]))
+        st.encVals[0] = b / (ZtekAudio.FINE_BANKS.size - 1).toFloat()
+        for (k in 0..3) {
+            val idx = opts[k]
+            val v = ZtekAudio.optionGet(idx)
+            st.fineVals[idx] = v
+            st.encVals[3 + k] = if (idx == ZtekAudio.FINE_OPT_MORPH) v / 255f
+                                else v.toFloat() / (ZtekAudio.fineOptCount(idx) - 1).coerceAtLeast(1)
+        }
+    }
+    private fun enterFine() { syncFineBank() }
+
     /* page MACRO : resynchronise slot/dst/sub/val depuis le moteur */
     private fun syncMacroSel() {
         if (ZtekAudio.macroUsed(st.macSlot) == 1) {
@@ -175,6 +194,9 @@ class MainActivity : Activity(), SurfaceListener {
                     st.stripAuxLoop[s] = ZtekAudio.mixGetStrip(s, ZtekAudio.MIX_AUX_LOOP)
                 }
             }
+            if (st.page == 18) {   // page FINE : rafraîchit les valeurs depuis le moteur
+                for (i in 0 until ZtekAudio.FINE_NOPT) st.fineVals[i] = ZtekAudio.optionGet(i)
+            }
             if (st.page == 12) {   // PATCH v3 : rebâtit toutes les vues depuis les bitsets du moteur
                 val idx = ZtekAudio.SRC_IDX
                 val words = Array(idx.size) { ZtekAudio.assignWords(idx[it]) }
@@ -246,6 +268,12 @@ class MainActivity : Activity(), SurfaceListener {
         ZtekAudio.loopSetLeader(st.loopLeader)
         ZtekAudio.drumSetLeader(st.drumLeader)
         ZtekAudio.setEngine(0)
+        // page FINE (18) : options persistées (équivalent OBJ_OPTIONS côté FM-1, patch 0012)
+        for (i in 0 until ZtekAudio.FINE_NOPT) {
+            val fv = optsPrefs.getInt("fine_$i", -1)
+            if (fv >= 0) ZtekAudio.setOption(i, fv)
+            st.fineVals[i] = ZtekAudio.optionGet(i)
+        }
         ZtekAudio.setBpm(bpm)
         ZtekAudio.setRoot(root)
         ZtekAudio.setScale(scale)
@@ -420,10 +448,13 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.xySet(0, 0f, 0f)
                 lcd.invalidate()
             }
-            "REC" -> when (st.page) { 1, in 6..16 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
+            "REC" -> when (st.page) { 1, in 6..16 -> { st.page = 0; lcd.invalidate() };
+                    18 -> { st.page = 0; setEncLabels(arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")); lcd.invalidate() }
+                    else -> ZtekAudio.redo() }
             "DLY" -> {
                 val old = st.page
-                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 8; 8 -> 9; 9 -> 10; 10 -> 11; 11 -> 12; 12 -> 13; 13 -> 14; 14 -> 15; 15 -> 16; 16 -> 0; else -> old }
+                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 8; 8 -> 9; 9 -> 10; 10 -> 11; 11 -> 12; 12 -> 13; 13 -> 14; 14 -> 15; 15 -> 16; 16 -> 18; 18 -> 0; else -> old }
+                if (st.page == 18) enterFine()
                 if (st.page == 12 && old == 11) {   // depuis MIX, la baie s'ouvre sur la boîte LOOP
                     st.patchView = 2
                     st.modBox = ZtekAudio.MOD_NAME.indexOf("LOOP")
@@ -458,6 +489,12 @@ class MainActivity : Activity(), SurfaceListener {
         if (i == 0) {   // appui SEL = page MIX (bible : « page MIX (SEL) ») — raccourci dédié au mixage
             st.page = if (st.page == 11) 0 else 11
             if (st.page == 11) st.patchView = 0
+            lcd.invalidate()
+        }
+        if (i == 1) {   // appui PRE = page FINE (18) — idem REC+EDIT sur FM-1 (patch 0012)
+            st.page = if (st.page == 18) 0 else 18
+            if (st.page == 18) enterFine()
+            else setEncLabels(arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4"))
             lcd.invalidate()
         }
     }
@@ -704,6 +741,25 @@ class MainActivity : Activity(), SurfaceListener {
                         st.drumLeader = if (on) 1 else 0
                         optsPrefs.edit().putBoolean("ldr", on).apply()
                     }
+                }
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 18) {   // page FINE : SEL=banque, K1..K4 = 4 options de la banque (idem patch 0012)
+            when (i) {
+                0 -> {
+                    val b = (v * (ZtekAudio.FINE_BANKS.size - 1).toFloat()).toInt().coerceIn(0, ZtekAudio.FINE_BANKS.size - 1)
+                    if (b != st.fineBank) { st.fineBank = b; syncFineBank() }
+                }
+                in 3..6 -> {
+                    val idx = ZtekAudio.FINE_BANK_OPT[st.fineBank][i - 3]
+                    val n = if (idx == ZtekAudio.FINE_OPT_MORPH) 256 else ZtekAudio.fineOptCount(idx)
+                    val raw = (v * (n - 1)).toInt().coerceIn(0, n - 1)
+                    ZtekAudio.setOption(idx, raw)
+                    st.fineVals[idx] = raw
+                    st.encVals[i] = v
+                    optsPrefs.edit().putInt("fine_$idx", raw).apply()
                 }
             }
             lcd.invalidate()

@@ -204,6 +204,13 @@ trop coûteux sur l'AC791N et contraire à « tout linkable »). Depuis le pack 
 comme destinations de la matrice (`labApply` au-delà de `ZT_NDST`) pour qu'un LFO puisse aussi piloter
 les macros.
 
+## Page FINE (18 APK, page 14 FM-1 — patch 0012) — 4 knobs façon Shruthi sur les réglages fins voix
+
+Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 = 4 réglages du banc**.
+- OSC : PW / SQ_DROOP / SAW_RESET / SAW_DROOP · FILTRE : MODEL ORG/NEW (`f_model`) / MORPH LP→HP (`f_morph`) / DRIVE / OTA · AMP : SLIDE / LEGATO / SAT / DRIFT
+- APK : appui **PRE** (ou DLY dans le cycle) = page 18 ; persistance `ztek_opts` (`fine_$idx`) + presets/snapshots (champ `opt[]` du POD). Moteur : `ztek_set_option/get_option` (opt 0..10 = `AT_OPT_*`, 11 = model, 12 = morph 0..255).
+- FM-1 (patch 0012) : REC maintenu + EDIT = page 14, GLO quitte ; CC MIDI 84..96 ; persistance OBJ_OPTIONS (OPT5). Numérotation : page 17 APK prise par PR #13 (LINK) → FINE = 18 côté APK, 14 côté FM-1.
+
 ## OPTIONS (page 9 APK, long-SCL ; OBJ_OPTIONS OPT6 côté FM-1)
 
 - **OPTIONS > ECO = OFF/ON** (« MODE ECO (BATTERIE) », comme Zulu v0.33) — mode éco DSP/RAM :

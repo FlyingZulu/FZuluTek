@@ -49,6 +49,7 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     at_voice_t voice;
     bass_t bass;
     float param[AT_NPARAMS];        /* last AT_ values, re-applied on engine switch */
+    uint8_t opt[ZTEK_NOPT];         /* page FINE : réglages fins voix (AT_OPT_* + f_model + f_morph) */
 
     ml_t loop;
     drum_t drum;                    /* boîte à rythmes (source DRUMS), bus propre z->drumbuf */
@@ -151,6 +152,7 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
         float strip_vol[ZTEK_NSTRIP];
         int   strip_mut[ZTEK_NSTRIP];
         float strip_aux[ZTEK_NSTRIP][4];   /* pow, loop, aux1, aux2 */
+        uint8_t opt[ZTEK_NOPT];            /* page FINE (préservé par snapshots/kits/undo) */
     } snap[16], kit[16], undo_st[3], redo_st[3];
     int undo_n, redo_n;
 
@@ -302,7 +304,14 @@ ztek_t *ztek_create(float sr)
     z->scale = 0;
 
     at_init(&z->voice, sr);
-    at_option(&z->voice, AT_OPT_DRIFT, 1);
+    for (int i = 0; i < AT_NOPTS; i++) {         /* page FINE : defaults AT_OPT_DEFAULT (DRIFT subtle inclus) */
+        z->opt[i] = AT_OPT_DEFAULT[i];
+        at_option(&z->voice, i, z->opt[i]);
+    }
+    z->opt[AT_NOPTS] = 0;                         /* filtre ORG */
+    z->opt[AT_NOPTS + 1] = 0;                     /* morph LP */
+    z->voice.f_model = 0;
+    z->voice.f_morph = 0.0f;
     bass_init(&z->bass, sr);
     for (int p = 0; p < AT_NPARAMS; p++) {
         z->param[p] = 0.5f;
@@ -502,6 +511,30 @@ void ztek_set_param(ztek_t *z, int param, float v)
     z->dst_base[param] = v;
     at_set(&z->voice, param, v);
     bass_set(&z->bass, param, v);
+}
+
+void ztek_set_option(ztek_t *z, int opt, int v)   /* page FINE (APK 18 / firmware 0012) */
+{
+    if (opt < 0 || opt >= ZTEK_NOPT) return;
+    if (opt == AT_NOPTS + 1) {                     /* morph LP->HP continu 0..255 */
+        if (v < 0) v = 0;
+        if (v > 255) v = 255;
+        z->opt[opt] = (uint8_t)v;
+        z->voice.f_morph = (float)v / 255.0f;
+    } else {
+        int n = opt == AT_NOPTS ? 2 : AT_OPT_N[opt];
+        if (v < 0) v = 0;
+        if (v >= n) v = n - 1;
+        z->opt[opt] = (uint8_t)v;
+        if (opt == AT_NOPTS) z->voice.f_model = v;
+        else at_option(&z->voice, opt, v);
+    }
+}
+
+int ztek_get_option(const ztek_t *z, int opt)
+{
+    if (opt < 0 || opt >= ZTEK_NOPT) return 0;
+    return z->opt[opt];
 }
 
 void ztek_set_engine(ztek_t *z, int engine)
@@ -834,6 +867,7 @@ static void ztek_capture(ztek_t *z, ztek_t::ztek_state_t *s)
     s->engine = z->engine;
     memcpy(s->param, z->param, sizeof s->param);
     memcpy(s->fx, z->fxparam, sizeof s->fx);
+    memcpy(s->opt, z->opt, sizeof s->opt);
     s->punch_on = z->punch_on; s->punch_type = z->punch_type;
     s->pa = z->punch_a; s->pb = z->punch_b; s->pmix = z->punch_mix;
     s->xy_on = z->xy_on; s->xy_hold = z->xy_hold;
@@ -867,6 +901,7 @@ static void ztek_apply(ztek_t *z, const ztek_t::ztek_state_t *s)
     ztek_set_engine(z, s->engine);
     for (i = 0; i < AT_NPARAMS; i++) ztek_set_param(z, i, s->param[i]);
     for (i = 0; i < FX_NPARAMS; i++) ztek_fx_set(z, i, s->fx[i]);
+    for (i = 0; i < ZTEK_NOPT; i++) ztek_set_option(z, i, s->opt[i]);
     ztek_punch(z, s->punch_on, s->punch_type, s->pa, s->pb, s->pmix);
     z->xy_hold = s->xy_hold;
     z->xy_target[0] = s->xy_target[0]; z->xy_target[1] = s->xy_target[1];
@@ -1799,6 +1834,7 @@ void ztek_preset_save(ztek_t *z, int part, int slot)
     p->engine = z->engine;
     memcpy(p->param, z->param, sizeof(p->param));
     memcpy(p->fx, z->fx_base, sizeof(p->fx));
+    memcpy(p->opt, z->opt, sizeof(p->opt));
     p->bpm = z->bpm;
     p->root = z->root;
     p->scale = z->scale;
@@ -1827,6 +1863,7 @@ void ztek_preset_load(ztek_t *z, int part, int slot)
     ztek_set_engine(z, p->engine);
     for (int i = 0; i < AT_NPARAMS; i++) ztek_set_param(z, i, p->param[i]);
     for (int i = 0; i < FX_NPARAMS; i++) ztek_fx_set(z, i, p->fx[i]);
+    for (int i = 0; i < ZTEK_NOPT; i++) ztek_set_option(z, i, p->opt[i]);
     ztek_set_bpm(z, p->bpm);
     ztek_set_root(z, p->root);
     ztek_set_scale(z, p->scale);

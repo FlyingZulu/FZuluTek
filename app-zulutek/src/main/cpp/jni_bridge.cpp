@@ -679,3 +679,14 @@ ZTEK_JNI jlongArray JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAssignWords
     if (arr) env->SetLongArrayRegion(arr, 0, ZTEK_AWORDS, out);
     return arr;
 }
+
+/* page FINE (APK 18 / firmware patch 0012) : réglages fins voix */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSetOption(JNIEnv *, jclass, jlong h, jint opt, jint v)
+{
+    ztek_set_option(zte(NULL, h), opt, v);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeOptionGet(JNIEnv *, jclass, jlong h, jint opt)
+{
+    return ztek_get_option(zte(NULL, h), opt);
+}

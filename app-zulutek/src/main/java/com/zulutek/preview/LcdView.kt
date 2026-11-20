@@ -70,6 +70,9 @@ class LcdState {
 
     // pages : 0 MAIN, 1 LOOP (édition slot), 2 SNAP, 3 KIT, 4 XY
     var page = 0
+    // page FINE (18) : banc courant + valeurs des 13 options (idem firmware 0012)
+    var fineBank = 0
+    val fineVals = IntArray(ZtekAudio.FINE_NOPT)
     val snapFilled = BooleanArray(16)
     val kitFilled = BooleanArray(16)
     val loopParam = FloatArray(6)       // PITCH POS MODE MUT SRC VOL du slot édité
@@ -736,6 +739,27 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             return
         }
 
+        if (st.page == 18) {   // page FINE : 4 colonnes façon Shruthi (SEL = banc, K1..K4 = réglages)
+            val b = st.fineBank.coerceIn(0, ZtekAudio.FINE_BANKS.size - 1)
+            text(c, 6f, 15f, "FINE ${b + 1}/${ZtekAudio.FINE_BANKS.size} ${ZtekAudio.FINE_BANKS[b]}", FLUO_TURQ, 12f)
+            val opts = ZtekAudio.FINE_BANK_OPT[b]
+            for (k in 0..3) {
+                val idx = opts[k]
+                val v = st.fineVals[idx]
+                val n = ZtekAudio.fineOptCount(idx)
+                val x0 = 6f + k * 58f
+                text(c, x0, 60f, ZtekAudio.FINE_OPT_NAMES[idx], DIM, 8f)
+                text(c, x0, 80f, ZtekAudio.fineValName(idx, v), INK, 10f)
+                box(c, x0, 90f, x0 + 50f, 100f, DIM)
+                val w = if (idx == ZtekAudio.FINE_OPT_MORPH) 50f * v / 255f else 50f * v / (n - 1).coerceAtLeast(1)
+                mono.color = FLUO_YEL; mono.style = Paint.Style.FILL
+                c.drawRect(x0, 90f, x0 + w, 100f, mono)
+                text(c, x0, 116f, "K${k + 1}", DIM, 8f)
+            }
+            text(c, 6f, 232f, "SEL=banc  appui PRE=quitte  DLY=cycle", DIM, 8f)
+            c.restore()
+            return
+        }
         // ---- page OPTIONS (16) : OPTIONS > ECO = OFF/ON, CHOKE LDR = ON/OFF ----
         if (st.page == 16) {
             text(c, 6f, 15f, "OPTIONS", FLUO_TURQ, 12f)

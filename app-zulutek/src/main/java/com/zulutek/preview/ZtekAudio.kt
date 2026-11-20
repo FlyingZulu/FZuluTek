@@ -18,6 +18,33 @@ object ZtekAudio {
     const val AT_WAVE = 6
     const val AT_ENGINE = 7
 
+    /* page FINE (18) : réglages fins voix — même contrat que le firmware (patch 0012).
+     * opt 0..10 = AT_OPT_*, 11 = f_model (ORG/NEW), 12 = f_morph 0..255 (LP->HP). */
+    const val AT_NOPTS = 11
+    const val FINE_OPT_MODEL = 11
+    const val FINE_OPT_MORPH = 12
+    const val FINE_NOPT = 13
+    val FINE_OPT_NAMES = arrayOf("PW", "SQ DRP", "SAW RS", "SAW DRP", "DRIVE", "SLIDE", "LEGATO",
+        "OTA", "SAT", "DRIFT", "UNIT", "MODEL", "MORPH")
+    private val FINE_NCHOICES = intArrayOf(5, 5, 4, 4, 3, 3, 2, 3, 3, 4, 4, 2, 256)
+    val FINE_VALS = arrayOf(
+        arrayOf("44%", "47%", "50%", "53%", "56%"), arrayOf("NONE", "8HZ", "15HZ", "30HZ", "60HZ"),
+        arrayOf("1US", "3US", "8US", "20US"), arrayOf("0.7", "3", "8", "15"), arrayOf("0dB", "+6dB", "+12dB"),
+        arrayOf("60ms", "120ms", "220ms"), arrayOf("OFF", "ON"), arrayOf("NONE", "SOFT", "HARD"),
+        arrayOf("NONE", "SOFT", "HARD"), arrayOf("NONE", "SUBTLE", "MARKED", "HEAVY"), arrayOf("1", "2", "3", "4"),
+        arrayOf("ORG", "NEW"), arrayOf("LP", "HP"))
+    fun fineOptCount(idx: Int): Int = FINE_NCHOICES.getOrElse(idx) { 2 }
+    fun fineValName(idx: Int, v: Int): String =
+        if (idx == FINE_OPT_MORPH) "${v * 100 / 255}%" else FINE_VALS[idx].getOrElse(v) { "?" }
+    /* bancs façon Shruthi (SEL = banc, K1..K4 = réglages du banc) — idem firmware 0012 */
+    val FINE_BANKS = arrayOf("OSC", "FILTRE", "AMP")
+    val FINE_BANK_OPT = arrayOf(
+        intArrayOf(0, 1, 2, 3),                          // OSC : PW / SQ DRP / SAW RS / SAW DRP
+        intArrayOf(FINE_OPT_MODEL, FINE_OPT_MORPH, 4, 7), // FILTRE : MODEL / MORPH / DRIVE / OTA
+        intArrayOf(5, 6, 8, 9))                          // AMP : SLIDE / LEGATO / SAT / DRIFT
+    fun setOption(opt: Int, v: Int) { if (handle != 0L) nativeSetOption(handle, opt, v) }
+    fun optionGet(opt: Int): Int = if (handle != 0L) nativeOptionGet(handle, opt) else 0
+
     /* the FX_ param ids (dsp/fx.h) */
     const val FX_DRIVE_TYPE = 0
     const val FX_DRIVE = 1
@@ -231,6 +258,8 @@ object ZtekAudio {
     private external fun nativeAllNotesOff(handle: Long)
     private external fun nativeSetParam(handle: Long, p: Int, v: Float)
     private external fun nativeSetEngine(handle: Long, e: Int)
+    private external fun nativeSetOption(handle: Long, opt: Int, v: Int)
+    private external fun nativeOptionGet(handle: Long, opt: Int): Int
     private external fun nativeSetBpm(handle: Long, bpm: Float)
     private external fun nativeSetRoot(handle: Long, root: Int)
     private external fun nativeSetScale(handle: Long, s: Int)
