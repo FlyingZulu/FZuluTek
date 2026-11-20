@@ -492,6 +492,10 @@ class MainActivity : Activity(), SurfaceListener {
     }
 
     /* v3 onglet PRESETS : PLAY = export ZTP1 vers filesDir/ztek/presets, SEQ = import .ztp1, ARP = load dans l'APK */
+    /** nom companion ZPRE d'un preset (part/slot) — mapping à confirmer quand le patch firmware ZPRE sera mergé */
+    private fun zpreName(part: Int, slot: Int): String =
+        "ZPRE%02d".format((part * ZtekAudio.ZT_NPRESETS + slot).coerceIn(0, 31))
+
     private fun linkPresetExport() {
         val part = st.linkDst
         val slot = st.linkSel.coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
@@ -499,7 +503,13 @@ class MainActivity : Activity(), SurfaceListener {
         if (blob == null) { hint("preset vide"); return }
         val f = java.io.File(SampleLibrary.presetsDir(this), "P${part}S%02d.ztp1".format(slot))
         f.writeBytes(blob)
-        st.linkStatus = "export -> ${f.name} (${blob.size} o)"
+        if (Fm1Usb.connected) {
+            val zn = zpreName(part, slot)
+            Fm1Usb.pushNamed(zn, blob, "PUSH $zn")
+            st.linkStatus = "export ${f.name} + push $zn (${blob.size} o)"
+        } else {
+            st.linkStatus = "export -> ${f.name} (${blob.size} o)"
+        }
         lcd.invalidate()
     }
 

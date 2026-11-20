@@ -322,7 +322,7 @@ object Fm1Usb {
         return ok
     }
 
-    /** pousse vers un fichier nommé (ZSMP00..07 / ZLUP00..07 / ZMAC) */
+    /** pousse vers un fichier nommé (ZSMP00..07 / ZLUP00..07 / ZMAC / ZPRE00..31 / ZKIT) */
     fun pushNamed(name: String, data: ByteArray, label: String = "PUSH"): Boolean {
         var ok = false
         run(label) {
