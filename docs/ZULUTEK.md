@@ -209,7 +209,7 @@ les macros.
 Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 = 4 réglages du banc**.
 - OSC : PW / SQ_DROOP / SAW_RESET / SAW_DROOP · FILTRE : MODEL ORG/NEW (`f_model`) / MORPH LP→HP (`f_morph`) / DRIVE / OTA · AMP : SLIDE / LEGATO / SAT / DRIFT
 - APK : appui **PRE** (ou DLY dans le cycle) = page 18 ; persistance `ztek_opts` (`fine_$idx`) + presets/snapshots (champ `opt[]` du POD). Moteur : `ztek_set_option/get_option` (opt 0..10 = `AT_OPT_*`, 11 = model, 12 = morph 0..255).
-- FM-1 (patch 0012, PR #15 — **pas encore mergé côté firmware au 2026-11-20 ~20:30Z → page FINE = « APK en avance »**) : REC maintenu + EDIT = page 14, GLO quitte ; CC MIDI 84..96 ; persistance OBJ_OPTIONS (OPT5). Numérotation : page 17 APK prise par PR #13 (LINK) → FINE = 18 côté APK, 14 côté FM-1.
+- FM-1 (patch 0012, PR #15 **mergée** → **parité FINE atteinte** FM-1 page 14 ↔ APK page 18) : REC maintenu + EDIT = page 14, GLO quitte ; CC MIDI 84..96 ; persistance OBJ_OPTIONS (OPT5). Numérotation : page 17 APK prise par PR #13 (LINK) → FINE = 18 côté APK, 14 côté FM-1.
 
 ## OPTIONS (page 9 APK, long-SCL ; OBJ_OPTIONS OPT6 côté FM-1)
 
