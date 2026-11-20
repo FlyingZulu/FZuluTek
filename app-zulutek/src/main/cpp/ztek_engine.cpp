@@ -80,7 +80,7 @@ int ztek_start(ztek_t *z)
      ->setSampleRate((int32_t)z->sr)
      ->setChannelCount(2)
      ->setFormat(oboe::AudioFormat::Float)
-     ->setCallback(z);
+     ->setDataCallback(z);
     oboe::Result r = b.openStream(z->out);
     if (r != oboe::Result::OK) {
         b.setSharingMode(oboe::SharingMode::Shared);
