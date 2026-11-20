@@ -16,7 +16,8 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
   LFO = 4 LFO + 4 labos, matrice ASSIGN typée façon VCV Rack out→in avec sens interdit 🚫 rond
   rouge + barre blanche + suggestions, option LUDIQUE, presets pré-patchés 8 usine + banc libre
   3 parties × 16 slots, molette PRESET en live), **pages 11 MIX + 12 PATCH** (baie de patch façon
-  AUM agglomérée depuis PR #1 @ 7d87264). CI verte.
+  AUM agglomérée depuis PR #1 @ 7d87264), **page 13 ARP** (arpégiateur : bouton ARP on/off, modes
+  UP/DOWN/UP-DOWN/RANDOM/AS-PLAYED, 1..4 octaves, divisions 1/4..1/16 triolets, gate). CI verte.
 - **PR #1** `vibe/zulutek-midi-looper-c9ef18` (`7d87264`) — session B : moteur de base restauré
   (veille Nyan, SMP, bend Lot D, ZuluLink, SNAP/KIT/undo, XY, POW!, sirène) + page MIX/baie de
   patch. CI verte.

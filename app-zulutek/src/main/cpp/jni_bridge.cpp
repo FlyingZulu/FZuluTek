@@ -289,6 +289,32 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopRandp(JNIEnv 
     ztek_loop_randp(zte(NULL, h), p);
 }
 
+/* arpégiateur (bouton ARP, page 13) */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeArpOn(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_arp_set_on(zte(NULL, h), on);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeArpGetOn(JNIEnv *, jclass, jlong h)
+{
+    return ztek_arp_get_on(zte(NULL, h));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeArpKnob(JNIEnv *, jclass, jlong h, jint k, jfloat v)
+{
+    ztek_arp_knob(zte(NULL, h), k, v);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeArpKnobGet(JNIEnv *, jclass, jlong h, jint k)
+{
+    return ztek_arp_knob_get(zte(NULL, h), k);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeArpHeld(JNIEnv *, jclass, jlong h)
+{
+    return ztek_arp_held(zte(NULL, h));
+}
+
 /* modulation: 16 sources x 4 knobs (pages LFO/ENV) */
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeModKnob(JNIEnv *, jclass, jlong h, jint src, jint k, jfloat v)
 {

@@ -242,6 +242,14 @@ object ZtekAudio {
     fun seqMutate(layer: Int) { if (handle != 0L) nativeSeqMutate(handle, layer) }
     fun loopMutate(slot: Int, layer: Int) { if (handle != 0L) nativeLoopMutate(handle, slot, layer) }  // ENV/LFO/SEQ sur les loops
     fun loopRandp(p: Float) { if (handle != 0L) nativeLoopRandp(handle, p) }                             // RAND au wrap des loops
+    /* arpégiateur (bouton ARP, page 13) : k=0 MODE 1 OCT 2 DIV 3 GATE */
+    val ARP_MODES = arrayOf("UP", "DOWN", "UP-DN", "RAND", "PLAY")
+    val ARP_DIVS = arrayOf("1/4", "1/8", "1/16", "1/32", "1/8T", "1/16T")
+    fun arpOn(on: Int) { if (handle != 0L) nativeArpOn(handle, on) }
+    fun arpGetOn(): Int = if (handle != 0L) nativeArpGetOn(handle) else 0
+    fun arpKnob(k: Int, v: Float) { if (handle != 0L) nativeArpKnob(handle, k, v) }
+    fun arpKnobGet(k: Int): Float = if (handle != 0L) nativeArpKnobGet(handle, k) else 0f
+    fun arpHeld(): Int = if (handle != 0L) nativeArpHeld(handle) else 0
     fun modKnob(src: Int, k: Int, v: Float) { if (handle != 0L) nativeModKnob(handle, src, k, v) }
     fun modKnobGet(src: Int, k: Int): Float = if (handle != 0L) nativeModKnobGet(handle, src, k) else 0f
     fun lfoOpt(which: Int, on: Int) { if (handle != 0L) nativeLfoOpt(handle, which, on) }
@@ -288,6 +296,11 @@ object ZtekAudio {
     private external fun nativeSeqMutate(handle: Long, layer: Int)
     private external fun nativeLoopMutate(handle: Long, slot: Int, layer: Int)
     private external fun nativeLoopRandp(handle: Long, p: Float)
+    private external fun nativeArpOn(handle: Long, on: Int)
+    private external fun nativeArpGetOn(handle: Long): Int
+    private external fun nativeArpKnob(handle: Long, k: Int, v: Float)
+    private external fun nativeArpKnobGet(handle: Long, k: Int): Float
+    private external fun nativeArpHeld(handle: Long): Int
     private external fun nativeModKnob(handle: Long, src: Int, k: Int, v: Float)
     private external fun nativeModKnobGet(handle: Long, src: Int, k: Int): Float
     private external fun nativeLfoOpt(handle: Long, which: Int, on: Int)

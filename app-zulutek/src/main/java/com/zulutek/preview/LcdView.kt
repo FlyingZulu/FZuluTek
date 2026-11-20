@@ -113,7 +113,9 @@ class LcdState {
 
     /* pack SEQ+ (PR #3) : pages 6 SEQ+, 7 LFO, 8 ENV, 9 ASSIGN, 10 PRESETS */
     val pageNames2 = mapOf(6 to "SEQ+", 7 to "LFO", 8 to "ENV", 9 to "ASSIGN", 10 to "PRESETS",
-        11 to "MIX", 12 to "PATCH")
+        11 to "MIX", 12 to "PATCH", 13 to "ARP")
+    var arpOn = false
+    val arpVals = FloatArray(4)             // MODE OCT DIV GATE
     var sub = 0
     val srcVals = FloatArray(16)
     var lfoSync = false
@@ -533,7 +535,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
 
         // ---- pack SEQ+ (PR #3): pages 6..10 + MIX/PATCH (PR #1 agglomérés): 6..12 ----
-        if (st.page >= 6 && st.page <= 12) {
+        if (st.page >= 6 && st.page <= 13) {
             val pn = st.pageNames2[st.page] ?: "?"
             text(c, 6f, 105f, pn, FLUO_TURQ, 10f)
             when (st.page) {
@@ -579,6 +581,17 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                     text(c, 116f, 105f, "SLT", DIM, 8f)
                     text(c, 140f, 105f, "${st.psSlot + 1}${if (st.psUsed) "*" else " "}", INK, 9f)
                     text(c, 170f, 105f, if (st.psName.isEmpty()) "-" else st.psName, if (st.psUsed) FLUO_YEL else DIM, 9f)
+                }
+                13 -> {
+                    val m = (st.arpVals[0] * 4.99f).toInt().coerceIn(0, 4)
+                    val d = (st.arpVals[2] * 5.99f).toInt().coerceIn(0, 5)
+                    text(c, 44f, 105f, "MODE", DIM, 8f)
+                    text(c, 84f, 105f, ZtekAudio.ARP_MODES[m], FLUO_PINK, 9f)
+                    text(c, 130f, 105f, "OCT", DIM, 8f)
+                    text(c, 156f, 105f, "${1 + (st.arpVals[1] * 3.99f).toInt().coerceIn(0, 3)}", INK, 9f)
+                    text(c, 178f, 105f, ZtekAudio.ARP_DIVS[d], INK, 9f)
+                    text(c, 212f, 105f, "G${(st.arpVals[3] * 100).toInt()}", INK, 9f)
+                    text(c, 6f, 92f, "held: ${ZtekAudio.arpHeld()}", DIM, 8f)
                 }
             }
         }

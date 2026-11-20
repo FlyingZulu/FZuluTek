@@ -46,6 +46,18 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     float acid_clk;                 /* 1/64-bar accumulator */
     int seq_note;                   /* the note the sequencer is holding, -1 none */
 
+    /* arpégiateur (bouton ARP, page 13) */
+    int arp_on;
+    float arp_k[4];                 /* 0 MODE 1 OCT 2 DIV 3 GATE */
+    int arp_held[16];               /* notes tenues, triées croissant */
+    int arp_order[16];              /* notes en ordre de jeu (AS-PLAYED) */
+    int arp_n, arp_nord;
+    int arp_idx;
+    float arp_clk;                  /* accumulateur en pas */
+    int arp_note;                   /* note en cours de l'arp, -1 = aucune */
+    int32_t arp_gate;               /* échantillons restants avant le note-off */
+    uint32_t arp_rng;
+
     float *mono;                    /* scratch, ZTEK_MAX_BLOCK */
     float lbuf[ZTEK_MAX_BLOCK], rbuf[ZTEK_MAX_BLOCK];
 
@@ -198,6 +210,8 @@ void ztek_stop(ztek_t *z)
 /* ---- looper callbacks (audio thread): loop events drive the synth -------------------- */
 
 static void ztek_note_on_int(ztek_t *z, int note, int vel, int accent, int slide, int record);
+static void ztek_arp_note_in(ztek_t *z, int note, int vel);
+static void ztek_arp_note_out(ztek_t *z, int note);
 
 static void cb_note_on(void *ctx, int slot, int note, int vel)
 {
@@ -268,6 +282,16 @@ ztek_t *ztek_create(float sr)
     z->seq_step = 0;
     z->acid_clk = 0.0f;
     z->seq_note = -1;
+
+    /* arp defaults : UP, 2 octaves, 1/16, gate 50% */
+    z->arp_on = 0;
+    z->arp_k[0] = 0.0f; z->arp_k[1] = 0.34f; z->arp_k[2] = 0.4f; z->arp_k[3] = 0.5f;
+    z->arp_n = 0; z->arp_nord = 0;
+    z->arp_idx = 0;
+    z->arp_clk = 0.0f;
+    z->arp_note = -1;
+    z->arp_gate = 0;
+    z->arp_rng = 0x2545F491u;
 
     /* modulation defaults */
     for (int s = 0; s < ZT_NSRC; s++) {
@@ -369,12 +393,14 @@ static void ztek_note_on_int(ztek_t *z, int note, int vel, int accent, int slide
 
 void ztek_note_on(ztek_t *z, int note, int vel, int accent, int slide)
 {
+    if (z->arp_on) { ztek_arp_note_in(z, note, vel); return; }   /* l'arp capture les notes tenues */
     ztek_note_on_int(z, note, vel, accent, slide, 1);
 }
 
 void ztek_note_off(ztek_t *z, int note)
 {
     ml_note_off_in(&z->loop, note);
+    if (z->arp_on) { ztek_arp_note_out(z, note); return; }
     if (z->engine == 0) at_gate(&z->voice, 0, note, 0, 0);
     else bass_gate(&z->bass, 0, note, 0, 0);
 }
@@ -384,6 +410,9 @@ void ztek_all_notes_off(ztek_t *z)
     if (z->engine == 0) at_panic(&z->voice);
     else bass_panic(&z->bass);
     z->seq_note = -1;
+    z->arp_n = 0; z->arp_nord = 0;
+    z->arp_note = -1;
+    z->arp_gate = 0;
 }
 
 void ztek_set_param(ztek_t *z, int param, float v)
@@ -1476,6 +1505,128 @@ void ztek_loop_randp(ztek_t *z, float p)
     ml_set_randp(&z->loop, p);
 }
 
+/* ---- arpégiateur (bouton ARP, page 13) ------------------------------------------- */
+
+static const float ZTEK_ARP_SPB[6] = { 1.f, 2.f, 4.f, 8.f, 3.f, 6.f };  /* pas par temps : 1/4 1/8 1/16 1/32 1/8T 1/16T */
+
+static uint32_t ztek_arp_rnd(ztek_t *z)
+{
+    z->arp_rng = z->arp_rng * 1664525u + 1013904223u;
+    return z->arp_rng >> 8;
+}
+
+/* note jouée au clavier pendant que l'arp est on : enregistrée dans le looper + retenue */
+static void ztek_arp_note_in(ztek_t *z, int note, int vel)
+{
+    int i;
+    if (note < 0 || note > 127) return;
+    ml_note_in(&z->loop, note, vel, 4, z->engine == 0 ? 0 : 1);
+    for (i = 0; i < z->arp_n; i++) if (z->arp_held[i] == note) return;   /* déjà tenue */
+    if (z->arp_n == 0) z->arp_idx = 0;                                   /* 1re note : on repart du début */
+    if (z->arp_n < 16) {
+        i = z->arp_n;
+        while (i > 0 && z->arp_held[i - 1] > note) { z->arp_held[i] = z->arp_held[i - 1]; i--; }
+        z->arp_held[i] = note;
+        z->arp_n++;
+    }
+    if (z->arp_nord < 16) z->arp_order[z->arp_nord++] = note;
+}
+
+static void ztek_arp_note_out(ztek_t *z, int note)
+{
+    int i, j;
+    for (i = 0; i < z->arp_n; i++) if (z->arp_held[i] == note) {
+        for (j = i; j < z->arp_n - 1; j++) z->arp_held[j] = z->arp_held[j + 1];
+        z->arp_n--;
+        break;
+    }
+    for (i = 0; i < z->arp_nord; i++) if (z->arp_order[i] == note) {
+        for (j = i; j < z->arp_nord - 1; j++) z->arp_order[j] = z->arp_order[j + 1];
+        z->arp_nord--;
+        break;
+    }
+    if (z->arp_n == 0 && z->arp_note >= 0) {                             /* plus rien tenu : silence */
+        if (z->engine == 0) at_gate(&z->voice, 0, z->arp_note, 0, 0);
+        else bass_gate(&z->bass, 0, z->arp_note, 0, 0);
+        z->arp_note = -1;
+        z->arp_gate = 0;
+    }
+}
+
+static void ztek_arp_silence(ztek_t *z)
+{
+    if (z->arp_note >= 0) {
+        if (z->engine == 0) at_gate(&z->voice, 0, z->arp_note, 0, 0);
+        else bass_gate(&z->bass, 0, z->arp_note, 0, 0);
+        z->arp_note = -1;
+    }
+    z->arp_gate = 0;
+}
+
+static void ztek_arp_step(ztek_t *z)
+{
+    int mode = (int)(z->arp_k[0] * 4.99f); if (mode < 0) mode = 0; if (mode > 4) mode = 4;
+    int oct  = 1 + (int)(z->arp_k[1] * 3.99f); if (oct < 1) oct = 1; if (oct > 4) oct = 4;
+    int div  = (int)(z->arp_k[2] * 5.99f); if (div < 0) div = 0; if (div > 5) div = 5;
+    const int *base = (mode == 4) ? z->arp_order : z->arp_held;          /* AS-PLAYED = ordre de jeu */
+    int base_n = (mode == 4) ? z->arp_nord : z->arp_n;
+    int L, idx, note;
+    if (base_n <= 0) return;
+    L = base_n * oct;
+    switch (mode) {
+    case 1:  idx = L - 1 - (z->arp_idx % L); break;                      /* DOWN */
+    case 2: { int p = z->arp_idx % (2 * L - 2);                          /* UP-DOWN (ping-pong) */
+              idx = p < L ? p : 2 * L - 2 - p; break; }
+    case 3:  idx = (int)(ztek_arp_rnd(z) % (uint32_t)L); break;           /* RANDOM */
+    default: idx = z->arp_idx % L; break;                                /* UP / AS-PLAYED */
+    }
+    z->arp_idx++;
+    note = base[idx % base_n] + 12 * (idx / base_n);
+    if (note < 0) note = 0;
+    if (note > 127) note = 127;
+    if (z->arp_note >= 0 && z->arp_note != note) ztek_arp_silence(z);
+    ztek_note_on_int(z, note, 100, 0, 0, 0);                             /* généré : pas enregistré dans le looper */
+    z->arp_note = note;
+    {
+        float gate = z->arp_k[3] * 0.95f + 0.05f;
+        float step_s = z->sr / ((z->bpm / 60.0f) * ZTEK_ARP_SPB[div]);
+        z->arp_gate = (int32_t)(gate * step_s);
+    }
+}
+
+void ztek_arp_set_on(ztek_t *z, int on)
+{
+    on = on ? 1 : 0;
+    if (z->arp_on == on) return;
+    z->arp_on = on;
+    if (!on) {                                                           /* coupure : silence propre */
+        ztek_arp_silence(z);
+        z->arp_n = 0; z->arp_nord = 0;
+        z->arp_clk = 0.0f;
+    } else {
+        z->arp_idx = 0;
+        z->arp_clk = 1.0f;                                               /* démarre au prochain bloc */
+    }
+}
+
+int ztek_arp_get_on(const ztek_t *z) { return z->arp_on; }
+
+void ztek_arp_knob(ztek_t *z, int k, float v)
+{
+    if (k < 0 || k > 3) return;
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    z->arp_k[k] = v;
+}
+
+float ztek_arp_knob_get(const ztek_t *z, int k)
+{
+    if (k < 0 || k > 3) return 0.0f;
+    return z->arp_k[k];
+}
+
+int ztek_arp_held(const ztek_t *z) { return z->arp_n; }
+
 void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
 {
     uint32_t done = 0;
@@ -1506,6 +1657,21 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
                 while (z->acid_clk >= 1.0f) {
                     z->acid_clk -= 1.0f;
                     ztek_acid_step(z);
+                }
+            }
+        }
+
+        /* 2b. l'arpégiateur : horloge en pas + gate sur la durée du pas */
+        if (z->arp_on) {
+            int div = (int)(z->arp_k[2] * 5.99f); if (div < 0) div = 0; if (div > 5) div = 5;
+            float rate = (z->bpm / 60.0f) * ZTEK_ARP_SPB[div] / z->sr;     /* pas par échantillon */
+            uint32_t i;
+            for (i = 0; i < blk; i++) {
+                if (z->arp_gate > 0 && --z->arp_gate == 0 && z->arp_note >= 0) ztek_arp_silence(z);
+                z->arp_clk += rate;
+                while (z->arp_clk >= 1.0f) {
+                    z->arp_clk -= 1.0f;
+                    ztek_arp_step(z);
                 }
             }
         }

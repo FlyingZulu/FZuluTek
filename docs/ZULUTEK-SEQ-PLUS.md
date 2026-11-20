@@ -162,3 +162,26 @@ Même sémantique ENV/LFO/SEQ que le seq acid (`EV_MUTATE`) et le drum, appliqu�
   slot en rec protégé) → **tous OK**. `g++ -fsyntax-only` moteur + JNI → OK.
 - À faire : porter la même chose dans le patch FM-1 (patch 0006, avec la drum machine),
   et brancher `loopRandp` sur un potard (ex. SEL RAND de la page SEQ+).
+
+## 10. Arpégiateur (bouton ARP, page 13) — ajouté après le transfert
+
+Nouveau module `ztek_arp_*` dans `ztek_engine.{h,cpp}` (APK ; à porter sur FM-1 avec le patch 0006) :
+
+- **Bouton ARP** (page MAIN) : toggle on/off. Quand ARP est on, les notes du clavier alimentent
+  une liste de notes tenues (16 max, triées + ordre de jeu) — elles sont quand même enregistrées
+  dans le looper — et l'arp les rejoue en boucle. Coupure = silence propre.
+- **Page 13 ARP** : SEL=MODE, PRE=OCT, ALG=DIV, K1=GATE.
+  - MODE : UP / DOWN / UP-DOWN (ping-pong sans répéter les extrémités) / RANDOM / AS-PLAYED ;
+  - OCT : 1..4 octaves (la boucle s'étend sur held×oct, +12 st par octave) ;
+  - DIV : 1/4, 1/8, 1/16, 1/32, 1/8 triolet, 1/16 triolet (pas/temps = 1,2,4,8,3,6, synchro BPM) ;
+  - GATE : 0.05..1.0 de la durée du pas (note-off avant le pas suivant si < 1).
+- Les notes générées par l'arp ne sont PAS ré-enregistrées dans le looper (record=0) ; le seq acid
+  et les callbacks looper passent par `ztek_note_on_int` et ne sont pas interceptés.
+- JNI : `ZtekAudio.arpOn/arpKnob/arpKnobGet/arpHeld` → `nativeArpOn/nativeArpKnob/...`.
+- Navigation : REC quitte la page 13 ; DLY cycle …12→13→0.
+- **Tests hôte** (20 checks, `#include "ztek_engine.cpp"` + objets DSP C) : capture/dédup/tri,
+  UP 60-64-67 en boucle, DOWN 67-64-60, UP-DOWN ping-pong 60-64-67-64-60, OCT 2 (+12 st),
+  RANDOM dans held, AS-PLAYED ordre de jeu 67-60-64, retrait note_off, silence à vide,
+  arp off = reset, clamps knobs → **tous OK**. `g++ -fsyntax-only` moteur+JNI → OK.
+- FM-1 : le bouton ARP existe physiquement ; à câbler dans le patch (arp sur la voix courante,
+  SAVE+K1..K4 = bend déjà pris — utiliser ARP seul + K1..K4 pour MODE/OCT/DIV/GATE).

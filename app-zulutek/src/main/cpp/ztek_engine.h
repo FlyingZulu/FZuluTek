@@ -118,6 +118,19 @@ void ztek_seq_mutate(ztek_t *z, int layer);
 void ztek_loop_mutate(ztek_t *z, int slot, int layer);   /* layer 1=TIME 2=PITCH 3=ARTIC */
 void ztek_loop_randp(ztek_t *z, float p);                /* RAND global des loops 0..1 */
 
+/* ---- arpégiateur (bouton ARP, page 13) ----------------------------------------------
+ * Tant que ARP est on, les notes jouées au clavier alimentent une liste de notes tenues
+ * (elles sont quand même enregistrées dans le looper) et l'arp les rejoue en boucle :
+ *   k=0 MODE : 0 UP, 1 DOWN, 2 UP-DOWN (ping-pong), 3 RANDOM, 4 AS-PLAYED (ordre de jeu)
+ *   k=1 OCT  : 1..4 octaves
+ *   k=2 DIV  : 0=1/4 1=1/8 2=1/16 3=1/32 4=1/8 triolet 5=1/16 triolet
+ *   k=3 GATE : 0.05..1.0 de la durée du pas */
+void ztek_arp_set_on(ztek_t *z, int on);
+int  ztek_arp_get_on(const ztek_t *z);
+void ztek_arp_knob(ztek_t *z, int k, float v);           /* k = 0..3 */
+float ztek_arp_knob_get(const ztek_t *z, int k);
+int  ztek_arp_held(const ztek_t *z);                     /* nb de notes tenues (LCD) */
+
 /* ---- modulation section (pages LFO=10 and ENV/TOOLS=11) -----------------------------
  * 16 sources (ZT_NSRC), computed per 32-sample block:
  *   0..3  LFO1..4   (page LFO, subs 0..3)  knobs: RATE, WAVE, DEPTH, SHAPE

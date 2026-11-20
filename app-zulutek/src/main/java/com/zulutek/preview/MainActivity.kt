@@ -321,10 +321,10 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.xySet(0, 0f, 0f)
                 lcd.invalidate()
             }
-            "REC" -> when (st.page) { 1, in 6..12 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
+            "REC" -> when (st.page) { 1, in 6..13 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
             "DLY" -> {
                 val old = st.page
-                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 8; 8 -> 9; 9 -> 10; 10 -> 11; 11 -> 12; 12 -> 0; else -> old }
+                st.page = when (old) { 0 -> 6; 6 -> 7; 7 -> 8; 8 -> 9; 9 -> 10; 10 -> 11; 11 -> 12; 12 -> 13; 13 -> 0; else -> old }
                 if (st.page != old) lcd.invalidate()
             }
             "REV" -> if (st.page == 1) {
@@ -430,6 +430,16 @@ class MainActivity : Activity(), SurfaceListener {
                     }
                     5 -> ZtekAudio.presetClear(st.psPart, st.psSlot)
                 }
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 13) {                    // page ARP : SEL=MODE PRE=OCT ALG=DIV K1=GATE
+            when (i) {
+                0 -> { st.arpVals[0] = v; ZtekAudio.arpKnob(0, v) }
+                1 -> { st.arpVals[1] = v; ZtekAudio.arpKnob(1, v) }
+                2 -> { st.arpVals[2] = v; ZtekAudio.arpKnob(2, v) }
+                3 -> { st.arpVals[3] = v; ZtekAudio.arpKnob(3, v) }
             }
             lcd.invalidate()
             return
@@ -543,7 +553,7 @@ class MainActivity : Activity(), SurfaceListener {
         }
         // pages SNAP / KIT / LOOP / XY : les boutons gardent des rôles de page
         when (st.page) {
-            6, 7, 8, 9, 10 -> {   // pages SEQ+ / LFO / ENV / ASSIGN / PRESETS : REC = retour page MAIN
+            6, 7, 8, 9, 10, 13 -> {   // pages SEQ+ / LFO / ENV / ASSIGN / PRESETS / ARP : REC = retour page MAIN
                 if (label == "REC") {
                     st.page = 0
                     setEncLabels(arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4"))
@@ -715,6 +725,19 @@ class MainActivity : Activity(), SurfaceListener {
                 }
             }
             "MUT" -> if (down) { ZtekAudio.allNotesOff(); st.curNote = -1 }
+            "ARP" -> if (down) {                                     // bouton ARP = arpégiateur on/off + page 13
+                st.arpOn = !st.arpOn
+                ZtekAudio.arpOn(if (st.arpOn) 1 else 0)
+                if (st.arpOn) {
+                    st.page = 13
+                    setEncLabels(arrayOf("MODE", "OCT", "DIV", "GATE", "", "", ""))
+                    for (k in 0..3) st.arpVals[k] = ZtekAudio.arpKnobGet(k)
+                } else if (st.page == 13) {
+                    st.page = 0
+                    setEncLabels(arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4"))
+                }
+                lcd.invalidate()
+            }
         }
         syncSlots()
         lcd.invalidate()
