@@ -74,6 +74,7 @@ class LcdState {
     val kitFilled = BooleanArray(16)
     val loopParam = FloatArray(6)       // PITCH POS MODE MUT SRC VOL du slot édité
     var sirenOn = false
+    var sirenMode = false
     var xyOn = false
     var xyX = 0.5f
     var xyY = 0.5f

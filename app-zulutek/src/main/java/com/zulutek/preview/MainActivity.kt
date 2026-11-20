@@ -97,6 +97,15 @@ class MainActivity : Activity(), SurfaceListener {
         override fun run() {
             val now = System.currentTimeMillis()
             val idle = now - lastActivity
+            if (st.page != prevPage) {
+                prevPage = st.page
+                if (sirenModePersistent) {
+                    sirenModePersistent = false
+                    st.sirenOn = false
+                    ZtekAudio.siren(0, st.sirenLvl, st.sirenRate, st.sirenFb)
+                }
+            }
+            st.sirenMode = sirenModePersistent
             val ph = when {
                 !st.veilleOn -> 0
                 idle < 150_000 -> 0
@@ -1142,6 +1151,7 @@ class MainActivity : Activity(), SurfaceListener {
     private var gloTap2 = 0L
     private var sirenMom = -1           // noire sirène momentanée en cours (-1 = aucune)
     private var sirenModePersistent = false   // mode SIREN (triple-tap GLO) persistant
+    private var prevPage = 0
 
     private fun chokeCtx() = st.page == 15 || (st.page == 1 && st.loopView == 1)
 
@@ -1400,6 +1410,7 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.siren(if (st.sirenOn) 1 else 0, st.sirenLvl, st.sirenRate, st.sirenFb)
                 hint(if (st.sirenOn) "SIREN" else "SIREN OFF")
                 if (st.page == 14) st.page = 0
+                prevPage = st.page
                 lcd.invalidate(); return
             }
             if (label == "GLO") { gloTap2 = gloTap1; gloTap1 = now }

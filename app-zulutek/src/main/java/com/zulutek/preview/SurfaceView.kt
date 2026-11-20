@@ -140,7 +140,8 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             val x0 = col * bw + 3f
             val y0 = 76f + row * 30f
             val active = (i == 10 && st.playing) || (i == 11 && st.recArmed) || (i == 9 && st.seqOn) ||
-                         (st.slotRec.getOrElse(st.selSlot) { false } && i == 11)
+                         (st.slotRec.getOrElse(st.selSlot) { false } && i == 11) ||
+                         (i == 5 && st.sirenMode && (System.currentTimeMillis() / 260) % 2 == 0L)
             frame.color = if (active) LcdView.REC_RED else LcdView.DIM
             c.drawRect(x0, y0, x0 + bw - 6f, y0 + 24f, frame)
             mono.color = if (active) LcdView.INK else LcdView.DIM
