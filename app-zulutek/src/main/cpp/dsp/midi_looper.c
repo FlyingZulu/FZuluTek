@@ -161,7 +161,7 @@ void ml_set_sp(ml_t *m, int slot, int idx, float v)
     switch (idx) {
     case ML_SP_PITCH: s->sp.pitch = (int8_t)clampf(v, -12.0f, 12.0f); break;
     case ML_SP_POS:   s->sp.pos = (uint16_t)clampf(v, 0.0f, s->len ? (float)s->len - 1.0f : 0.0f); break;
-    case ML_SP_MODE:  s->sp.mode = (uint8_t)clampf(v, 0.0f, 2.0f); if (s->sp.mode) s->dir = s->sp.mode == 2 ? 1 : -1; break;
+    case ML_SP_MODE:  s->sp.mode = (uint8_t)clampf(v, 0.0f, 3.0f); if (s->sp.mode == 2) s->dir = 1; else if (s->sp.mode == 1) s->dir = -1; break;
     case ML_SP_MUT:   s->sp.mut = (uint8_t)clampf(v * 255.0f, 0.0f, 255.0f); break;
     case ML_SP_SRC:   s->sp.src = (uint8_t)clampf(v, 0.0f, 6.0f); break;
     case ML_SP_FX:    s->sp.fx = v >= 0.5f ? 1 : 0; break;
@@ -554,6 +554,8 @@ static void ml_fire(ml_t *m, int si, ml_slot_t *s, float p0, float p1, int dir)
     }
 }
 
+static void ml_rand_slot(ml_t *m, int slot);   /* défini plus bas (pack SEQ+ RAND) */
+
 void ml_render(ml_t *m, uint32_t n)
 {
     float rate, step;
@@ -590,12 +592,94 @@ void ml_render(ml_t *m, uint32_t n)
                     ml_fire(m, i, s, 0.0f, p1, 1);
                 } else ml_fire(m, i, s, p0, p1, -1);
             }
+        } else if (s->sp.mode == 3) {                          /* RANDOM (pack SEQ+) : saut aléatoire au wrap */
+            p1 = p0 + step;
+            if (p1 >= (float)s->len) {
+                ml_fire(m, i, s, p0, (float)s->len, 1);
+                p1 = (float)(ml_rnd(m) % (uint32_t)s->len);    /* nouvelle position aléatoire */
+                if (m->randp > 0.0f && (float)(ml_rnd(m) & 0xFFFF) / 65536.0f < m->randp)
+                    ml_rand_slot(m, i);                        /* RAND au wrap : re-génère le slot */
+                ml_fire(m, i, s, 0.0f, p1, 1);
+            } else ml_fire(m, i, s, p0, p1, 1);
         } else {                                               /* normal */
             p1 = p0 + step;
-            if (p1 >= (float)s->len) { ml_fire(m, i, s, p0, (float)s->len, 1); p1 -= (float)s->len; ml_fire(m, i, s, 0.0f, p1, 1); }
+            if (p1 >= (float)s->len) {
+                ml_fire(m, i, s, p0, (float)s->len, 1);
+                p1 -= (float)s->len;
+                if (m->randp > 0.0f && (float)(ml_rnd(m) & 0xFFFF) / 65536.0f < m->randp)
+                    ml_rand_slot(m, i);                        /* RAND au wrap (mode normal aussi) */
+                ml_fire(m, i, s, 0.0f, p1, 1);
+            }
             else ml_fire(m, i, s, p0, p1, 1);
         }
         s->pos = p1;
         s->last_pos = p1;
+    }
+}
+
+/* ---- pack SEQ+ : RAND au wrap + mutation live ENV/LFO/SEQ (mêmes sémantiques que le
+ * seq acid EV_MUTATE et le drum) ------------------------------------------------ */
+
+void ml_set_randp(ml_t *m, float p)
+{
+    m->randp = p < 0.0f ? 0.0f : p > 1.0f ? 1.0f : p;
+}
+
+/* re-génère le contenu d'un slot (notes aléatoires dans la longueur conservée) */
+static void ml_rand_slot(ml_t *m, int slot)
+{
+    ml_slot_t *s;
+    int i, n;
+    if (slot < 0 || slot >= ML_NSLOTS) return;
+    s = &m->slot[slot];
+    if (s->len == 0 || s->rec || s->rs) return;
+    n = 1 + (int)(ml_rnd(m) % (uint32_t)(s->len / 8 + 1));      /* ~len/8 notes */
+    if (n > ML_MAXEV) n = ML_MAXEV;
+    s->n_note = (uint16_t)n;
+    for (i = 0; i < n; i++) {
+        s->note[i].t = (uint16_t)(ml_rnd(m) % s->len);
+        s->note[i].note = (uint8_t)(36 + (ml_rnd(m) % 37));      /* 36..72 */
+        s->note[i].vel = (uint8_t)(50 + (ml_rnd(m) % 78));
+        s->note[i].dur = (uint8_t)(1 + (ml_rnd(m) % (uint32_t)(s->len / 4 + 1)));
+    }
+    s->n_par = 0;
+}
+
+/* mutation live d'un slot : layer 1=TIME (dur/timing) 2=PITCH (transpose) 3=ARTIC (vélocité) */
+void ml_mutate(ml_t *m, int slot, int layer)
+{
+    ml_slot_t *s;
+    int i;
+    if (slot < 0 || slot >= ML_NSLOTS) return;
+    s = &m->slot[slot];
+    switch (layer) {
+    case 1:                                                     /* TIME (ENV seul) */
+        for (i = 0; i < s->n_note; i++) {
+            int d = (int)s->note[i].dur + ((int)(ml_rnd(m) % 9) - 4);
+            s->note[i].dur = (uint8_t)(d < 1 ? 1 : d);
+            int t = (int)s->note[i].t + ((int)(ml_rnd(m) % 5) - 2);
+            if (t < 0) t = 0;
+            if (s->len && t >= (int)s->len) t = (int)s->len - 1;
+            s->note[i].t = (uint16_t)t;
+        }
+        break;
+    case 2: {                                                   /* PITCH (LFO seul) : transpose le slot */
+        int dp = ((int)(ml_rnd(m) % 5) - 2);                    /* -2..+2 demi-tons */
+        int np = s->sp.pitch + dp;
+        if (np < -12) np = -12;
+        if (np > 12) np = 12;
+        s->sp.pitch = (int8_t)np;
+        for (i = 0; i < s->n_note; i++) {
+            int nn = (int)s->note[i].note + dp;
+            if (nn < 0) nn = 0;
+            if (nn > 127) nn = 127;
+            s->note[i].note = (uint8_t)nn;
+        }
+        break;
+    }
+    default:                                                    /* ARTIC (ENV+LFO) : vélocités */
+        for (i = 0; i < s->n_note; i++)
+            s->note[i].vel = (uint8_t)(40 + (ml_rnd(m) % 88));
+        break;
     }
 }

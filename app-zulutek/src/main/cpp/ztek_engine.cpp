@@ -1466,6 +1466,16 @@ void ztek_seq_mutate(ztek_t *z, int layer)
     acid_render(&z->pat, &z->grid);
 }
 
+void ztek_loop_mutate(ztek_t *z, int slot, int layer)
+{
+    ml_mutate(&z->loop, slot, layer);
+}
+
+void ztek_loop_randp(ztek_t *z, float p)
+{
+    ml_set_randp(&z->loop, p);
+}
+
 void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
 {
     uint32_t done = 0;

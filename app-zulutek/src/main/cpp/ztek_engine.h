@@ -113,6 +113,10 @@ float ztek_seq_knob_get(const ztek_t *z, int k);
 /* live mutation of the current 16-step page, as the ATEK303 ENV/LFO buttons:
  * layer = ACID_MUT_TIME (ENV alone), ACID_MUT_PITCH (LFO alone), ACID_MUT_ARTICULATION (both) */
 void ztek_seq_mutate(ztek_t *z, int layer);
+/* pack SEQ+ sur les MIDI loops (mêmes fonctions ENV/LFO/SEQ que le seq acid et le drum) :
+ * mutation live d'un slot de loop, RAND au wrap, mode RANDOM via ML_SP_MODE=3 */
+void ztek_loop_mutate(ztek_t *z, int slot, int layer);   /* layer 1=TIME 2=PITCH 3=ARTIC */
+void ztek_loop_randp(ztek_t *z, float p);                /* RAND global des loops 0..1 */
 
 /* ---- modulation section (pages LFO=10 and ENV/TOOLS=11) -----------------------------
  * 16 sources (ZT_NSRC), computed per 32-sample block:

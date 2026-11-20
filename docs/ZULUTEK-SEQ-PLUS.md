@@ -140,3 +140,25 @@ avec le pack SEQ+ dans `vibe/zulutek-seq-plus-c9ef18` :
 - Porter aussi MIX/PATCH sur le firmware FM-1 (pages 11/12 côté ATEK303, baie de patch
   out→in comme page ASSIGN).
 - Mix des slots PoW! comme destinations de la matrice (`labApply` au-delà de `ZT_NDST`).
+
+## 9. Pack SEQ+ porté sur les MIDI loops (en cours, non poussé — en attente d'aval)
+
+Même sémantique ENV/LFO/SEQ que le seq acid (`EV_MUTATE`) et le drum, appliquée aux
+16 slots du looper (`midi_looper.c`) :
+
+- **`ml_mutate(m, slot, layer)`** : layer 1 = TIME (dur/timing ±, comme ENV seul),
+  2 = PITCH (transpose -2..+2 demi-tons, met à jour `sp.pitch`, comme LFO seul),
+  3 = ARTIC (vélocités 40..127, comme ENV+LFO). Exposé en JNI :
+  `ZtekAudio.loopMutate(slot, layer)` → `ztek_loop_mutate`.
+- **`ml_set_randp(m, p)`** : probabilité de re-générer un slot à son wrap (RAND global
+  des loops). Exposé : `ZtekAudio.loopRandp(p)` → `ztek_loop_randp`.
+- **Mode de lecture 3 = RANDOM** (`ML_SP_MODE`, cycle REV dans la page LOOP : NORM →
+  REV → PING-PONG → RANDOM) : au wrap, la position saute à un offset aléatoire.
+- UI APK : sur la **page 1 (LOOP)**, appui long **TAP** = mutation TIME du slot,
+  appui long **SCL** = PITCH, double-tap **GEN** = ARTICULATION (hors page LOOP :
+  comportement seq acid inchangé).
+- Tests hôte (`gcc -DFX_HOST`, 15 checks) : mutate 3 layers, clamp randp, mode RANDOM,
+  RAND au wrap (randp=1 re-génère ~len/8 notes pitch 36..72 ; randp=0 inchangé ;
+  slot en rec protégé) → **tous OK**. `g++ -fsyntax-only` moteur + JNI → OK.
+- À faire : porter la même chose dans le patch FM-1 (patch 0006, avec la drum machine),
+  et brancher `loopRandp` sur un potard (ex. SEL RAND de la page SEQ+).

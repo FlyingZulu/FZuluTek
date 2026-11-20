@@ -240,6 +240,8 @@ object ZtekAudio {
     fun seqKnob(k: Int, v: Float) { if (handle != 0L) nativeSeqKnob(handle, k, v) }
     fun seqKnobGet(k: Int): Float = if (handle != 0L) nativeSeqKnobGet(handle, k) else 0f
     fun seqMutate(layer: Int) { if (handle != 0L) nativeSeqMutate(handle, layer) }
+    fun loopMutate(slot: Int, layer: Int) { if (handle != 0L) nativeLoopMutate(handle, slot, layer) }  // ENV/LFO/SEQ sur les loops
+    fun loopRandp(p: Float) { if (handle != 0L) nativeLoopRandp(handle, p) }                             // RAND au wrap des loops
     fun modKnob(src: Int, k: Int, v: Float) { if (handle != 0L) nativeModKnob(handle, src, k, v) }
     fun modKnobGet(src: Int, k: Int): Float = if (handle != 0L) nativeModKnobGet(handle, src, k) else 0f
     fun lfoOpt(which: Int, on: Int) { if (handle != 0L) nativeLfoOpt(handle, which, on) }
@@ -284,6 +286,8 @@ object ZtekAudio {
     private external fun nativeSeqKnob(handle: Long, k: Int, v: Float)
     private external fun nativeSeqKnobGet(handle: Long, k: Int): Float
     private external fun nativeSeqMutate(handle: Long, layer: Int)
+    private external fun nativeLoopMutate(handle: Long, slot: Int, layer: Int)
+    private external fun nativeLoopRandp(handle: Long, p: Float)
     private external fun nativeModKnob(handle: Long, src: Int, k: Int, v: Float)
     private external fun nativeModKnobGet(handle: Long, src: Int, k: Int): Float
     private external fun nativeLfoOpt(handle: Long, which: Int, on: Int)

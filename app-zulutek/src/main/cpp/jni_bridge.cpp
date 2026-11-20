@@ -279,6 +279,16 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSeqMutate(JNIEnv 
     ztek_seq_mutate(zte(NULL, h), layer);
 }
 
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopMutate(JNIEnv *, jclass, jlong h, jint slot, jint layer)
+{
+    ztek_loop_mutate(zte(NULL, h), slot, layer);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopRandp(JNIEnv *, jclass, jlong h, jfloat p)
+{
+    ztek_loop_randp(zte(NULL, h), p);
+}
+
 /* modulation: 16 sources x 4 knobs (pages LFO/ENV) */
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeModKnob(JNIEnv *, jclass, jlong h, jint src, jint k, jfloat v)
 {

@@ -58,6 +58,7 @@ typedef struct {
 typedef struct {
     float sr, bpm;
     float loop_gain;             /* MIX page: the loop return level */
+    float randp;                 /* RAND global (pack SEQ+) : proba de re-générer un slot à son wrap */
     ml_slot_t slot[ML_NSLOTS];
     int sel;                 /* the selected slot (SELECT) */
     int playing;
@@ -107,3 +108,9 @@ void ml_rs_stop(ml_t *m);                                            /* quantize
 void ml_rs_render(ml_t *m, float *outL, float *outR, uint32_t n);    /* mix the resample loop into L/R */
 
 void ml_render(ml_t *m, uint32_t n);         /* advance the clock, fire the loops' events */
+
+/* pack SEQ+ — mêmes fonctions ENV / LFO / SEQ que le seq acid et le drum :
+ * mutation live d'un slot (layer 1=TIME 2=PITCH 3=ARTIC/vel, comme EV_MUTATE),
+ * RAND au wrap (randp 0..1), mode de lecture 3=RANDOM (voir ML_SP_MODE). */
+void ml_set_randp(ml_t *m, float p);
+void ml_mutate(ml_t *m, int slot, int layer);

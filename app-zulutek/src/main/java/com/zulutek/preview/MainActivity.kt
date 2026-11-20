@@ -309,8 +309,10 @@ class MainActivity : Activity(), SurfaceListener {
                 lcd.invalidate()
             }
             "POW" -> st.bendMode = (st.bendMode + 1) % 2   // GLITCH / LOW BAT
-            "TAP" -> ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_TIME)         // appui long = mutation TIME (comme ENV seul sur FM-1)
-            "SCL" -> ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_PITCH)        // appui long = mutation PITCH (comme LFO seul sur FM-1)
+            "TAP" -> if (st.page == 1) ZtekAudio.loopMutate(st.selSlot, ZtekAudio.ACID_MUT_TIME)   // page LOOP : mutation TIME du slot (ENV seul)
+                      else ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_TIME)                            // sinon seq acid (comme avant)
+            "SCL" -> if (st.page == 1) ZtekAudio.loopMutate(st.selSlot, ZtekAudio.ACID_MUT_PITCH)  // page LOOP : mutation PITCH du slot (LFO seul)
+                      else ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_PITCH)
             "DRV" -> { st.page = if (st.page == 2) 0 else 2; lcd.invalidate() }   // page SNAP
             "MUT" -> { st.page = if (st.page == 3) 0 else 3; lcd.invalidate() }   // page KIT
             "GEN" -> {                                                    // page XY
@@ -574,7 +576,7 @@ class MainActivity : Activity(), SurfaceListener {
                         ZtekAudio.loopSetLen(st.selSlot, stLoopLen)
                     }
                     "REV" -> { // cycle le mode de lecture : normal/reverse/ping-pong
-                        val m = (ZtekAudio.loopGetSp(st.selSlot, ZtekAudio.ML_SP_MODE).toInt() + 1) % 3
+                        val m = (ZtekAudio.loopGetSp(st.selSlot, ZtekAudio.ML_SP_MODE).toInt() + 1) % 4   // 0 NORM 1 REV 2 PING-PONG 3 RANDOM (pack SEQ+)
                         ZtekAudio.loopSetSp(st.selSlot, ZtekAudio.ML_SP_MODE, m.toFloat())
                     }
                 }
@@ -621,7 +623,7 @@ class MainActivity : Activity(), SurfaceListener {
             }
             if (label == "GEN" && now - lastGenTap < 350) {          // double-tap GEN = mutation ARTICULATION
                 lastGenTap = 0L
-                ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_ARTICULATION); return
+                if (st.page == 1) { ZtekAudio.loopMutate(st.selSlot, ZtekAudio.ACID_MUT_ARTICULATION) } else { ZtekAudio.seqMutate(ZtekAudio.ACID_MUT_ARTICULATION) }; return
             }
             if (label == "MUT" && now - lastMutTap < 350) { st.page = 7; setEncLabels(arrayOf("SUB", "SYN", "TRG", "K1", "K2", "K3", "K4")); lastMutTap = 0L; lcd.invalidate(); return }
             if (label == "DLY" && now - lastDlyTap < 350) { st.page = 8; setEncLabels(arrayOf("SUB", "LOOP", "", "K1", "K2", "K3", "K4")); lastDlyTap = 0L; lcd.invalidate(); return }
