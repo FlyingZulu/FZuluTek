@@ -65,7 +65,7 @@ index d41d4a5..fcc477c 100644
 +void  zlk_loop_gain_set(float g) { zml_gain(g); }
 +float zlk_swing(void) { return zdr_mod_get(1); }
 +void  zlk_swing_set(float v) { zdr_mod_set(1, v); }
-+uint32_t zlk_data_free(void) { return 0xD4000u - 0xD2000u; }   /* estimation: ce qui reste sous la zone app */
++uint32_t zlk_data_free(void) { return 0xD4000u - 0xD2000u; }   /* libre entre fin ZMAC (0xD2000) et 1er objet store APP_STORE_MAP (0xD4000) — voir docs/FM1-FLASHMAP.md */
 +
 +int app_sysex(const uint8_t *p, uint32_t n) { return zlk_sysex(p, n); }
 +int app_file(int i, plat_file_info_t *f) { return zlk_file(i, f); }
@@ -162,7 +162,9 @@ index 0000000..d4bbb2e
 +#define ZLK_NLUP 8
 +#define ZLK_NFILE (ZLK_NSMP + ZLK_NLUP + 1)          /* + ZMAC */
 +
-+/* copies A/B dans la zone data (0x97000..0xD3FFF libre sous la zone app 0xD4000..) :
++/* copies A/B dans la zone data PLAT_DATA (0x97000..0xE0000, plat.h), cantonnées sous les
++ * objets store APP_STORE_MAP (qui commencent à 0xD4000) : fichiers ZTF dans 0xB0000..0xD3FFF
++ * (jamais au-delà de 0xE0000 : OTA staging/VM/BTIF/USR/globals/key_mac — docs/FM1-FLASHMAP.md) :
 + * samples 0xB0000.., loops 0xC0000.., ZMAC 0xD0000.. ; n = 0x1000 (1 secteur A + 1 secteur B) */
 +#define ZLK_SMP_BASE 0xB0000u
 +#define ZLK_LUP_BASE 0xC0000u

@@ -28,6 +28,7 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
   - **PR #11** `vibe/fm1-patch-choke-eco-c9ef18` (autre session) — patch firmware **0009-choke-eco**
   - **PR #12** `vibe/fm1-patch-link-c9ef18` — patch firmware **0010-link** : liaison ZTF côté FM-1 (companion 0x60/61/62, fichiers ZSMP/ZLUP/ZMAC, SysEx `F0 7D 'Z' 'T' …`, `usb_audio_out` + hook `app_usb_in`) — CI verte run 44754438124
 - ⚠️ la série de patches firmware **0001-0010 n'a jamais été buildée avec la toolchain JieLi** ni testée dans fm1-emu (`docs/FM1-EMULATEUR.md`) — à faire **avant tout flash**. Ordre des patches : 0001-0008 → 0009-choke (#11) → 0010-link (#12).
+- 🗺️ **Carte de la flash 1 MiB (zones interdites en écriture)** : `docs/FM1-FLASHMAP.md` — boot head `0x0..0x3FFF` et `key_mac 0xFF000` jamais écrits, zone app `0x4000..0x97000` réservée au loader OTA, VM/BTIF `0xE7000..0xE9FFF` interdits, nos fichiers ZTF validés dans `0xB0000..0xD3FFF`. Voir aussi `docs/FM1-HARDWARE.md` (FM-1 rev octobre 2026 = flash UC25HQ80 JEDEC `B3 60 14`, unbrick par `WL82 UBOOT1.00` USB ou dongle Seeed XIAO RP2040).
 
 <details><summary>Détail des PR mergées (archive)</summary>
 

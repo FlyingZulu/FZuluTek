@@ -1,5 +1,10 @@
 # zuluTek — patches firmware ATEK303 (M-VAVE FM-1)
 
+> 🗺️ Avant tout flash : lire **`docs/FM1-FLASHMAP.md`** (zones de la flash 1 MiB interdites en
+> écriture : boot head `0x0..0x3FFF`, zone app `0x4000..0x97000` = loader OTA uniquement,
+> VM/BTIF `0xE7000..0xE9FFF`, `key_mac 0xFF000` ; placement ZTF validé `0xB0000..0xD3FFF`)
+> et **`docs/FM1-HARDWARE.md`** (procédure FM-1 rev 2026-10, backup/dump avant flash).
+
 Série de 4 patches `git am` à appliquer sur `animatek/FM1-Animatek` (base : HEAD main de `animatek/FM1-Animatek`
 (les patches 0001-0004 s'appliquent sur main HEAD — vérifié par `git apply --check` ; la release `atek303-v1.2` ne matche pas)), dossier cible `atek303/app/dsp/`. Ils produisent le **moteur zuluTek**
 identique à celui embarqué dans l'APK preview (`app-zulutek/src/main/cpp/dsp/`, copiés
