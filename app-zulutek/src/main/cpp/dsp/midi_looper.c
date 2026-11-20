@@ -45,6 +45,8 @@ void ml_init(ml_t *m, float sr)
     m->loop_gain = 1.0f;
     m->sel = 0;
     m->rng = 0x5EED1234u;
+    m->leader = 1;                 /* mode leader (hybride) par défaut ; choke tout à 0 (off) */
+    for (i = 0; i < 7; i++) m->lead[i] = -1;
     for (i = 0; i < ML_NSLOTS; i++) {
         m->slot[i].len = ML_BAR64;   /* placeholder; len_set=0 -> quantized at rec stop */
         m->slot[i].len_set = 0;
@@ -100,6 +102,69 @@ void ml_toggle(ml_t *m, int slot)
         s->dir = 1;
         s->n_act = 0;
     }
+    if (s->on) {
+        /* choke au déclenchement : mode leader = seul le master du groupe arrête les autres,
+         * sinon (normal/Koala) tout membre arrête les autres membres du même groupe */
+        int g = m->choke[slot];
+        if (g > 0 && (!m->leader || ml_choke_master(m, g) == slot)) {
+            int i, a;
+            for (i = 0; i < ML_NSLOTS; i++) {
+                ml_slot_t *o;
+                if (i == slot || m->choke[i] != (uint8_t)g || !m->slot[i].on) continue;
+                o = &m->slot[i];
+                o->on = 0;
+                for (a = 0; a < o->n_act; a++)
+                    if (m->note_off) m->note_off(m->ctx, i, o->act[a].note);
+                o->n_act = 0;
+            }
+        }
+    }
+}
+
+void ml_set_choke(ml_t *m, int slot, int grp)
+{
+    if (slot < 0 || slot >= ML_NSLOTS) return;
+    if (grp < 0) grp = 0;
+    if (grp > 6) grp = 6;
+    if (m->choke[slot] != (uint8_t)grp) {   /* nouvelle assignation = nouvel ordre */
+        int old = m->choke[slot];
+        if (old > 0 && m->lead[old] == slot) m->lead[old] = -1;   /* le leader explicite quitte le groupe */
+        m->choke[slot] = (uint8_t)grp;
+        m->choke_order[slot] = ++m->choke_tick;
+    }
+}
+
+int ml_get_choke(const ml_t *m, int slot)
+{
+    if (slot < 0 || slot >= ML_NSLOTS) return 0;
+    return m->choke[slot];
+}
+
+int ml_choke_master(const ml_t *m, int grp)
+{
+    int best = -1, i;
+    uint32_t bo = 0xFFFFFFFFu;
+    if (grp <= 0 || grp > 6) return -1;
+    if (m->lead[grp] >= 0 && m->choke[m->lead[grp]] == (uint8_t)grp)
+        return m->lead[grp];                /* leader désigné explicitement (POLY) */
+    for (i = 0; i < ML_NSLOTS; i++)
+        if (m->choke[i] == (uint8_t)grp && m->choke_order[i] < bo) {
+            bo = m->choke_order[i];
+            best = i;
+        }
+    return best;
+}
+
+void ml_set_leader(ml_t *m, int on) { m->leader = on ? 1 : 0; }
+int  ml_get_leader(const ml_t *m)   { return m->leader; }
+void ml_set_leader_slot(ml_t *m, int slot, int on)
+{
+    int g;
+    if (slot < 0 || slot >= ML_NSLOTS) return;
+    g = m->choke[slot];
+    if (g <= 0) return;
+    if (on) m->lead[g] = (int8_t)slot;                      /* désigner leader (sticky) */
+    else if (m->lead[g] == slot) m->lead[g] = -1;           /* désassigner -> retour à l'auto */
 }
 
 void ml_set_len(ml_t *m, int slot, int len64)
@@ -394,13 +459,21 @@ static float ml_ulaw_dec(uint8_t u)
 /* resample (reloop): record the monitored bus into the ring.
  * fmt: 0 = int16, 1 = µ-law 8-bit (SP-1200 style, half RAM -> cap may reach 2*ML_RS_MAX);
  * khz: 0 = native ring rate, else the ring runs at khz kHz (32 = lighter on the FM-1) */
+void ml_set_eco(ml_t *m, int on) { m->eco = on ? 1 : 0; }
+int  ml_get_eco(const ml_t *m)   { return m->eco; }
+
 void ml_rs_start(ml_t *m, int dst, uint16_t monmask, uint32_t cap, int fmt, int khz)
 {
     uint32_t maxc;
     if (dst < 0 || dst >= ML_NSLOTS) return;
+    if (m->eco) {   /* MODE ECO : bitrate du loop le plus bas — µ-law + paliers lo-fi, ring 32 kHz min, capa /2 */
+        if (fmt < 2) fmt = 2;
+        if (khz < 32) khz = 32;
+    }
     m->rs_fmt = fmt == 2 ? 2 : (fmt ? 1 : 0);
     maxc = m->rs_fmt ? (uint32_t)ML_RS_MAX * 2u : (uint32_t)ML_RS_MAX;
     if (cap > maxc) cap = maxc;
+    if (m->eco && cap > ML_RS_MAX) cap = ML_RS_MAX;
     if (cap < 512) cap = 512;
     m->rs_decim = khz > 0 ? m->sr / (khz * 1000.0f) : 1.0f;   /* ring rate = khz kHz (32 = 32 kHz ring) */
     if (m->rs_decim < 1.0f) m->rs_decim = 1.0f;
@@ -682,4 +755,9 @@ void ml_mutate(ml_t *m, int slot, int layer)
             s->note[i].vel = (uint8_t)(40 + (ml_rnd(m) % 88));
         break;
     }
+}
+
+void ml_clear_leader(ml_t *m, int grp)
+{
+    if (grp > 0 && grp <= 6) m->lead[grp] = -1;
 }

@@ -22,6 +22,7 @@ import kotlin.math.sin
 
 interface SurfaceListener {
     fun onEncoder(i: Int, v: Float)
+    fun onEncoderPress(i: Int) {}    // appui court sur un encodeur (SEL pushable du FM-1)
     fun onButton(i: Int, down: Boolean)
     fun onButtonLong(i: Int)
     fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean)
@@ -51,6 +52,8 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
     private var startY = 0f
     private var startVal = 0f
     private var longPosted = false
+    private var downTime = 0L
+    private var encMoved = false
     private val longRunnable = Runnable {
         longPosted = false
         when (zone) {
@@ -177,7 +180,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                 val (z, i) = zoneAt(x, y)
                 zone = z; idx = i; startY = y; longPosted = false
                 when (z) {
-                    1 -> { startVal = st.encVals[i] }
+                    1 -> { startVal = st.encVals[i]; downTime = System.currentTimeMillis(); encMoved = false }
                     2 -> {
                         listener.onButton(i, true)
                         handler.postDelayed(longRunnable, 600)
@@ -198,6 +201,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             }
             MotionEvent.ACTION_MOVE -> {
                 if (zone == 1) {
+                    encMoved = true
                     val v = (startVal + (startY - y) / 90f).coerceIn(0f, 1f)
                     st.encVals[idx] = v
                     listener.onEncoder(idx, v)
@@ -208,6 +212,8 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 handler.removeCallbacks(longRunnable)
                 when (zone) {
+                    1 -> if (!encMoved && System.currentTimeMillis() - downTime < 350)
+                             listener.onEncoderPress(idx)   // tap encodeur = appui SEL/... du FM-1
                     2 -> listener.onButton(idx, false)
                     3 -> if (longPosted) listener.onWhiteKey(idx, false, false)
                     4 -> listener.onBlackKey(BLACK_NOTES[idx], false)

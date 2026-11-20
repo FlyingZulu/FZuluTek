@@ -104,6 +104,63 @@ class LcdState {
         Color.rgb(60, 220, 90), Color.rgb(60, 160, 255), Color.rgb(255, 120, 200),
         Color.rgb(120, 200, 255), Color.rgb(220, 255, 120), Color.rgb(255, 200, 90))
 
+    // page MIX (6) + sous-page baie de patch (7) v3 hiérarchique :
+    // vue 0 = boîtes (sources puis modules, compteurs de câbles), 1 = sous-boîte source
+    // (sélecteur IN + liste des câbles qui grandit), 2 = sous-boîte module (câbles entrants),
+    // 3 = liste plate de tous les câbles. Pilotable 100% encodeurs/boutons (FM-1 non tactile).
+    val slotSrc = IntArray(16)              // ML_SP_SRC 0..6 -> lettre B/S/D/A/R/M/+
+    val slotMut = BooleanArray(16)          // ML_SP_MUT
+    val slotAct = BooleanArray(16)          // notes actives (VU tranche)
+    val slotPatch = IntArray(16)            // nb de câbles de modulation sur le slot (baie v3)
+    var masterPeak = 0f                     // VU master
+    val auxN = IntArray(2)                  // nb de câbles sur les départs aux libres du master (AUX1/AUX2)
+    val srcLetters = arrayOf("B", "S", "D", "A", "R", "M", "+")
+    fun srcLetter(i: Int) = srcLetters.getOrElse(slotSrc[i]) { "?" }
+    var patchView = 0
+    val patchBoxes = ZtekAudio.NSRC_ACTIVE + ZtekAudio.NMOD
+    var boxSel = 0                          // vue 0 : 0..NSRC_ACTIVE-1 = source, puis module
+    var srcBox = 0                          // vue 1 : source courante
+    val inList = ArrayList<Int>()           // entrées visibles : -1-m = header module m, sinon port
+    val inOk = ArrayList<Boolean>()         // compatibilité de chaque entrée (estompée si faux)
+    val inOn = ArrayList<Boolean>()         // câble déjà branché sur chaque entrée
+    var inSel = 0                           // curseur liste IN (vue 1)
+    val srcCables = ArrayList<Int>()        // dst des câbles de srcBox (vue 1)
+    var listScroll = 0                      // scroll des câbles (vue 1)
+    var modBox = 0                          // vue 2 : module courant
+    val modRows = ArrayList<Pair<Int, Int>>()   // (src,dst) entrants dans modBox (vue 2)
+    val flatRows = ArrayList<Pair<Int, Int>>()  // tous les câbles (vue 3)
+    var rowSel = 0                          // ligne sélectionnée (vues 2/3)
+    val srcOut = IntArray(ZtekAudio.NSRC)           // nb câbles sortants par source (vue 0)
+    var drumOn = false                              // boîte à rythmes on/off
+    val loopChoke = IntArray(16)                    // groupe de choke par slot LOOP (0=off, 1..6)
+    val drumChoke = IntArray(ZtekAudio.DR_NPADS)    // groupe de choke par pad DRUMS
+    val loopMaster = BooleanArray(16)               // slot master de son groupe (marqueur M)
+    val drumMaster = BooleanArray(ZtekAudio.DR_NPADS)// pad master de son groupe
+    var loopLeader = 1                              // LDR LOOP : 1=leader(hybride) 0=normal(Koala)
+    var drumLeader = 1                              // LDR DRUMS
+    var loopView = 0                                // page LOOP : 0=params, 1=sous-vue CHK
+    var drumPad = 0                                 // pad sélectionné (page DRUMS)
+    var chokeWin = false                            // fenêtre d'édition choke ouverte (touche noire MONO)
+    var chokeWinUntil = 0L                          // auto-fermeture après 1,5 s sans action
+    var chokePad = -1                               // pad/slot en cours d'édition choke
+    var polyArmed = false                           // POLY pressé : le prochain pad tapé sera désigné leader
+    var ecoOn = false                               // OPTIONS > ECO ON : LCD throttlé + blink figé
+    var optRow = 0                                  // page OPTIONS (9) : ligne sélectionnée
+    var mixStrip = 0                                // page MIX (6) : tranche sélectionnée (0..3, 4=master)
+    val stripCut = FloatArray(4)                    // filtre traversant par tranche
+    val stripFmode = IntArray(4)                    // 0 LP, 1 neutre, 2 HP
+    val stripVol = FloatArray(4)
+    val stripMut = BooleanArray(4)
+    val stripAuxPow = FloatArray(4)                 // départ post-fader PoW!
+    val stripAuxLoop = FloatArray(4)                // départ post-fader Loop
+    val drumPat = BooleanArray(ZtekAudio.DR_NPADS * 16)  // grille 16 steps par pad
+    val drumLvl = FloatArray(ZtekAudio.DR_NPADS)     // niveau par pad
+    var drumSwing = 0f                              // swing du séquenceur drums
+    var drumStep = 0                                // step courant du séquenceur
+    var drumStepCur = 0                             // curseur d'édition de step
+    val modIn = IntArray(ZtekAudio.NMOD)            // nb câbles entrants par module (vue 0)
+    val expanded = BooleanArray(ZtekAudio.NMOD)     // module déplié dans la liste IN
+
     val targetNames = arrayOf(
         "TUN", "CUT", "RES", "ENV", "DEC", "ACC", "WAV", "ENG",
         "DRVT", "DRV", "TONE", "LVL", "MODT", "RATE", "DEPT", "MIX",
@@ -111,9 +168,36 @@ class LcdState {
 
     fun targetName(t: Int) = targetNames.getOrElse(t) { "?" }
 
+    /* nom d'un port de destination de la baie (ports 0..34 = VOIX/FX/SEQ comme PR #3) */
+    fun dstName(p: Int): String {
+        val m = ZtekAudio.modOf(p)
+        if (m < 0) return "?"
+        val rel = p - ZtekAudio.MOD_OFF[m]
+        return when (m) {
+            0 -> targetName(rel)                                   // VOIX : AT_
+            1 -> targetName(8 + rel)                               // FX : FX_
+            2 -> arrayOf("DEN", "ACC", "SLD", "RNG", "TIE", "STP", "SCL", "SQ8", "SQ9")
+                    .getOrElse(rel) { "?" }                        // SEQ 26..34
+            3 -> arrayOf("LVL", "T", "FB").getOrElse(rel) { "?" }   // SIREN
+            4 -> arrayOf("START", "END", "VOL", "PITCH", "MODE").getOrElse(rel) { "?" }  // SMP
+            5 -> "S${rel / 7 + 1}." +                              // LOOP : 16 slots x 7
+                    arrayOf("PITCH", "POS", "MOD", "MUT", "SRC", "FX", "VOL").getOrElse(rel % 7) { "?" }
+            6 -> arrayOf("FX", "MASTER", "POW!", "AUX1", "AUX2").getOrElse(rel) { "?" }   // OUT
+            else -> "AUX${rel + 1}"                                                        // AUX (libres)
+        }
+    }
+
+    fun cableLabel(src: Int, dst: Int) =
+        ZtekAudio.SRC_NAME.getOrElse(src) { "?" } + ">" + dstName(dst)
+
+    fun cableColor(src: Int) = patchCableColors[src % patchCableColors.size]
+
+    /* première ligne visible d'une fenêtre de `vis` lignes autour de `sel` dans `n` entrées */
+    fun winFirst(sel: Int, n: Int, vis: Int) = (sel - vis / 2).coerceIn(0, (n - vis).coerceAtLeast(0))
+
     /* pack SEQ+ (PR #3) : pages 6 SEQ+, 7 LFO, 8 ENV, 9 ASSIGN, 10 PRESETS */
     val pageNames2 = mapOf(6 to "SEQ+", 7 to "LFO", 8 to "ENV", 9 to "ASSIGN", 10 to "PRESETS",
-        11 to "MIX", 12 to "PATCH", 13 to "ARP", 14 to "MACRO")
+        11 to "MIX", 12 to "PATCH", 13 to "ARP", 14 to "MACRO", 15 to "DRUMS", 16 to "OPTIONS")
     var arpOn = false
     val arpVals = FloatArray(4)             // MODE OCT DIV GATE
     var macSlot = 0                         // page MACRO (14)
@@ -227,7 +311,9 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         c.scale(s, s)
 
         val now = System.currentTimeMillis()
-        val blink = (now / 260) % 2 == 0L
+        val blink = if (st.ecoOn) true else (now / 260) % 2 == 0L
+        val blinkFast = if (st.ecoOn) false else (now / 120) % 2 == 0L   // eco: animations figées
+        // clignotement rapide = pad leader du choke
 
         // flash de capture SNAP (REC+PLAY) : inversion blanc/noir 120 ms
         if (now < st.flashUntil) {
@@ -315,6 +401,41 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         // ---- page LOOP : édition du slot sélectionné (K1 PITCH K2 POS K3 MODE K4 MUT, PRE VOL, ALG SRC) ----
         if (st.page == 1) {
+            if (st.loopView == 1) {   // sous-vue CHK : groupes de choke des 16 slots (style Koala)
+                text(c, 6f, 15f, "LOOP CHK", FLUO_TURQ, 12f)
+                text(c, 96f, 15f, if (st.loopLeader == 1) "LDR ON" else "LDR OFF",
+                    if (st.loopLeader == 1) FLUO_YEL else DIM, 9f)
+                for (i in 0 until 16) {
+                    val col = i % 8
+                    val row = i / 8
+                    val x0 = 6f + col * 29f
+                    val y0 = 28f + row * 78f
+                    val g = st.loopChoke[i]
+                    val sel = i == st.selSlot
+                    val mst = st.loopMaster[i]
+                    val leadBlink = mst && blinkFast     // leader = clignotement rapide
+                    box(c, x0, y0, x0 + 26f, y0 + 68f,
+                        if (leadBlink) REC_RED else if (sel) FLUO_TURQ else if (g > 0) FLUO_YEL else DIM)
+                    text(c, x0 + 8f, y0 + 42f, "${i + 1}", if (sel || g > 0) INK else DIM, 10f)
+                    text(c, x0 + 3f, y0 + 12f, if (g > 0) "C$g" else "·",
+                        if (leadBlink) REC_RED else if (g > 0) INK else DIM, 8f)
+                    if (mst) text(c, x0 + 16f, y0 + 12f, "M", if (leadBlink) REC_RED else FLUO_YEL, 8f)
+                    if (st.slotOn[i]) text(c, x0 + 4f, y0 + 60f, "▶", FLUO_YEL, 8f)
+                }
+                text(c, 6f, 196f, "SEL=slot  K1=CHK 0..6  K2=LDR ON/OFF", DIM, 8f)
+                text(c, 6f, 210f, "même Cn = choke · M = master · MONO/POLY = noires 9/10", DIM, 8f)
+                text(c, 6f, 224f, "SCL=params  REC=quitte", DIM, 8f)
+                if (st.chokeWin) {
+                    val g = st.loopChoke[st.chokePad.coerceIn(0, 15)]
+                    box(c, 34f, 84f, 206f, 156f, FLUO_YEL)
+                    text(c, 44f, 102f, "CHOKE SLOT ${st.chokePad + 1}", INK, 10f)
+                    text(c, 44f, 126f, "C$g", FLUO_YEL, 16f)
+                    text(c, 44f, 140f, "SEL=groupe  MONO=off  POLY=LDR", DIM, 8f)
+                    text(c, 44f, 152f, "tap=+C$g  re-tap=LDR", DIM, 8f)
+                }
+                c.restore()
+                return
+            }
             text(c, 6f, 15f, "LOOP ${st.selSlot + 1}", FLUO_TURQ, 12f)
             if (st.slotRec[st.selSlot] && blink) { mono.color = REC_RED; c.drawCircle(226f, 11f, 5f, mono) }
             val labels = arrayOf("PITCH", "POS", "MODE", "MUT", "SRC", "VOL")
@@ -327,7 +448,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 c.drawLine(62f, y0 + 8f, 62f + 168f * v, y0 + 8f, frame)
                 text(c, 200f, y0 + 12f, if (i == 0) "${(v * 24 - 12).toInt()}st" else "${(v * 100).toInt()}", INK, 9f)
             }
-            text(c, 6f, 232f, "REC=arm/stop ERS=erase DLY=len REV=mode long-REC=quitte", DIM, 8f)
+            text(c, 6f, 232f, "REC=arm/stop ERS=erase DLY=len REV=mode SCL=CHK long-REC=quitte", DIM, 8f)
             c.restore()
             return
         }
@@ -400,75 +521,230 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         }
 
         // ---- page MIX (11) : niveaux des 16 slots, aux -> PoW!, gain du bus LOOP ----
-        if (st.page == 11) {
-            text(c, 6f, 15f, "MIX", FLUO_TURQ, 12f)
-            text(c, 60f, 15f, "AUX>POW", DIM, 9f)
-            for (i in 0 until 16) {
-                val col = i / 8
-                val row = i % 8
-                val x0 = 6f + col * 116f
-                val y0 = 26f + row * 24f
-                val sel = i == st.selSlot
-                box(c, x0, y0, x0 + 70f, y0 + 18f, if (sel) FLUO_TURQ else DIM)
-                text(c, x0 + 3f, y0 + 13f, "${i + 1}${if (st.slotAux[i]) "*" else " "}", INK, 9f)
-                frame.color = if (st.slotOn[i]) FLUO_YEL else Color.argb(255, 60, 60, 60)
-                c.drawLine(x0 + 34f, y0 + 14f, x0 + 34f + 32f * st.slotVol[i], y0 + 14f, frame)
+
+        if (st.page == 15) {
+            // ---- page DRUMS : 8 pads (choke) + grille 16 steps du pad sélectionné ----
+            text(c, 6f, 15f, "DRUMS", AMBER, 12f)
+            text(c, 70f, 15f, if (st.drumOn) "ON" else "OFF", if (st.drumOn) FLUO_YEL else DIM, 9f)
+            text(c, 140f, 15f, if (st.drumLeader == 1) "LDR" else "KOALA", if (st.drumLeader == 1) FLUO_YEL else DIM, 8f)
+            for (p in 0 until ZtekAudio.DR_NPADS) {
+                val col = p % 4
+                val row = p / 4
+                val x0 = 6f + col * 59f
+                val y0 = 22f + row * 40f
+                val g = st.drumChoke[p]
+                val sel = p == st.drumPad
+                val mst = st.drumMaster[p]
+                val leadBlink = mst && blinkFast         // leader = clignotement rapide ; hors groupe = éteint
+                box(c, x0, y0, x0 + 55f, y0 + 36f,
+                    if (leadBlink) REC_RED else if (sel) FLUO_TURQ else if (g > 0) FLUO_YEL else DIM)
+                text(c, x0 + 3f, y0 + 14f, ZtekAudio.DR_PAD_NAMES[p], if (sel || g > 0) INK else DIM, 8f)
+                // niveau du pad
+                frame.color = if (sel) FLUO_TURQ else Color.argb(255, 60, 60, 60)
+                c.drawLine(x0 + 3f, y0 + 30f, x0 + 3f + 48f * st.drumLvl[p].coerceIn(0f, 1f), y0 + 30f, frame)
+                if (g > 0 || mst)
+                    text(c, x0 + 40f, y0 + 11f, (if (g > 0) "C$g" else "") + (if (mst) "M" else ""),
+                        if (leadBlink) REC_RED else FLUO_YEL, 7f)
             }
-            text(c, 6f, 224f, "MIX", DIM, 9f)
-            box(c, 40f, 216f, 234f, 232f, DIM)
-            frame.color = FLUO_TURQ
-            c.drawLine(42f, 224f, 42f + 188f * (st.mixGain / 2f).coerceIn(0f, 1f), 224f, frame)
-            text(c, 6f, 240f - 4f, "SEL=slot K1=vol PRE=aux ALG=MIX long-DLY=PATCH long-REC=quitte", DIM, 8f)
+            // grille 16 steps du pad sélectionné (2 rangées de 8)
+            val p = st.drumPad
+            text(c, 6f, 108f, "STEPS ${ZtekAudio.DR_PAD_NAMES[p]}", DIM, 9f)
+            text(c, 200f, 108f, "sw ${(st.drumSwing * 100).toInt()}", DIM, 8f)
+            for (s2 in 0 until 16) {
+                val col = s2 % 8
+                val row = s2 / 8
+                val x0 = 6f + col * 29f
+                val y0 = 116f + row * 26f
+                val on = st.drumPat[p * 16 + s2]
+                val cur = s2 == st.drumStep && st.drumOn
+                val edit = s2 == st.drumStepCur
+                box(c, x0, y0, x0 + 26f, y0 + 22f,
+                    if (cur && blink) FLUO_PINK else if (edit) FLUO_TURQ else if (on) FLUO_YEL else DIM)
+                if (on) text(c, x0 + 9f, y0 + 16f, "•", if (cur && blink) FLUO_PINK else INK, 10f)
+            }
+            text(c, 6f, 178f, "SEL=pad PRE=niv ALG=step K1=step K2=swing K3=clear K4=rand PLAY=hit", DIM, 8f)
+            text(c, 6f, 192f, "MONO=noire9 choke · POLY=noire10 leader · REC/long-ERS=quitte", DIM, 8f)
+            if (st.chokeWin) {
+                val cp = st.chokePad.coerceIn(0, ZtekAudio.DR_NPADS - 1)
+                box(c, 34f, 84f, 206f, 156f, FLUO_YEL)
+                text(c, 44f, 102f, "CHOKE ${ZtekAudio.DR_PAD_NAMES[cp]}", INK, 10f)
+                text(c, 44f, 126f, "C${st.drumChoke[cp]}", FLUO_YEL, 16f)
+                text(c, 44f, 140f, "SEL=groupe  MONO=off  POLY=LDR", DIM, 8f)
+                text(c, 44f, 152f, "tap=+C${st.drumChoke[cp]}  POLY+pad=LDR", DIM, 8f)
+            }
             c.restore()
             return
         }
 
-        // ---- sous-page baie de patch (12) : grille sources x destinations, curseur SEL/ALGO ----
-        if (st.page == 12) {
-            text(c, 6f, 15f, "PATCH", FLUO_TURQ, 12f)
-            text(c, 70f, 15f, "SEL=rangée ALG=colonne", DIM, 8f)
-            // colonnes (destinations)
-            for (d in 0 until 3) {
-                val x0 = 96f + d * 46f
-                text(c, x0, 34f, st.patchDstNames[d], if (d == st.patchCol) FLUO_YEL else DIM, 9f)
-            }
-            // rangées (sources) + câbles ; l'incompatible est estompé, le compatible lumineux
-            val DIMC = Color.argb(255, 70, 70, 70)
-            for (r in 0 until 4) {
-                val y0 = 52f + r * 44f
-                val rowOk = st.patchOk.getOrElse(r * 3) { true }
-                text(c, 6f, y0 + 12f, st.patchSrcNames[r],
-                    if (r == st.patchRow) FLUO_YEL else if (rowOk) INK else DIMC, 10f)
-                box(c, 88f, y0, 238f, y0 + 30f, DIMC)
-                for (d in 0 until 3) {
-                    val x0 = 96f + d * 46f
-                    val ok = st.patchOk[r * 3 + d]
-                    val on = st.patchGrid[r * 3 + d]
-                    // destination : estompée si incompatible, lumineuse sinon
-                    if (!ok) {
-                        frame.color = DIMC
-                        c.drawRect(x0 + 4f, y0 + 8f, x0 + 34f, y0 + 22f, frame)
-                        if (r == st.patchRow && d == st.patchCol)
-                            text(c, x0 + 12f, y0 + 22f, "×", DIMC, 10f)   // sens interdit
-                    } else {
-                        if (on) {
-                            frame.color = st.patchCableColors[(r * 3 + d) % st.patchCableColors.size]
-                            frame.strokeWidth = 2.5f
-                            c.drawLine(x0, y0 + 15f, x0 + 38f, y0 + 15f, frame)
-                            frame.strokeWidth = 1f
-                        } else {
-                            frame.color = Color.argb(255, 150, 150, 150)
-                            c.drawRect(x0 + 4f, y0 + 8f, x0 + 34f, y0 + 22f, frame)
-                        }
-                        // curseur
-                        if (r == st.patchRow && d == st.patchCol) {
-                            frame.color = if (blink) FLUO_PINK else INK
-                            c.drawRect(x0 - 2f, y0 + 2f, x0 + 40f, y0 + 28f, frame)
-                        }
-                    }
+        if (st.page == 11) {
+            // ---- table de mixage : 4 tranches + bandeau master (BUS + AUX libres + VU) ----
+            text(c, 6f, 15f, "MIX", FLUO_TURQ, 12f)
+            text(c, 52f, 15f, if (st.mixStrip < 4) "tr ${ZtekAudio.STRIP_NAMES[st.mixStrip]}" else "MASTER", DIM, 8f)
+            val fmNames = arrayOf("LP", "·", "HP")
+            for (s in 0 until 4) {
+                val x0 = 6f + (s % 2) * 116f
+                val y0 = 22f + (s / 2) * 90f
+                val sel = s == st.mixStrip
+                val mut = st.stripMut[s]
+                box(c, x0, y0, x0 + 110f, y0 + 86f, if (sel) FLUO_TURQ else if (mut) DIM else FLUO_YEL)
+                text(c, x0 + 4f, y0 + 13f, ZtekAudio.STRIP_NAMES[s], if (mut) DIM else INK, 10f)
+                if (mut) text(c, x0 + 76f, y0 + 13f, "MUT", REC_RED, 8f)
+                // filtre traversant en tête (pré-fader) : mode LP/·/HP + cutoff
+                val fm = st.stripFmode[s].coerceIn(0, 2)
+                text(c, x0 + 4f, y0 + 27f, "FLT ${fmNames[fm]}", if (fm == 1) DIM else FLUO_TURQ, 8f)
+                frame.color = if (fm == 1) Color.argb(255, 60, 60, 60) else FLUO_TURQ
+                c.drawLine(x0 + 50f, y0 + 23f, x0 + 50f + 56f * st.stripCut[s].coerceIn(0f, 1f), y0 + 23f, frame)
+                // fader VOL
+                text(c, x0 + 4f, y0 + 42f, "VOL", DIM, 8f)
+                box(c, x0 + 34f, y0 + 34f, x0 + 106f, y0 + 42f, DIM)
+                frame.color = if (mut) DIM else FLUO_YEL
+                c.drawLine(x0 + 36f, y0 + 38f, x0 + 36f + 68f * st.stripVol[s].coerceIn(0f, 1f), y0 + 38f, frame)
+                // départs auxiliaires post-fader : P = PoW!, L = Loop
+                text(c, x0 + 4f, y0 + 56f, "aux", DIM, 8f)
+                val aux = arrayOf("P" to st.stripAuxPow[s], "L" to st.stripAuxLoop[s])
+                var ax = x0 + 30f
+                for ((nm, av) in aux) {
+                    frame.color = if (av > 0.02f) FLUO_PINK else Color.argb(255, 50, 50, 50)
+                    c.drawLine(ax, y0 + 64f, ax + 28f * av.coerceIn(0f, 1f), y0 + 64f, frame)
+                    text(c, ax, y0 + 78f, nm, if (av > 0.02f) INK else DIM, 8f)
+                    ax += 40f
                 }
             }
-            text(c, 6f, 236f, "PLAY/tap cellule = connecte/déconnecte  long-DLY=retour MIX  long-REC=quitte", DIM, 8f)
+            // bandeau master : BUS + départs aux libres du master (AUX1/AUX2, assignables dans la baie) + VU
+            val msel = st.mixStrip == 4
+            text(c, 6f, 210f, "BUS", if (msel) FLUO_TURQ else DIM, 8f)
+            box(c, 30f, 202f, 140f, 214f, if (msel) FLUO_TURQ else DIM)
+            frame.color = FLUO_TURQ
+            c.drawLine(32f, 208f, 32f + 106f * (st.mixGain / 2f).coerceIn(0f, 1f), 208f, frame)
+            text(c, 6f, 226f, "AUX", DIM, 8f)
+            for (a in 0..1) {
+                val x0 = 30f + a * 82f
+                box(c, x0, 218f, x0 + 76f, 230f, if (st.auxN[a] > 0) FLUO_TURQ else DIM)
+                text(c, x0 + 4f, 227f, "AUX${a + 1}▶${st.auxN[a]}", if (st.auxN[a] > 0) INK else DIM, 9f)
+            }
+            text(c, 196f, 226f, "VU", DIM, 8f)
+            box(c, 214f, 218f, 236f, 230f, DIM)
+            frame.color = if (st.masterPeak > 0.85f) REC_RED else FLUO_TURQ
+            c.drawLine(216f, 224f, 216f + 18f * st.masterPeak.coerceIn(0f, 1f), 224f, frame)
+            text(c, 6f, 238f, "SEL=tranche(4=master) K1=vol/bus K2=mut K3=filtre K4=cut PRE=auxP ALG=auxL", DIM, 8f)
+            c.restore()
+            return
+        }
+
+        // ---- sous-page baie de patch (7) v3 hiérarchique (pilotable sans tactile, FM-1) ----
+
+        if (st.page == 12) {
+            val DIMC = Color.argb(255, 70, 70, 70)
+            val RH = 17f
+            val Y0 = 26f
+            when (st.patchView) {
+                0 -> {   // vue générale : une boîte par source puis par module, compteur de câbles
+                    text(c, 6f, 15f, "PATCH", FLUO_TURQ, 12f)
+                    text(c, 78f, 15f, "SEL=boîte PLAY=ouvre", DIM, 8f)
+                    val first = st.winFirst(st.boxSel, st.patchBoxes, 11)
+                    for (k in 0 until 11) {
+                        val i = first + k
+                        if (i >= st.patchBoxes) break
+                        val y = Y0 + k * RH
+                        val sel = i == st.boxSel
+                        val isSrc = i < ZtekAudio.NSRC_ACTIVE
+                        val si = if (isSrc) ZtekAudio.SRC_IDX[i] else 0
+                        val name = if (isSrc) ">" + ZtekAudio.SRC_NAME[si]
+                                   else "<" + ZtekAudio.MOD_NAME[i - ZtekAudio.NSRC_ACTIVE]
+                        val n = if (isSrc) st.srcOut[si] else st.modIn[i - ZtekAudio.NSRC_ACTIVE]
+                        box(c, 6f, y, 234f, y + 15f, if (sel) (if (blink) FLUO_PINK else FLUO_YEL) else DIM)
+                        text(c, 12f, y + 12f, name, if (sel) INK else DIM, 10f)
+                        text(c, 196f, y + 12f, if (isSrc) "▶$n" else "$n▶",
+                            if (n > 0) FLUO_TURQ else DIM, 10f)
+                    }
+                    text(c, 6f, 236f, "PLAY=ouvre  MUT=liste câbles  ERS=plier/déplier  REC=retour MIX", DIM, 8f)
+                }
+                1 -> {   // sous-boîte source : sélecteur IN (modules groupés/repliés) + câbles
+                    text(c, 6f, 15f, ZtekAudio.SRC_NAME[st.srcBox] + " >", FLUO_YEL, 12f)
+                    val e = st.inList.getOrElse(st.inSel) { -1 }
+                    val eName = if (e < 0) ZtekAudio.MOD_NAME[-1 - e] else st.dstName(e)
+                    text(c, 120f, 15f, "IN:$eName", DIM, 8f)
+                    val first = st.winFirst(st.inSel, st.inList.size, 6)
+                    for (k in 0 until 6) {
+                        val i = first + k
+                        if (i >= st.inList.size) break
+                        val y = Y0 + k * RH
+                        val en = st.inList[i]
+                        val sel = i == st.inSel
+                        if (en < 0) {   // header de module : replié = un seul slot
+                            val m = -1 - en
+                            box(c, 6f, y, 234f, y + 15f, if (sel) FLUO_YEL else DIM)
+                            text(c, 12f, y + 12f, (if (st.expanded[m]) "▾ " else "▸ ") + ZtekAudio.MOD_NAME[m],
+                                if (st.modIn[m] > 0) AMBER else DIM, 10f)
+                            text(c, 210f, y + 12f, "${st.modIn[m]}", if (st.modIn[m] > 0) FLUO_TURQ else DIM, 9f)
+                        } else {        // port : estompé + × si incompatible (protection VCV Rack)
+                            val ok = st.inOk.getOrElse(i) { true }
+                            val on = st.inOn.getOrElse(i) { false }
+                            val col = if (!ok) DIMC else if (on) st.cableColor(st.srcBox)
+                                      else if (sel) FLUO_YEL else INK
+                            if (sel) box(c, 6f, y, 234f, y + 15f, if (blink) FLUO_PINK else FLUO_YEL)
+                            text(c, 12f, y + 12f, (if (on) "● " else "○ ") + st.dstName(en) + (if (!ok) "  ×" else ""), col, 10f)
+                        }
+                    }
+                    val cy = Y0 + 6 * RH + 8f
+                    text(c, 6f, cy, "CÂBLES ${st.srcCables.size}", AMBER, 9f)
+                    val cfirst = st.listScroll.coerceIn(0, (st.srcCables.size - 5).coerceAtLeast(0))
+                    for (k in 0 until 5) {
+                        val i = cfirst + k
+                        if (i >= st.srcCables.size) break
+                        text(c, 12f, cy + 8f + k * RH, st.cableLabel(st.srcBox, st.srcCables[i]),
+                            st.cableColor(st.srcBox), 9f)
+                    }
+                    text(c, 6f, 236f, "ALG=IN  SEL=câbles  PLAY=on/off  ERS=plier  MUT=liste  REC=retour", DIM, 8f)
+                }
+                2 -> {   // sous-boîte module : câbles entrants, PLAY sur une ligne = débranche
+                    val m = st.modBox
+                    text(c, 6f, 15f, "< " + ZtekAudio.MOD_NAME[m], FLUO_YEL, 12f)
+                    text(c, 120f, 15f, "${st.modRows.size} câble(s)", DIM, 8f)
+                    if (st.modRows.isEmpty()) text(c, 12f, Y0 + 12f, "vide", DIM, 10f)
+                    val first = st.winFirst(st.rowSel, st.modRows.size, 11)
+                    for (k in 0 until 11) {
+                        val i = first + k
+                        if (i >= st.modRows.size) break
+                        val y = Y0 + k * RH
+                        val (s, d) = st.modRows[i]
+                        val sel = i == st.rowSel
+                        if (sel) box(c, 6f, y, 234f, y + 15f, if (blink) FLUO_PINK else FLUO_YEL)
+                        text(c, 12f, y + 12f, st.dstName(d) + " ← " + ZtekAudio.SRC_NAME[s],
+                            if (sel) INK else st.cableColor(s), 10f)
+                    }
+                    text(c, 6f, 236f, "SEL=ligne  PLAY=débranche  MUT=liste  REC=retour", DIM, 8f)
+                }
+                else -> {  // vue 3 : liste plate de tous les câbles (la baie grandit avec les patchs)
+                    text(c, 6f, 15f, "CÂBLES", FLUO_TURQ, 12f)
+                    text(c, 90f, 15f, "${st.flatRows.size} au total", DIM, 8f)
+                    if (st.flatRows.isEmpty()) text(c, 12f, Y0 + 12f, "aucun câble", DIM, 10f)
+                    val first = st.winFirst(st.rowSel, st.flatRows.size, 11)
+                    for (k in 0 until 11) {
+                        val i = first + k
+                        if (i >= st.flatRows.size) break
+                        val y = Y0 + k * RH
+                        val (s, d) = st.flatRows[i]
+                        val sel = i == st.rowSel
+                        if (sel) box(c, 6f, y, 234f, y + 15f, if (blink) FLUO_PINK else FLUO_YEL)
+                        text(c, 12f, y + 12f, st.cableLabel(s, d), if (sel) INK else st.cableColor(s), 10f)
+                    }
+                    text(c, 6f, 236f, "SEL=ligne  PLAY=débranche  MUT/REC=retour", DIM, 8f)
+                }
+            }
+            c.restore()
+            return
+        }
+
+        // ---- page OPTIONS (16) : OPTIONS > ECO = OFF/ON, CHOKE LDR = ON/OFF ----
+        if (st.page == 16) {
+            text(c, 6f, 15f, "OPTIONS", FLUO_TURQ, 12f)
+            text(c, 6f, 60f, "ECO", if (st.optRow == 0) FLUO_TURQ else DIM, 10f)
+            text(c, 90f, 60f, if (st.ecoOn) "ON" else "OFF", if (st.ecoOn) FLUO_YEL else INK, 10f)
+            text(c, 6f, 90f, "CHOKE LDR", if (st.optRow == 1) FLUO_TURQ else DIM, 10f)
+            text(c, 110f, 90f, if (st.loopLeader == 1 && st.drumLeader == 1) "ON" else "OFF",
+                if (st.loopLeader == 1 && st.drumLeader == 1) FLUO_YEL else INK, 10f)
+            text(c, 6f, 232f, "SEL=ligne  K1=ON/OFF  long-SCL=quitte", DIM, 8f)
             c.restore()
             return
         }

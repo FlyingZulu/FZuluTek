@@ -50,6 +50,9 @@ void fx_punch_off_tail(float t);   /* circuit bend release: keep the effect in, 
 
 void fx_init(float sr);
 void fx_set(int param, float value);   /* knobs 0..1; the types as their index */
+float fx_get(int param);               /* readback (UI) — appended, saved ids do not move */
+void fx_set_eco(int on);               /* MODE ECO: crush 96+tanh en entrée, BBD mono, swirl off, pre-delay /2 */
+int  fx_get_eco(void);
 void fx_tempo(float sixteenth_s);      /* kept for the API; the delay is free now, no sync */
 float fx_dly_ms(float t01);            /* BBD TIME 0..1 -> free ms, 10..~600 */
 float fx_delay_seconds(void);          /* the delay time it plays (clamped to the buffer) */

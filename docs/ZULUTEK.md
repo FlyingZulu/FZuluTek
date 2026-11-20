@@ -66,9 +66,9 @@ On développe/test d'abord sur l'APK (`app-zulutek`), puis on porte sur le FM-1 
 - `patches/atek303-*.patch` (branche PR #4) — le firmware FM-1.
 - `docs/ZULUTEK-MODE-D-EMPLOI.md` — le mode d'emploi.
 
-## Le sampleur / looper MIDI (branche looper)
+## Le sampleur / Loop (branche looper)
 
-Voir `docs/ZULUTEK-MIDI-LOOPER.md` pour le détail. En bref : **REC+EDIT** = page LOOP
+Voir `docs/ZULUTEK-LOOP.md` pour le détail. En bref : **REC+EDIT** = page LOOP
 (16 slots = les 16 blanches), **REC+GLO** = procédure REC (caméra cinéma, armement
 1,2 s, REC+GLO clignotent + logo REC rouge, départ immédiat, stop = longueur prédéfinie
 ou quantizee au tempo), appui long = édition du slot (ALGO = source, SELECT = longueur,
@@ -203,3 +203,29 @@ trop coûteux sur l'AC791N et contraire à « tout linkable »). Depuis le pack 
 À prévoir dans le patch FM-1 : ajouter les **16 mix des slots PoW!**
 comme destinations de la matrice (`labApply` au-delà de `ZT_NDST`) pour qu'un LFO puisse aussi piloter
 les macros.
+
+## OPTIONS (page 9 APK, long-SCL ; OBJ_OPTIONS OPT6 côté FM-1)
+
+- **OPTIONS > ECO = OFF/ON** (« MODE ECO (BATTERIE) », comme Zulu v0.33) — mode éco DSP/RAM :
+  runtime (flag `ztek_set_eco`, lu dans le render) : entrée crush 96 + loudness `tanh` (style Zulu),
+  BBD **mono**, swirl de la Black Hole off, pre-delay max /2, decay réverb ≤ **0.70** (0.89 sinon),
+  polyphonie drums **8 → 5**, resample loop forcé **µ-law + paliers lo-fi (fmt 2), ring 32 kHz, capa /2**,
+  LCD throttlé (~1 s) + animations figées côté APK. Build éco firmware (defines, `patches/README.md`) :
+  `-DFX_RV_Q` (lignes plaque en 16 bits, −73 Ko), `DLY_N`/2 (BBD 300 ms max, −51 Ko), `PN_N`/2, `ML_RS_MAX`/2
+  → ≈ **−220 Ko** de pool sur l'AC791N (~430 Ko RAM). Persistance : SharedPreferences APK / OBJ_OPTIONS FM-1.
+- **OPTIONS > CHOKE LDR = ON/OFF** — mode choke des séquenceurs : ON = **LEADER** (hybride, seul le leader
+  coupe), OFF = **NORMAL** (Koala, choke mutuel). Manip par touches noires MONO (9e) / POLY (10e), voir
+  `docs/ZULUTEK-LOOP.md`.
+
+## Table de mixage principale (page MIX, 4 tranches)
+
+4 tranches **BASSE / LEAD / DRUMS / LOOP** (BASSE et LEAD partagent le bus voix physique :
+engine 0 = LEAD, engines 1..4 = BASSE). Par tranche, en tête **pré-fader** : filtre traversant
+**LP — neutre — HP** + cutoff (40 Hz..5 kHz), puis **VOL**, **MUT** ; départs auxiliaires
+**post-fader** : PoW! (P), Loop (L — la tranche LOOP n'en a pas), 2 slots libres AUX1/AUX2
+(assignables dans la baie, module AUX). Master : **BUS** (gain, SEL=tranche 4) + départs aux
+libres master AUX1/AUX2 (vides par défaut, baie) + **VU**. Chaîne FX partagée (1×) sur le bus
+master, Black Hole bridée. Pas d'inserts delay/reverb dans le mixeur (pages instruments).
+Contrôles page MIX : SEL=tranche/master, K1=vol (bus si master), K2=mut, K3=filtre LP/·/HP,
+K4=cutoff, PRE=aux PoW!, ALG=aux Loop. Moteur : `ztek_mix_set/get_strip` (ZTEK_MIX_*), tranches
+préservées par snapshots/kits/undo.

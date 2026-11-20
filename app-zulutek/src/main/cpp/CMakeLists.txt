@@ -16,8 +16,9 @@ add_library(zulutek SHARED
     dsp/bass_engines.c
     dsp/fx.c
     dsp/acid_pattern.c
-    dsp/midi_looper.c)
+    dsp/midi_looper.c
+    dsp/drum_engine.c)
 target_include_directories(zulutek PRIVATE dsp)
 target_compile_definitions(zulutek PRIVATE FX_HOST)
-target_link_libraries(zulutek oboe::oboe log)
+target_link_libraries(zulutek oboe::oboe log m)
 target_compile_options(zulutek PRIVATE -O2)

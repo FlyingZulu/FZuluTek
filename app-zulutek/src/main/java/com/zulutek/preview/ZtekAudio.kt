@@ -92,6 +92,7 @@ object ZtekAudio {
         if (handle != 0L) nativeSetScale(handle, s)
     }
 
+    fun fxGet(p: Int): Float = if (handle != 0L) nativeFxGet(handle, p) else 0f
     fun fxSet(p: Int, v: Float) {
         if (handle != 0L) nativeFxSet(handle, p, v)
     }
@@ -114,6 +115,13 @@ object ZtekAudio {
     fun loopSlotOn(slot: Int): Boolean = handle != 0L && nativeLoopSlotOn(handle, slot)
     fun loopSlotRec(slot: Int): Boolean = handle != 0L && nativeLoopSlotRec(handle, slot)
     fun loopGetSp(slot: Int, idx: Int): Float = if (handle != 0L) nativeLoopGetSp(handle, slot, idx) else 0f
+    fun loopSetChoke(slot: Int, grp: Int) { if (handle != 0L) nativeLoopSetChoke(handle, slot, grp) }
+    fun loopGetChoke(slot: Int): Int = if (handle != 0L) nativeLoopGetChoke(handle, slot) else 0
+    fun loopChokeMaster(grp: Int): Int = if (handle != 0L) nativeLoopChokeMaster(handle, grp) else -1
+    fun loopSetLeader(on: Int) { if (handle != 0L) nativeLoopSetLeader(handle, on) }
+    fun loopGetLeader(): Int = if (handle != 0L) nativeLoopGetLeader(handle) else 1
+    fun loopSetLeaderSlot(slot: Int, on: Int) { if (handle != 0L) nativeLoopSetLeaderSlot(handle, slot, on) } // POLY
+    fun loopClearLeader(grp: Int) { if (handle != 0L) nativeLoopClearLeader(handle, grp) }
 
     fun acidGenerate(seed: Int) { if (handle != 0L) nativeAcidGenerate(handle, seed) }
     fun acidPlay(on: Int) { if (handle != 0L) nativeAcidPlay(handle, on) }
@@ -157,9 +165,62 @@ object ZtekAudio {
     fun mixSetAux(slot: Int, on: Int) { if (handle != 0L) nativeMixSetAux(handle, slot, on) }
     fun mixSetGain(g: Float) { if (handle != 0L) nativeMixSetGain(handle, g) }
     fun mixGetGain(): Float = if (handle != 0L) nativeMixGetGain(handle) else 1f
+    fun masterPeak(): Float = if (handle != 0L) nativeMasterPeak(handle) else 0f
+    fun loopSlotAct(slot: Int): Int = if (handle != 0L) nativeLoopSlotAct(handle, slot) else 0
     fun patchSet(src: Int, dst: Int, on: Int) { if (handle != 0L) nativePatchSet(handle, src, dst, on) }
     fun patchGet(src: Int, dst: Int): Int = if (handle != 0L) nativePatchGet(handle, src, dst) else 0
     fun patchCompat(src: Int, dst: Int): Int = if (handle != 0L) nativePatchCompat(handle, src, dst) else 0
+
+    /* baie de patch v3 : 22 sources x 158 ports groupés par module.
+     * Ports 0..34 = matrice ASSIGN de la branche seq-plus (VOIX 0..7, FX 8..25, SEQ 26..34),
+     * puis SIREN 35..37, SMP 38..42, LOOP 43..154 (16 slots x 7), OUT 155..157.
+     * Sources 6..21 = modulation LFO/ENV (branche seq-plus PR #3, même ordre que SRC_NAMES là-bas). */
+    const val NSRC = 23                // 22 = DRUMS (boîte à rythmes, PR #5 vendored)
+    const val PSRC_DRUMS = 22
+    /* sources affichées dans la baie : audio d'abord (VOIX/SIREN/SMP/LOOP/DRUMS), puis X/Y */
+    val SRC_IDX = intArrayOf(0, 1, 2, 3, PSRC_DRUMS, 4, 5)
+    val NSRC_ACTIVE = SRC_IDX.size     // 0..5 + DRUMS actifs ici ; 6..21 câblés par le moteur de PR #3
+    const val NMOD = 8
+    const val NDST = 168
+    const val MOD_OUT = 6
+    const val MOD_AUX = 7              // 8 slots aux libres (2 x 4 tranches du main mix)
+    val MOD_OFF = intArrayOf(0, 8, 26, 35, 38, 43, 155, 160, 168)
+    val MOD_NAME = arrayOf("VOIX", "FX", "SEQ", "SIREN", "SMP", "LOOP", "OUT", "AUX")
+    val MOD_NPORT = intArrayOf(8, 18, 9, 3, 5, 112, 5, 8)
+    val SRC_NAME = arrayOf("VOIX", "SIREN", "SMP", "LOOP", "X", "Y",
+        "LFO1", "LFO2", "LFO3", "LFO4", "LAB1", "LAB2", "LAB3", "LAB4",
+        "ENV1", "ENV2", "EF", "LOG", "SLEW", "CMP", "QUANT", "ATT", "DRUMS")
+
+    /* boîte à rythmes (source DRUMS) */
+    const val DR_NPADS = 8
+    val DR_PAD_NAMES = arrayOf("KICK", "SNARE", "HATC", "HATO", "CLAP", "TOM", "CONGA", "COWBELL")
+    fun drumPlay(on: Int) { if (handle != 0L) nativeDrumPlay(handle, on) }
+    fun drumHit(pad: Int) { if (handle != 0L) nativeDrumHit(handle, pad) }
+    fun drumPat(pad: Int, step: Int, on: Int) { if (handle != 0L) nativeDrumPat(handle, pad, step, on) }
+    fun drumGetPat(pad: Int, step: Int): Int = if (handle != 0L) nativeDrumGetPat(handle, pad, step) else 0
+    fun drumClear(pad: Int) { if (handle != 0L) nativeDrumClear(handle, pad) }
+    fun drumRand(pad: Int, density: Float, seed: Int) { if (handle != 0L) nativeDrumRand(handle, pad, density, seed) }
+    fun drumSwing(s: Float) { if (handle != 0L) nativeDrumSwing(handle, s) }
+    fun drumLevel(pad: Int, lvl: Float) { if (handle != 0L) nativeDrumLevel(handle, pad, lvl) }
+    fun drumMaster(m: Float) { if (handle != 0L) nativeDrumMaster(handle, m) }
+    fun drumStep(): Int = if (handle != 0L) nativeDrumStep(handle) else 0
+    fun drumSetChoke(pad: Int, grp: Int) { if (handle != 0L) nativeDrumSetChoke(handle, pad, grp) }
+    fun drumGetChoke(pad: Int): Int = if (handle != 0L) nativeDrumGetChoke(handle, pad) else 0
+    fun drumChokeMaster(grp: Int): Int = if (handle != 0L) nativeDrumChokeMaster(handle, grp) else -1
+    fun drumSetLeader(on: Int) { if (handle != 0L) nativeDrumSetLeader(handle, on) }
+    fun drumGetLeader(): Int = if (handle != 0L) nativeDrumGetLeader(handle) else 1
+    fun drumSetLeaderPad(pad: Int, on: Int) { if (handle != 0L) nativeDrumSetLeaderPad(handle, pad, on) }   // POLY (noire 10)
+    fun drumClearLeader(grp: Int) { if (handle != 0L) nativeDrumClearLeader(handle, grp) }
+    fun modOf(dst: Int): Int {
+        if (dst < 0 || dst >= NDST) return -1
+        var m = NMOD - 1
+        while (m > 0 && dst < MOD_OFF[m]) m--
+        return m
+    }
+    fun assignSet(src: Int, dst: Int, on: Int) { if (handle != 0L) nativeAssignSet(handle, src, dst, on) }
+    fun assignGet(src: Int, dst: Int): Int = if (handle != 0L) nativeAssignGet(handle, src, dst) else 0
+    fun assignWords(src: Int): LongArray = if (handle != 0L) nativeAssignWords(handle, src) else LongArray(3)
+    fun assignBit(words: LongArray, dst: Int): Boolean = (words[dst / 64] shr (dst % 64)) and 1L == 1L
 
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
@@ -352,7 +413,53 @@ object ZtekAudio {
     private external fun nativeMixSetAux(handle: Long, slot: Int, on: Int)
     private external fun nativeMixSetGain(handle: Long, g: Float)
     private external fun nativeMixGetGain(handle: Long): Float
+    // table de mixage 4 tranches BASSE/LEAD/DRUMS/LOOP
+    const val STRIP_BASSE = 0
+    const val STRIP_LEAD = 1
+    const val STRIP_DRUMS = 2
+    const val STRIP_LOOP = 3
+    const val MIX_CUT = 0; const val MIX_FMODE = 1; const val MIX_VOL = 2; const val MIX_MUT = 3
+    const val MIX_AUX_POW = 4; const val MIX_AUX_LOOP = 5; const val MIX_AUX1 = 6; const val MIX_AUX2 = 7
+    val STRIP_NAMES = arrayOf("BASSE", "LEAD", "DRUMS", "LOOP")
+    fun mixSetStrip(strip: Int, param: Int, v: Float) { if (handle != 0L) nativeMixSetStrip(handle, strip, param, v) }
+    fun mixGetStrip(strip: Int, param: Int): Float = if (handle != 0L) nativeMixGetStrip(handle, strip, param) else 0f
+    private external fun nativeMixSetStrip(handle: Long, strip: Int, param: Int, v: Float)
+    private external fun nativeMixGetStrip(handle: Long, strip: Int, param: Int): Float
+    private external fun nativeMasterPeak(handle: Long): Float
+    private external fun nativeLoopSlotAct(handle: Long, slot: Int): Int
     private external fun nativePatchSet(handle: Long, src: Int, dst: Int, on: Int)
     private external fun nativePatchGet(handle: Long, src: Int, dst: Int): Int
     private external fun nativePatchCompat(handle: Long, src: Int, dst: Int): Int
+    private external fun nativeAssignSet(handle: Long, src: Int, dst: Int, on: Int)
+    private external fun nativeAssignGet(handle: Long, src: Int, dst: Int): Int
+    private external fun nativeAssignWords(handle: Long, src: Int): LongArray
+    private external fun nativeDrumPlay(handle: Long, on: Int)
+    private external fun nativeDrumHit(handle: Long, pad: Int)
+    private external fun nativeDrumPat(handle: Long, pad: Int, step: Int, on: Int)
+    private external fun nativeDrumGetPat(handle: Long, pad: Int, step: Int): Int
+    private external fun nativeDrumClear(handle: Long, pad: Int)
+    private external fun nativeDrumRand(handle: Long, pad: Int, density: Float, seed: Int)
+    private external fun nativeDrumSwing(handle: Long, s: Float)
+    private external fun nativeDrumLevel(handle: Long, pad: Int, lvl: Float)
+    private external fun nativeDrumMaster(handle: Long, m: Float)
+    private external fun nativeDrumStep(handle: Long): Int
+    private external fun nativeDrumSetChoke(handle: Long, pad: Int, grp: Int)
+    private external fun nativeDrumGetChoke(handle: Long, pad: Int): Int
+    private external fun nativeDrumChokeMaster(handle: Long, grp: Int): Int
+    private external fun nativeDrumSetLeader(handle: Long, on: Int)
+    private external fun nativeDrumGetLeader(handle: Long): Int
+    private external fun nativeDrumSetLeaderPad(handle: Long, pad: Int, on: Int)
+    private external fun nativeDrumClearLeader(handle: Long, grp: Int)
+    private external fun nativeLoopSetChoke(handle: Long, slot: Int, grp: Int)
+    private external fun nativeLoopGetChoke(handle: Long, slot: Int): Int
+    private external fun nativeLoopChokeMaster(handle: Long, grp: Int): Int
+    private external fun nativeLoopSetLeader(handle: Long, on: Int)
+    private external fun nativeLoopGetLeader(handle: Long): Int
+    private external fun nativeLoopSetLeaderSlot(handle: Long, slot: Int, on: Int)
+    private external fun nativeLoopClearLeader(handle: Long, grp: Int)
+    private external fun nativeFxGet(handle: Long, p: Int): Float
+    fun setEco(on: Int) { if (handle != 0L) nativeSetEco(handle, on) }       // OPTIONS > ECO
+    fun eco(): Int = if (handle != 0L) nativeGetEco(handle) else 0
+    private external fun nativeSetEco(handle: Long, on: Int)
+    private external fun nativeGetEco(handle: Long): Int
 }
