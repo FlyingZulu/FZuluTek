@@ -1,0 +1,801 @@
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 7793de7..d41d4a5 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -158,8 +158,8 @@ static int8_t cur_preset = -1;                 /* the one loaded (or saved) last
+ 
+ /* the OPTIONS menu (OCT- + HOME): the unit's own choices, apart from the settings so no preset carries them (OBJ_OPTIONS,
+  * saved as the menu closes). Each an index into its choices */
+-#define OPT_MAGIC 0x4F505433u                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
+-enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_FINE, OP_N = OP_FINE + AT_NOPTS };   /* patch 0005: OP_LUDIQUE */
++#define OPT_MAGIC 0x4F505434u                  /* "OPT4": patch 0009 adds OP_ECO, OP_CHOKE_LDR */                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
++enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_ECO, OP_CHOKE_LDR, OP_FINE,   /* patch 0009 */ OP_N = OP_FINE + AT_NOPTS };   /* patch 0005: OP_LUDIQUE */
+ #define CLK_OFS_MAX 40                         /* OPTIONS > CLK OFFSET: -40 .. +40 ms, stored + 40 */
+ typedef struct {
+     uint32_t magic;
+@@ -176,13 +176,15 @@ static void options_defaults(void)
+     opt.v[OP_SEQ_OUT] = 1;                     /* the sequencer's notes out */
+     opt.v[OP_CLOCK_OUT] = 0;
+     opt.v[OP_CLK_OFS] = CLK_OFS_MAX - 16;
+-    opt.v[OP_LUDIQUE] = 1;                   /* patch 0005: educational pops ON by default */      /* -16 ms: a Digitakt on the TRS jack, by ear in fm1-dock (14/11) */
++    opt.v[OP_LUDIQUE] = 1;
++    opt.v[OP_ECO] = 0;                   /* patch 0009: OPTIONS > ECO = OFF par defaut */
++    opt.v[OP_CHOKE_LDR] = 1;            /* patch 0009: OPTIONS > CHOKE LDR = ON (mode leader hybride) */                   /* patch 0005: educational pops ON by default */      /* -16 ms: a Digitakt on the TRS jack, by ear in fm1-dock (14/11) */
+     for (i = 0; i < AT_NOPTS; i++)
+         opt.v[OP_FINE + i] = AT_OPT_DEFAULT[i];
+ }
+ static int opt_count(int i)                    /* how many choices item i has */
+ {
+-    static const uint8_t N[OP_FINE] = {0, 17, 16, 2, 2, 2 * CLK_OFS_MAX + 1, 2};   /* patch 0005: + LUDIQUE on/off */
++    static const uint8_t N[OP_FINE] = {0, 17, 16, 2, 2, 2 * CLK_OFS_MAX + 1, 2, 2, 2};   /* patch 0009: + ECO on/off, CHOKE LDR on/off */   /* patch 0005: + LUDIQUE on/off */
+     return i == OP_COLOR ? NTHEMES : i < OP_FINE ? N[i] : AT_OPT_N[i - OP_FINE];
+ }
+ static void options_load(void)
+@@ -1106,7 +1108,9 @@ void app_init(void)
+     int i;
+     at_init(&voice, SR);
+     options_load();
+-    zsp_set_ludique(opt.v[OP_LUDIQUE]);   /* patch 0005: LUDIQUE option -> SEQ+ flash */
++    zsp_set_ludique(opt.v[OP_LUDIQUE]);
++    fx_set_eco(opt.v[OP_ECO]); zdr_set_eco(opt.v[OP_ECO]); zml_set_eco(opt.v[OP_ECO]);   /* patch 0009: OPTIONS > ECO */
++    zdr_set_leader(opt.v[OP_CHOKE_LDR]); zml_set_leader(opt.v[OP_CHOKE_LDR]);   /* patch 0009: OPTIONS > CHOKE LDR */   /* patch 0005: LUDIQUE option -> SEQ+ flash */
+     for (i = 0; i < AT_NOPTS; i++)
+         at_option(&voice, i, opt.v[OP_FINE + i]);
+     store_load();
+@@ -1545,7 +1549,7 @@ static void edit_move(int32_t d)
+ }
+ /* ------------------------------------------------------------ OPTIONS --- */
+ static const char *const OPT_LABEL[OP_N] = {"COLOR", "MIDI IN CH", "MIDI OUT CH", "SEQ NOTES OUT", "CLOCK OUT",
+-    "CLK OFFSET", "LUDIQUE",   /* patch 0005 */ "PULSE WIDTH", "SQUARE DROOP", "SAW RESET", "SAW DROOP", "FILTER DRIVE", "SLIDE TIME", "AUTO LEGATO",
++    "CLK OFFSET", "LUDIQUE", "ECO", "CHOKE LDR",   /* patch 0009 */   /* patch 0005 */ "PULSE WIDTH", "SQUARE DROOP", "SAW RESET", "SAW DROOP", "FILTER DRIVE", "SLIDE TIME", "AUTO LEGATO",
+     "OTA SATURATION", "OUT SATURATION", "ANALOG DRIFT", "UNIT"};
+ static const char *const OPT_SECTION[OP_N] = {"DISPLAY", "MIDI", 0, 0, 0, 0, "FINE TUNING", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+ static void opt_value_text(int i, char *t)
+@@ -1584,6 +1588,10 @@ static void opt_change(int i, int32_t e)       /* a step through item i's choice
+     if (i == OP_COLOR) {
+         theme_apply(v);
+         lcd_fill(0, 0, 240, 240, C_BLACK);
++    } else if (i == OP_ECO) {   /* patch 0009: OPTIONS > ECO = OFF/ON (runtime DSP) */
++        fx_set_eco(opt.v[OP_ECO]); zdr_set_eco(opt.v[OP_ECO]); zml_set_eco(opt.v[OP_ECO]);
++    } else if (i == OP_CHOKE_LDR) {   /* patch 0009: OPTIONS > CHOKE LDR = ON/OFF */
++        zdr_set_leader(opt.v[OP_CHOKE_LDR]); zml_set_leader(opt.v[OP_CHOKE_LDR]);
+     } else if (i >= OP_FINE)
+         post(EV_OPTION, (uint32_t)(i - OP_FINE), (uint32_t)v);
+ }
+@@ -1592,7 +1600,9 @@ static void opt_close(void)
+     ui.opts = 0;
+     if (ui.opt_dirty && !backup_hold) {
+         ui.opt_dirty = 0;
+-        zsp_set_ludique(opt.v[OP_LUDIQUE]);   /* patch 0005: sync LUDIQUE into the SEQ+ flash */
++        zsp_set_ludique(opt.v[OP_LUDIQUE]);
++    fx_set_eco(opt.v[OP_ECO]); zdr_set_eco(opt.v[OP_ECO]); zml_set_eco(opt.v[OP_ECO]);   /* patch 0009: OPTIONS > ECO */
++    zdr_set_leader(opt.v[OP_CHOKE_LDR]); zml_set_leader(opt.v[OP_CHOKE_LDR]);   /* patch 0009: OPTIONS > CHOKE LDR */   /* patch 0005: sync LUDIQUE into the SEQ+ flash */
+         zsp_flash_save();
+         if (plat_store_save(OBJ_OPTIONS, &opt, sizeof opt) == 0)
+             app_say("OPTIONS", "SAVED");
+@@ -1637,7 +1647,7 @@ static void input(void)
+             if (set.page == 11u) {           /* patch 0007: page DRUM — blanches = steps, noires = pads */
+                 int w;
+                 for (w = 0; w < 16; w++)
+-                    if (WHITE_KEY[w] == k) { zdr_step_toggle(w); break; }
++                    if (WHITE_KEY[w] == k) { if (zdr_choke_win()) zdr_choke_close(); zdr_step_toggle(w); break; }   /* patch 0009 */
+                 if (w == 16) {               /* touche noire : index parmi les noires, 8 premières = pads */
+                     int b, bi = 0;
+                     for (b = 0; b < 27; b++) {
+@@ -1645,13 +1655,26 @@ static void input(void)
+                         for (ww = 0; ww < 16; ww++) if (WHITE_KEY[ww] == b) { isw = 1; break; }
+                         if (!isw) { if (b == (int)k) break; bi++; }
+                     }
+-                    if (bi < 8) zdr_pad_hit(bi);
++                    if (bi == 8) zdr_choke_mono(plat_ms());   /* patch 0009: MONO = 9e noire */
++                    else if (bi == 9) zdr_choke_poly(plat_ms());   /* patch 0009: POLY = 10e noire */
++                    else if (bi < 8) { if (zdr_choke_win()) zdr_choke_pad(bi, plat_ms()); else zdr_pad_hit(bi); }
+                 }
+                 ui.redraw = 1;
+             } else if (set.page == 12u) {     /* patch 0008: page LOOP — 16 blanches = les 16 slots */
+                 int w;
+                 for (w = 0; w < 16; w++)
+-                    if (WHITE_KEY[w] == k) { zml_slot_toggle(w); break; }
++                    if (WHITE_KEY[w] == k) { if (zml_choke_win()) zml_choke_slot(w, plat_ms()); else zml_slot_toggle(w); break; }   /* patch 0009 */
++                if (w == 16) {   /* patch 0009: noires 8/9 = MONO/POLY ; fenetre ouverte = fermees par les autres noires */
++                    int b, bi = 0;
++                    for (b = 0; b < 27; b++) {
++                        int ww, isw = 0;
++                        for (ww = 0; ww < 16; ww++) if (WHITE_KEY[ww] == b) { isw = 1; break; }
++                        if (!isw) { if (b == (int)k) break; bi++; }
++                    }
++                    if (bi == 8) zml_choke_mono(plat_ms());
++                    else if (bi == 9) zml_choke_poly(plat_ms());
++                    else if (zml_choke_win()) zml_choke_close();
++                }
+                 ui.redraw = 1;
+             } else if (set.page == 13u) {     /* patch 0008: page MACRO — 16 blanches = les 16 slots macro */
+                 int w;
+@@ -1938,10 +1961,12 @@ static void input(void)
+             post(EV_EDIT, ui.cursor, (uint32_t)OP[k - EN_K1] | (e > 0 ? 1u : 0u) << 8);
+             set_dirty = 1;
+         } else if (set.page == 11u) {          /* patch 0007: page DRUM — SELECT=pad PRESET=page ALGO=swing K1..K4=params */
+-            zdr_encoder(k, e);
++            if (zdr_choke_win() && k == EN_SELECT) zdr_choke_group(e, plat_ms());   /* patch 0009 */
++            else zdr_encoder(k, e);
+             ui.redraw = 1;
+         } else if (set.page == 12u) {          /* patch 0008: page LOOP */
+-            zml_encoder(k, e);
++            if (zml_choke_win() && k == EN_SELECT) zml_choke_group(e, plat_ms());   /* patch 0009 */
++            else zml_encoder(k, e);
+             ui.redraw = 1;
+         } else if (set.page == 13u) {          /* patch 0008: page MACRO */
+             zmac_encoder(k, e);
+@@ -2472,6 +2497,7 @@ void app_frame(void)
+     static int last_batt = -2;
+     uint32_t now = plat_ms();
+     input();
++    zdr_choke_tick(now); zml_choke_tick(now);   /* patch 0009: fenetre choke auto 1,5 s */
+     ann_tick(now);
+     if (plat_battery() != last_batt) {         /* the battery's bars (header) */
+         last_batt = plat_battery();
+diff --git a/atek303/app/dsp/drum_engine.c b/atek303/app/dsp/drum_engine.c
+index a53725f..c7b27c7 100644
+--- a/atek303/app/dsp/drum_engine.c
++++ b/atek303/app/dsp/drum_engine.c
+@@ -104,6 +104,9 @@ void drum_init(drum_t *d, float sr)
+     d->play_pos = 0;
+     d->play_dir = 1;
+     d->rng = 0x2026u;
++    /* patch 0009: choke desactive par defaut (tout a 0, memset) ; leader ON, pas de leader designe */
++    d->leader = 1;
++    for (int g = 0; g < DR_NCHOKE; g++) d->lead[g] = -1;
+     /* compresseur de bus, défaut "glue" doux (section compression PĒRKONS-like) */
+     d->comp.on = 1;
+     d->comp.thr = 0.65f;
+@@ -255,6 +258,22 @@ float drum_lfo_val(const drum_t *d, int i)
+ static void trigger(drum_t *d, int pad, int vel)
+ {
+     if (pad < 0 || pad >= DR_NPADS) return;
++    /* patch 0009: MODE ECO = polyphonie 8 -> 5 (vole la voix la plus vieille) */
++    if (d->eco) {
++        int p, act = 0, oldest = -1;
++        float ot = -1.0f;
++        for (p = 0; p < DR_NPADS; p++)
++            if (d->v[p].t >= 0.0f) { act++; if (d->v[p].t > ot) { ot = d->v[p].t; oldest = p; } }
++        if (act >= 5 && oldest >= 0 && oldest != pad) d->v[oldest].t = -1.0f;
++    }
++    {   /* patch 0009: choke au declenchement (aussi depuis le sequenceur 16 steps, via trigger) :
++         * mode leader = seul le master du groupe coupe ; sinon (Koala) tout membre coupe */
++        int g = d->choke[pad];
++        if (g > 0 && (!d->leader || drum_choke_master(d, g) == pad))
++            for (int p = 0; p < DR_NPADS; p++)
++                if (p != pad && d->choke[p] == (uint8_t)g)
++                    d->v[p].t = -1.0f;      /* tue la voix */
++    }
+     dr_voice_t *v = &d->v[pad];
+     const float *par = d->pad[pad].par;
+     v->t = 0.0f;
+@@ -343,6 +362,61 @@ void drum_hit(drum_t *d, int pad)
+     trigger(d, pad, 110);
+ }
+ 
++/* patch 0009: choke Koala + leader (POLY) + MODE ECO */
++void drum_set_choke(drum_t *d, int pad, int grp)
++{
++    if (pad < 0 || pad >= DR_NPADS) return;
++    if (grp < 0) grp = 0;
++    if (grp >= DR_NCHOKE) grp = DR_NCHOKE - 1;
++    if (d->choke[pad] != (uint8_t)grp) {       /* nouvelle assignation = nouvel ordre */
++        int old = d->choke[pad];
++        if (old > 0 && d->lead[old] == pad) d->lead[old] = -1;   /* le leader explicite quitte le groupe */
++        d->choke[pad] = (uint8_t)grp;
++        d->choke_order[pad] = ++d->choke_tick;
++    }
++}
++
++int drum_get_choke(const drum_t *d, int pad)
++{
++    if (pad < 0 || pad >= DR_NPADS) return 0;
++    return d->choke[pad];
++}
++
++int drum_choke_master(const drum_t *d, int grp)
++{
++    int best = -1;
++    uint32_t bo = 0xFFFFFFFFu;
++    if (grp <= 0 || grp >= DR_NCHOKE) return -1;
++    if (d->lead[grp] >= 0 && d->choke[d->lead[grp]] == (uint8_t)grp)
++        return d->lead[grp];                    /* leader designe explicitement (POLY) */
++    for (int p = 0; p < DR_NPADS; p++)
++        if (d->choke[p] == (uint8_t)grp && d->choke_order[p] < bo) {
++            bo = d->choke_order[p];
++            best = p;
++        }
++    return best;
++}
++
++void drum_set_leader(drum_t *d, int on) { d->leader = on ? 1 : 0; }
++int  drum_get_leader(const drum_t *d)   { return d->leader; }
++void drum_set_leader_pad(drum_t *d, int pad, int on)
++{
++    int g;
++    if (pad < 0 || pad >= DR_NPADS) return;
++    g = d->choke[pad];
++    if (g <= 0) return;
++    if (on) d->lead[g] = (int8_t)pad;                       /* designer leader (sticky) */
++    else if (d->lead[g] == pad) d->lead[g] = -1;            /* desassigner le leader -> retour a l'auto */
++}
++
++void drum_clear_leader(drum_t *d, int grp)          /* POLY sans selection : mode leader off */
++{
++    if (grp > 0 && grp < DR_NCHOKE) d->lead[grp] = -1;
++}
++
++void drum_set_eco(drum_t *d, int on) { d->eco = on ? 1 : 0; }
++int  drum_get_eco(const drum_t *d)   { return d->eco; }
++
+ /* ---- un échantillon de voix ---- */
+ static float voice_sample(drum_t *d, dr_voice_t *v)
+ {
+diff --git a/atek303/app/dsp/drum_engine.h b/atek303/app/dsp/drum_engine.h
+index 2b8c60d..b55589b 100644
+--- a/atek303/app/dsp/drum_engine.h
++++ b/atek303/app/dsp/drum_engine.h
+@@ -21,6 +21,7 @@ extern "C" {
+ 
+ #define DR_NPADS 8
+ #define DR_NSTEPS 16
++#define DR_NCHOKE 7                     /* patch 0009: groupes de choke : 0 = off, 1..6 (style Koala) */
+ #define DR_BAR64 64            /* 1 mesure 4/4 = 64 soixante-quatrièmes ; 1 step = 4 unités */
+ 
+ enum { DR_KICK = 0, DR_SNARE, DR_HAT, DR_CLAP, DR_TOM, DR_PERC, DR_COWBELL, DR_FM };
+@@ -144,6 +145,15 @@ typedef struct {
+     dr_lfo_t lfo[2];         /* 2 LFO globaux (matrice façon ASSIGN : dst + depth) */
+     float mod_pitch, mod_dec, mod_pan, mod_dsend, mod_rsend, mod_glitch, mod_thr; /* valeurs LFO courantes */
+     int   lfo_blk;           /* compteur d'échantillons pour le calcul LFO par blocs de 32 */
++    /* patch 0009: choke (style Koala) : groupe 0 = off, 1..6 = groupe. Le premier pad assigne a un
++     * groupe en est le master (le plus ancien choke_order) ; en mode leader, seul le master
++     * coupe les autres membres du groupe, sinon (leader off) tout membre coupe les autres. */
++    uint8_t  choke[DR_NPADS];
++    uint32_t choke_order[DR_NPADS];
++    uint32_t choke_tick;
++    int8_t   lead[DR_NCHOKE]; /* leader explicite par groupe (touche POLY), -1 = auto (1er assigne) */
++    uint8_t  leader;    /* 1 = mode hybride (leader), 0 = choke mutuel classique */
++    uint8_t  eco;       /* patch 0009: MODE ECO (OPTIONS > ECO) : polyphonie 8 -> 5 */
+ } drum_t;
+ 
+ /* destinations LFO (matrice façon ASSIGN du pack SEQ+) */
+@@ -167,7 +177,17 @@ void drum_set_randp(drum_t *d, float p);                          /* RAND au wra
+ void drum_set_lfo(drum_t *d, int i, float rate, int wave, float depth, int dst);  /* i 0..1 */
+ float drum_lfo_val(const drum_t *d, int i);
+ 
+-void drum_hit(drum_t *d, int pad);                 /* hit manuel (REC ajoute l'événement si rec=1) */
++void drum_hit(drum_t *d, int pad);
++/* patch 0009: choke Koala + leader (POLY) + MODE ECO */
++void drum_set_choke(drum_t *d, int pad, int grp);
++int  drum_get_choke(const drum_t *d, int pad);
++int  drum_choke_master(const drum_t *d, int grp);
++void drum_set_leader(drum_t *d, int on);
++int  drum_get_leader(const drum_t *d);
++void drum_set_leader_pad(drum_t *d, int pad, int on);
++void drum_clear_leader(drum_t *d, int grp);
++void drum_set_eco(drum_t *d, int on);
++int  drum_get_eco(const drum_t *d);                 /* hit manuel (REC ajoute l'événement si rec=1) */
+ void drum_set_step(drum_t *d, int pad, int step, int on, int vel, int cond, int slide);
+ void drum_get_step(const drum_t *d, int pad, int step, int *on, int *vel, int *cond, int *slide);
+ void drum_clear_pat(drum_t *d, int pad);
+diff --git a/atek303/app/dsp/fx.c b/atek303/app/dsp/fx.c
+index 504bb0a..1ec8824 100644
+--- a/atek303/app/dsp/fx.c
++++ b/atek303/app/dsp/fx.c
+@@ -18,6 +18,7 @@ const char *const FX_MOD_NAME[FX_MOD_TYPES] = {"CHORUS", "FLANGER"};
+ static float sr = 44100.0f;
+ static float par[FX_NPARAMS];
+ static float sixteenth = 0.12f;
++static int fx_eco = 0;                            /* MODE ECO (OPTIONS > ECO) : voir fx_set_eco */
+ 
+ static inline float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
+ static inline float flush(float x) { return fm_fabsf(x) < 1e-15f ? 0.0f : x; }
+@@ -457,6 +458,12 @@ void fx_set(int p, float v)
+         par[p] = v;
+ }
+ 
++float fx_get(int p)                 /* lecture des knobs (UI mixeur: niveaux d'aux master) */
++{
++    if (p < 0 || p >= FX_NPARAMS) return 0.0f;
++    return par[p];
++}
++
+ void fx_tempo(float s) { sixteenth = clampf(s, 0.02f, 2.0f); }
+ 
+ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+@@ -479,6 +486,7 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+     float decay = 0.30f + 0.695f * par[FX_REV_DECAY];        /* up to 0.995: Black Hole long tails, never endless */
+     float damp = onepole_c(700.0f * fm_exp2f(4.0f * (1.0f - par[FX_REV_DAMP])));   /* 700 Hz .. 11 kHz, darker */
+     uint32_t pre = (uint32_t)(par[FX_REV_PRE] * (float)(PRE_MAX - 1u));
++    if (fx_eco && pre > PRE_MAX / 2u) pre = PRE_MAX / 2u;   /* eco: pre-delay max réduit de moitié */
+     dr.gain_s = 1.0f + (dtype == 3 ? 120.0f : dtype == 2 ? 60.0f : dtype == 4 ? 3.0f : 12.0f) * par[FX_DRIVE] * par[FX_DRIVE];
+     /* MOJO's bitcrusher, on its own two knobs: BIT the depth (11 -> 5 bits), HOLD the sample hold (1 -> 8) */
+     if (dtype == 4) {
+@@ -496,6 +504,10 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+ 
+     for (i = 0; i < n; i++) {
+         float x = in[i], l, r;
++        if (fx_eco) {                             /* eco: bitrate réduit (96 pas) + loudness chaud, style Zulu v0.33 */
++            x = fm_floorf(x * 96.0f + 0.5f) / 96.0f;
++            x = fm_tanhf(x * 1.7f) * 0.72f;
++        }
+         /* DRIVE */
+         if (dtype)
+             x = drive_sample(x, dtype) * level;
+@@ -529,15 +541,17 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+                 dl.rng ^= dl.rng << 5;
+                 hiss = ((float)(dl.rng >> 8) * (2.0f / 16777216.0f) - 1.0f) * 0.015f;
+                 a = dly_read(dly_buf[0], qlen) + hiss;
+-                b = dly_read(dly_buf[1], qlen) + hiss;
++                b = fx_eco ? a : dly_read(dly_buf[1], qlen) + hiss;   /* eco: BBD mono, une seule ligne */
+             }
+             /* the loop's tone: darker every pass, no mud */
+             dl.lp[0] += dlp * (b - dl.lp[0]);
+             dl.hp[0] += dhp * (dl.lp[0] - dl.hp[0]);
+-            dl.lp[1] += dlp * (a - dl.lp[1]);
+-            dl.hp[1] += dhp * (dl.lp[1] - dl.hp[1]);
+             dly_buf[0][dl.w] = to16(mono + fb * (dl.lp[0] - dl.hp[0]));
+-            dly_buf[1][dl.w] = to16(fb * (dl.lp[1] - dl.hp[1]));
++            if (!fx_eco) {
++                dl.lp[1] += dlp * (a - dl.lp[1]);
++                dl.hp[1] += dhp * (dl.lp[1] - dl.hp[1]);
++                dly_buf[1][dl.w] = to16(fb * (dl.lp[1] - dl.hp[1]));
++            }
+             if (++dl.w >= DLY_N)
+                 dl.w = 0;
+             l += dmix * a;
+@@ -556,10 +570,14 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+             t = rap(R_IN4, t, 0.625f);
+             t = rap(R_IN5, t, 0.5f);                /* extra diffusion, Black Hole style */
+             t = rap(R_IN6, t, 0.5f);
+-            ex = (float)EXC * 0.5f * (1.0f + fm_sin_turns(rv.ph));
+-            rv.ph += 2.5f / sr;                        /* 2.5 Hz swirl */
+-            if (rv.ph >= 1.0f)
+-                rv.ph -= 1.0f;
++            if (fx_eco) {
++                ex = (float)EXC * 0.5f;                /* eco: swirl de la tank off */
++            } else {
++                ex = (float)EXC * 0.5f * (1.0f + fm_sin_turns(rv.ph));
++                rv.ph += 2.5f / sr;                    /* 2.5 Hz swirl */
++                if (rv.ph >= 1.0f)
++                    rv.ph -= 1.0f;
++            }
+             /* left half of the tank */
+             xl = rap_mod(R_AP1L, t + decay * rv.fb_r, -0.70f, (float)RS(672) + ex);
+             rput(R_D1L, xl);
+@@ -604,3 +622,7 @@ void fx_process(const float *in, float *outl, float *outr, uint32_t n)
+         outr[i] = r;
+     }
+ }
++
++/* MODE ECO (OPTIONS > ECO, append-only : les patches restent applicables) */
++void fx_set_eco(int on) { fx_eco = on ? 1 : 0; }
++int  fx_get_eco(void)   { return fx_eco; }
+diff --git a/atek303/app/dsp/fx.h b/atek303/app/dsp/fx.h
+index eb4204b..b162553 100644
+--- a/atek303/app/dsp/fx.h
++++ b/atek303/app/dsp/fx.h
+@@ -50,6 +50,9 @@ void fx_punch_off_tail(float t);   /* circuit bend release: keep the effect in,
+ 
+ void fx_init(float sr);
+ void fx_set(int param, float value);   /* knobs 0..1; the types as their index */
++float fx_get(int param);               /* readback (UI) — appended, saved ids do not move */
++void fx_set_eco(int on);               /* MODE ECO: crush 96+tanh en entrée, BBD mono, swirl off, pre-delay /2 */
++int  fx_get_eco(void);
+ void fx_tempo(float sixteenth_s);      /* kept for the API; the delay is free now, no sync */
+ float fx_dly_ms(float t01);            /* BBD TIME 0..1 -> free ms, 10..~600 */
+ float fx_delay_seconds(void);          /* the delay time it plays (clamped to the buffer) */
+diff --git a/atek303/app/dsp/midi_looper.c b/atek303/app/dsp/midi_looper.c
+index b960b5c..f83724e 100644
+--- a/atek303/app/dsp/midi_looper.c
++++ b/atek303/app/dsp/midi_looper.c
+@@ -45,6 +45,8 @@ void ml_init(ml_t *m, float sr)
+     m->loop_gain = 1.0f;
+     m->sel = 0;
+     m->rng = 0x5EED1234u;
++    m->leader = 1;                 /* mode leader (hybride) par défaut ; choke tout à 0 (off) */
++    for (i = 0; i < 7; i++) m->lead[i] = -1;
+     for (i = 0; i < ML_NSLOTS; i++) {
+         m->slot[i].len = ML_BAR64;   /* placeholder; len_set=0 -> quantized at rec stop */
+         m->slot[i].len_set = 0;
+@@ -100,6 +102,69 @@ void ml_toggle(ml_t *m, int slot)
+         s->dir = 1;
+         s->n_act = 0;
+     }
++    if (s->on) {
++        /* choke au déclenchement : mode leader = seul le master du groupe arrête les autres,
++         * sinon (normal/Koala) tout membre arrête les autres membres du même groupe */
++        int g = m->choke[slot];
++        if (g > 0 && (!m->leader || ml_choke_master(m, g) == slot)) {
++            int i, a;
++            for (i = 0; i < ML_NSLOTS; i++) {
++                ml_slot_t *o;
++                if (i == slot || m->choke[i] != (uint8_t)g || !m->slot[i].on) continue;
++                o = &m->slot[i];
++                o->on = 0;
++                for (a = 0; a < o->n_act; a++)
++                    if (m->note_off) m->note_off(m->ctx, i, o->act[a].note);
++                o->n_act = 0;
++            }
++        }
++    }
++}
++
++void ml_set_choke(ml_t *m, int slot, int grp)
++{
++    if (slot < 0 || slot >= ML_NSLOTS) return;
++    if (grp < 0) grp = 0;
++    if (grp > 6) grp = 6;
++    if (m->choke[slot] != (uint8_t)grp) {   /* nouvelle assignation = nouvel ordre */
++        int old = m->choke[slot];
++        if (old > 0 && m->lead[old] == slot) m->lead[old] = -1;   /* le leader explicite quitte le groupe */
++        m->choke[slot] = (uint8_t)grp;
++        m->choke_order[slot] = ++m->choke_tick;
++    }
++}
++
++int ml_get_choke(const ml_t *m, int slot)
++{
++    if (slot < 0 || slot >= ML_NSLOTS) return 0;
++    return m->choke[slot];
++}
++
++int ml_choke_master(const ml_t *m, int grp)
++{
++    int best = -1, i;
++    uint32_t bo = 0xFFFFFFFFu;
++    if (grp <= 0 || grp > 6) return -1;
++    if (m->lead[grp] >= 0 && m->choke[m->lead[grp]] == (uint8_t)grp)
++        return m->lead[grp];                /* leader désigné explicitement (POLY) */
++    for (i = 0; i < ML_NSLOTS; i++)
++        if (m->choke[i] == (uint8_t)grp && m->choke_order[i] < bo) {
++            bo = m->choke_order[i];
++            best = i;
++        }
++    return best;
++}
++
++void ml_set_leader(ml_t *m, int on) { m->leader = on ? 1 : 0; }
++int  ml_get_leader(const ml_t *m)   { return m->leader; }
++void ml_set_leader_slot(ml_t *m, int slot, int on)
++{
++    int g;
++    if (slot < 0 || slot >= ML_NSLOTS) return;
++    g = m->choke[slot];
++    if (g <= 0) return;
++    if (on) m->lead[g] = (int8_t)slot;                      /* désigner leader (sticky) */
++    else if (m->lead[g] == slot) m->lead[g] = -1;           /* désassigner -> retour à l'auto */
+ }
+ 
+ void ml_set_len(ml_t *m, int slot, int len64)
+@@ -394,13 +459,21 @@ static float ml_ulaw_dec(uint8_t u)
+ /* resample (reloop): record the monitored bus into the ring.
+  * fmt: 0 = int16, 1 = µ-law 8-bit (SP-1200 style, half RAM -> cap may reach 2*ML_RS_MAX);
+  * khz: 0 = native ring rate, else the ring runs at khz kHz (32 = lighter on the FM-1) */
++void ml_set_eco(ml_t *m, int on) { m->eco = on ? 1 : 0; }
++int  ml_get_eco(const ml_t *m)   { return m->eco; }
++
+ void ml_rs_start(ml_t *m, int dst, uint16_t monmask, uint32_t cap, int fmt, int khz)
+ {
+     uint32_t maxc;
+     if (dst < 0 || dst >= ML_NSLOTS) return;
++    if (m->eco) {   /* MODE ECO : bitrate du loop le plus bas — µ-law + paliers lo-fi, ring 32 kHz min, capa /2 */
++        if (fmt < 2) fmt = 2;
++        if (khz < 32) khz = 32;
++    }
+     m->rs_fmt = fmt == 2 ? 2 : (fmt ? 1 : 0);
+     maxc = m->rs_fmt ? (uint32_t)ML_RS_MAX * 2u : (uint32_t)ML_RS_MAX;
+     if (cap > maxc) cap = maxc;
++    if (m->eco && cap > ML_RS_MAX) cap = ML_RS_MAX;
+     if (cap < 512) cap = 512;
+     m->rs_decim = khz > 0 ? m->sr / (khz * 1000.0f) : 1.0f;   /* ring rate = khz kHz (32 = 32 kHz ring) */
+     if (m->rs_decim < 1.0f) m->rs_decim = 1.0f;
+@@ -683,3 +756,8 @@ void ml_mutate(ml_t *m, int slot, int layer)
+         break;
+     }
+ }
++
++void ml_clear_leader(ml_t *m, int grp)
++{
++    if (grp > 0 && grp <= 6) m->lead[grp] = -1;
++}
+diff --git a/atek303/app/dsp/midi_looper.h b/atek303/app/dsp/midi_looper.h
+index 0890469..7935329 100644
+--- a/atek303/app/dsp/midi_looper.h
++++ b/atek303/app/dsp/midi_looper.h
+@@ -83,6 +83,16 @@ typedef struct {
+     void (*note_off)(void *ctx, int slot, int note);
+     void (*param)(void *ctx, int slot, int key, float v);
+     void *ctx;
++    /* patch 0009: choke (style Koala) par slot, hors ml_sp_t (la baie garde ses 7 params/slot) :
++     * groupe 0 = off, 1..6 = groupe. Le premier slot assign\u00e9 \u00e0 un groupe en est le master ;
++     * en mode leader, seul le master arr\u00eate les autres membres quand il d\u00e9marre,
++     * sinon (leader off) tout membre arr\u00eate les autres (Koala classique). */
++    uint8_t  choke[ML_NSLOTS];
++    uint32_t choke_order[ML_NSLOTS];
++    uint32_t choke_tick;
++    int8_t   lead[7];        /* leader explicite par groupe (touche POLY), -1 = auto (1er assign\u00e9) */
++    uint8_t  leader;         /* 1 = mode hybride (leader), 0 = choke mutuel classique */
++    uint8_t  eco;            /* MODE ECO : resample en \u00b5-law + paliers lo-fi, ring 32 kHz, capacit\u00e9 /2 */
+ } ml_t;
+ 
+ void ml_init(ml_t *m, float sr);
+@@ -118,3 +128,13 @@ void ml_render(ml_t *m, uint32_t n);         /* advance the clock, fire the loop
+  * RAND au wrap (randp 0..1), mode de lecture 3=RANDOM (voir ML_SP_MODE). */
+ void ml_set_randp(ml_t *m, float p);
+ void ml_mutate(ml_t *m, int slot, int layer);
++/* patch 0009: choke Koala + leader (POLY) + MODE ECO */
++void ml_set_choke(ml_t *m, int slot, int grp);   /* grp 0..6 ; 1er assign\u00e9 = master */
++int  ml_get_choke(const ml_t *m, int slot);
++int  ml_choke_master(const ml_t *m, int grp);    /* slot master du groupe, -1 si aucun */
++void ml_set_leader(ml_t *m, int on);             /* 1 hybride (leader), 0 mutuel (Koala) */
++int  ml_get_leader(const ml_t *m);
++void ml_set_leader_slot(ml_t *m, int slot, int on);  /* POLY : on=1 d\u00e9signe leader, on=0 le d\u00e9sassigne */
++void ml_clear_leader(ml_t *m, int grp);              /* POLY sans pad : mode leader d\u00e9sactiv\u00e9 pour le groupe */
++void ml_set_eco(ml_t *m, int on);                    /* MODE ECO : bitrate du ring resample au plus bas */
++int  ml_get_eco(const ml_t *m);
+diff --git a/atek303/app/ztek_drum.c b/atek303/app/ztek_drum.c
+index b7c4b90..bac63f2 100644
+--- a/atek303/app/ztek_drum.c
++++ b/atek303/app/ztek_drum.c
+@@ -10,6 +10,9 @@
+ static drum_t d;
+ static float busL[ZDR_BUS_MAX], busR[ZDR_BUS_MAX];
+ static int s_pad, s_ppage, s_playing, s_rec;
++/* patch 0009: fenetre choke (MONO/POLY = noires 8/9) */
++static int s_chwin, s_poly, s_chpad;
++static uint32_t s_chwin_until;
+ 
+ static float clamp01(float v) { return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; }
+ 
+@@ -55,6 +58,95 @@ void zdr_pad_hit(int pad)
+ }
+ 
+ /* enc: 0 SELECT 1 ALGO 2 PRESET 3..6 K1..K4 (ordre enum app.h) */
++/* ---- patch 0009: choke Koala page DRUM (MONO/POLY = 9e/10e noires) ---- */
++int zdr_choke_win(void) { return s_chwin; }
++
++void zdr_choke_tick(uint32_t now)
++{
++    if (!s_chwin) return;
++    if ((int32_t)(now - s_chwin_until) >= 0) {
++        if (s_poly) { drum_clear_leader(&d, drum_get_choke(&d, s_chpad)); s_poly = 0; }
++        s_chwin = 0;                     /* 1,5 s sans action = la fenetre se ferme */
++    }
++}
++
++void zdr_choke_close(void)
++{
++    if (!s_chwin) return;
++    if (s_poly) { drum_clear_leader(&d, drum_get_choke(&d, s_chpad)); s_poly = 0; }
++    s_chwin = 0;
++}
++
++void zdr_choke_mono(uint32_t now)
++{
++    int g = drum_get_choke(&d, s_pad);
++    if (g == 0) {
++        drum_set_choke(&d, s_pad, 1);    /* entre en mode choke, groupe 1 par defaut */
++        s_chpad = s_pad; s_chwin = 1; s_poly = 0;
++        s_chwin_until = now + 1500u;
++        zdr_say("CHOKE", "C1");
++    } else {
++        drum_set_choke(&d, s_pad, 0);    /* re-MONO = C0 + ferme */
++        zdr_choke_close();
++        zdr_say("CHOKE", "OFF");
++    }
++}
++
++void zdr_choke_poly(uint32_t now)
++{
++    if (!s_chwin) return;
++    if (s_poly) {                        /* POLY sans pad = mode leader off pour le groupe */
++        s_poly = 0;
++        drum_clear_leader(&d, drum_get_choke(&d, s_chpad));
++        zdr_say("LDR", "OFF");
++    } else {
++        s_poly = 1;                      /* le prochain pad tape deviendra leader */
++        s_chwin_until = now + 1500u;
++        zdr_say("LDR", "POLY+PAD");
++    }
++}
++
++void zdr_choke_pad(int pad, uint32_t now)
++{
++    int g, isLead;
++    char t[4];
++    if (!s_chwin || pad < 0 || pad >= DR_NPADS) return;
++    if (s_poly) {                        /* POLY + pad = leader sticky ; re-tap leader = plus leader */
++        g = drum_get_choke(&d, pad);
++        isLead = drum_choke_master(&d, g) == pad;
++        drum_set_leader_pad(&d, pad, isLead ? 0 : 1);
++        s_poly = 0; s_chwin = 0;
++        s_pad = pad;
++        zdr_say("LEADER", DR_PAD_NAMES[pad]);
++        return;
++    }
++    g = drum_get_choke(&d, s_chpad);     /* tap = multi-assign au groupe courant */
++    drum_set_choke(&d, pad, g);
++    s_chwin_until = now + 1500u;
++    t[0] = 'C'; t[1] = (char)('0' + g); t[2] = 0;
++    zdr_say(DR_PAD_NAMES[pad], t);
++}
++
++void zdr_choke_group(int det, uint32_t now)
++{
++    int g;
++    char t[4];
++    if (!s_chwin) return;
++    g = drum_get_choke(&d, s_chpad) + (det > 0 ? 1 : -1);   /* SELECT = groupe C0..C6 */
++    if (g < 0) g = 0;
++    if (g > 6) g = 6;
++    drum_set_choke(&d, s_chpad, g);
++    if (g == 0) { zdr_choke_close(); zdr_say("CHOKE", "OFF"); return; }
++    s_chwin_until = now + 1500u;
++    t[0] = 'C'; t[1] = (char)('0' + g); t[2] = 0;
++    zdr_say("CHOKE", t);
++}
++
++void zdr_set_leader(int on)    { drum_set_leader(&d, on); }
++void zdr_set_eco(int on)       { drum_set_eco(&d, on); }
++int  zdr_get_choke(int pad)    { return drum_get_choke(&d, pad); }
++int  zdr_choke_master(int grp) { return drum_choke_master(&d, grp); }
++
+ void zdr_encoder(int enc, int32_t det)
+ {
+     if (det == 0) return;
+diff --git a/atek303/app/ztek_drum.h b/atek303/app/ztek_drum.h
+index 9ec7ec7..c159c8c 100644
+--- a/atek303/app/ztek_drum.h
++++ b/atek303/app/ztek_drum.h
+@@ -49,3 +49,16 @@ int   zdr_sel_pad(void);
+  * k 0..7 = 0 MASTER 1 SWING 2 COMP RATIO 3 COMP ON 4 GMUT 5 GLITCH 6 DLY WET 7 REV WET */
+ void  zdr_mod_set(int k, float v);       /* v 0..1 */
+ float zdr_mod_get(int k);
++
++/* patch 0009: choke (style Koala) page DRUM -- fenetre d'edition (noires 8/9 = MONO/POLY) */
++int   zdr_choke_win(void);                     /* fenetre choke ouverte */
++void  zdr_choke_tick(uint32_t now_ms);         /* auto-fermeture 1,5 s (app_frame) */
++void  zdr_choke_mono(uint32_t now_ms);         /* MONO (9e noire) : ouvre/ferme sur le pad SEL */
++void  zdr_choke_poly(uint32_t now_ms);         /* POLY (10e noire) : arme le leader ; re-POLY = mode leader off */
++void  zdr_choke_pad(int pad, uint32_t now_ms); /* fenetre ouverte, noire 0..7 : assigne au groupe / leader si POLY arme */
++void  zdr_choke_group(int det, uint32_t now_ms); /* fenetre ouverte, SELECT = groupe C0..C6 */
++void  zdr_choke_close(void);                   /* toute autre action ferme la fenetre */
++void  zdr_set_leader(int on);                  /* OPTIONS > CHOKE LDR = ON/OFF */
++void  zdr_set_eco(int on);                     /* OPTIONS > ECO = ON/OFF (drums: poly 8->5) */
++int   zdr_get_choke(int pad);
++int   zdr_choke_master(int grp);
+diff --git a/atek303/app/ztek_loop.c b/atek303/app/ztek_loop.c
+index 0c028fa..e58f581 100644
+--- a/atek303/app/ztek_loop.c
++++ b/atek303/app/ztek_loop.c
+@@ -14,6 +14,9 @@ static ml_t ml;
+ static float busL[ZML_BUS_MAX], busR[ZML_BUS_MAX];
+ static float pv[7];                      /* page: 0 SEL(slot) 1 ALGO(src) 2 PRESET(len) 3..6 K1..K4 */
+ static int od, mut_layer;
++/* patch 0009: fenetre choke (MONO/POLY = noires 8/9) */
++static int s_chwin, s_poly, s_chslot;
++static uint32_t s_chwin_until;
+ 
+ static float clamp01(float v) { return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; }
+ 
+@@ -80,6 +83,96 @@ void zml_slot_toggle(int slot)
+ }
+ 
+ /* enc: 0 SELECT 1 ALGO 2 PRESET 3..6 K1..K4 (ordre enum) */
++/* ---- patch 0009: choke Koala page LOOP (MONO/POLY = 9e/10e noires) ---- */
++int zml_choke_win(void) { return s_chwin; }
++
++void zml_choke_tick(uint32_t now)
++{
++    if (!s_chwin) return;
++    if ((int32_t)(now - s_chwin_until) >= 0) {
++        if (s_poly) { ml_clear_leader(&ml, ml_get_choke(&ml, s_chslot)); s_poly = 0; }
++        s_chwin = 0;
++    }
++}
++
++void zml_choke_close(void)
++{
++    if (!s_chwin) return;
++    if (s_poly) { ml_clear_leader(&ml, ml_get_choke(&ml, s_chslot)); s_poly = 0; }
++    s_chwin = 0;
++}
++
++void zml_choke_mono(uint32_t now)
++{
++    int g = ml_get_choke(&ml, ml.sel);
++    if (g == 0) {
++        ml_set_choke(&ml, ml.sel, 1);
++        s_chslot = ml.sel; s_chwin = 1; s_poly = 0;
++        s_chwin_until = now + 1500u;
++        say_slot("CHOKE", ml.sel, "C1");
++    } else {
++        ml_set_choke(&ml, ml.sel, 0);
++        zml_choke_close();
++        say_slot("CHOKE", ml.sel, "OFF");
++    }
++}
++
++void zml_choke_poly(uint32_t now)
++{
++    if (!s_chwin) return;
++    if (s_poly) {
++        s_poly = 0;
++        ml_clear_leader(&ml, ml_get_choke(&ml, s_chslot));
++        zml_say("LDR", "OFF");
++    } else {
++        s_poly = 1;
++        s_chwin_until = now + 1500u;
++        zml_say("LDR", "POLY+SLOT");
++    }
++}
++
++void zml_choke_slot(int slot, uint32_t now)
++{
++    int g, isLead;
++    char t[8];
++    if (!s_chwin || slot < 0 || slot >= ML_NSLOTS) return;
++    if (s_poly) {                        /* POLY + slot = leader sticky ; re-tap = plus leader */
++        g = ml_get_choke(&ml, slot);
++        isLead = ml_choke_master(&ml, g) == slot;
++        ml_set_leader_slot(&ml, slot, isLead ? 0 : 1);
++        s_poly = 0; s_chwin = 0;
++        ml.sel = slot;
++        say_slot("LEADER", slot, "");
++        return;
++    }
++    g = ml_get_choke(&ml, s_chslot);     /* multi-assign au groupe courant */
++    ml_set_choke(&ml, slot, g);
++    s_chwin_until = now + 1500u;
++    t[0] = 'C'; t[1] = (char)('0' + g); t[2] = 0;
++    say_slot("CHK", slot, t);
++    (void)t;
++}
++
++void zml_choke_group(int det, uint32_t now)
++{
++    int g;
++    char t[8];
++    if (!s_chwin) return;
++    g = ml_get_choke(&ml, s_chslot) + (det > 0 ? 1 : -1);
++    if (g < 0) g = 0;
++    if (g > 6) g = 6;
++    ml_set_choke(&ml, s_chslot, g);
++    if (g == 0) { zml_choke_close(); say_slot("CHOKE", s_chslot, "OFF"); return; }
++    s_chwin_until = now + 1500u;
++    t[0] = 'C'; t[1] = (char)('0' + g); t[2] = 0;
++    say_slot("CHOKE", s_chslot, t);
++}
++
++void zml_set_leader(int on)     { ml_set_leader(&ml, on); }
++void zml_set_eco(int on)        { ml_set_eco(&ml, on); }
++int  zml_get_choke(int slot)    { return ml_get_choke(&ml, slot); }
++int  zml_choke_master(int grp)  { return ml_choke_master(&ml, grp); }
++
+ void zml_encoder(int enc, int32_t det)
+ {
+     int slot;
+diff --git a/atek303/app/ztek_loop.h b/atek303/app/ztek_loop.h
+index 2783555..b2b5f51 100644
+--- a/atek303/app/ztek_loop.h
++++ b/atek303/app/ztek_loop.h
+@@ -59,3 +59,16 @@ void  zml_act_rand(void);
+ int   zml_sel(void);
+ void  zml_gain(float g);                 /* macro / matrice ASSIGN : loop_gain 0..1 */
+ float zml_gain_get(void);
++
++/* patch 0009: choke (style Koala) page LOOP -- fenetre choke (noires 8/9 = MONO/POLY) */
++int   zml_choke_win(void);
++void  zml_choke_tick(uint32_t now_ms);        /* auto-fermeture 1,5 s (app_frame) */
++void  zml_choke_mono(uint32_t now_ms);        /* MONO (9e noire) : ouvre/ferme sur le slot SEL */
++void  zml_choke_poly(uint32_t now_ms);        /* POLY (10e noire) : arme le leader ; re-POLY = off */
++void  zml_choke_slot(int slot, uint32_t now_ms); /* fenetre ouverte, blanche = assigne au groupe / leader si POLY */
++void  zml_choke_group(int det, uint32_t now_ms); /* fenetre ouverte, SELECT = groupe C0..C6 */
++void  zml_choke_close(void);
++void  zml_set_leader(int on);                 /* OPTIONS > CHOKE LDR = ON/OFF */
++void  zml_set_eco(int on);                    /* OPTIONS > ECO (resample ring au plus bas) */
++int   zml_get_choke(int slot);
++int   zml_choke_master(int grp);
