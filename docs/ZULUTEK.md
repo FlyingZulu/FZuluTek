@@ -219,7 +219,13 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
 - **HOME + Shift** (noire 10 maintenue) = cycle des pages de travail : **FX (5) → MIX (11) → SNAP (2) → KIT (3)**.
   C'est le raccourci d'entrée de SNAP/KIT (les anciens bras legacy dbl-DRV/dbl-MUT étaient morts depuis PR #18).
 - **HOME long** = page LINK 17 (ZTF, inchangé).
-- Prévu bible, pas encore câblé : REC+dbl-FX = SNAP, REC+SAVE = KIT.
+- Entrées de pages câblées (mode d'emploi) : **REC+EDIT** = LOOP (1), **REC+SEL** = SNAP (2), **REC+SAVE** = KIT (3),
+  **REC+ARP** = XY (4), REC+FX = menu FX (5), dbl-SEQ = SEQ+ (6), **REC+LFO** = LFO (7), **REC+ENV** = ENV (8),
+  REC+OCT- = ASSIGN (9), REC+OCT+ = PRESETS (10), SEL = MIX (11), dbl-GLO ou REC+SEQ = MACRO (14), ARP = ARP (13),
+  long-HOME = LINK (17), PRE = FINE (18). **REC+PLAY** = capture SNAP (flash 120 ms + icône caméra + lock clavier
+  1,5 s + choix du pad + rétrécissement 0,8 s ; REC+PLAY+OCT± choisit le contenu), **REC+GLO** = procédure REC loop.
+  En page SNAP/KIT : REC+touche = stocker, tap = charger, dbl-tap = copie miroir (xor 8) ; page SNAP : K1 = ZU/LU, K4 = FLY.
+- Undo/redo globaux : **HOME+REC** = undo, **HOME+GLO** = redo (à chaque tap) ; dbl-REC = undo, long-REC = redo (mode d'emploi).
 
 ## OPTIONS (page 9 APK, long-SCL ; OBJ_OPTIONS OPT6 côté FM-1)
 

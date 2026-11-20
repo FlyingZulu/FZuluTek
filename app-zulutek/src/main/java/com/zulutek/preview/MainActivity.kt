@@ -118,6 +118,8 @@ class MainActivity : Activity(), SurfaceListener {
                 }
             }
             st.sirenMode = sirenModePersistent
+            if (st.snapArm && now > st.snapArmUntil) st.snapArm = false
+            if (st.loopRecArm == -2 && now > st.loopRecWinUntil) st.loopRecArm = -1
             val ph = when {
                 !st.veilleOn -> 0
                 idle < 150_000 -> 0
@@ -729,8 +731,9 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- encoders ----
     override fun onEncoderPress(i: Int) {
-        if (i == 0) {   // appui SEL = page MIX (bible : « page MIX (SEL) ») — raccourci dédié au mixage
-            st.page = if (st.page == 11) 0 else 11
+        if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40)
+            if (recHeld) st.page = if (st.page == 2) 0 else 2
+            else st.page = if (st.page == 11) 0 else 11
             if (st.page == 11) st.patchView = 0
             lcd.invalidate()
         }
@@ -1042,6 +1045,15 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
             return
         }
+        if (st.page == 2 || st.page == 3) {      // SNAP/KIT : SEL=slot, K1=fader ZU/LU (SNAP), K4=FLY ±12 st (SNAP)
+            when (i) {
+                0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
+                3 -> if (st.page == 2) st.snapSide = if (v > 0.5f) 1 else 0
+                6 -> if (st.page == 2) { ZtekAudio.setParam(ZtekAudio.AT_TUNING, v); hint("FLY ${((v - 0.5f) * 24).toInt()} st") }
+            }
+            lcd.invalidate()
+            return
+        }
         if (st.page == 16) {                     // page OPTIONS : K1=ECO, K2=LABELS FM1/ZULU (APK only)
             if (i == 3) {
                 st.ecoOn = !st.ecoOn
@@ -1149,6 +1161,8 @@ class MainActivity : Activity(), SurfaceListener {
     // états de modifieurs pour la page MIX (11) et la sirène
     private var recHeld = false
     private var homeDownAt = 0L
+    private var homeHeld = false
+    private var homeCombo = false
     private var curEngine = 0
     private val workPages = intArrayOf(5, 11, 2, 3)   // HOME+Shift : cycle FX -> MIX -> SNAP -> KIT
 
@@ -1158,6 +1172,38 @@ class MainActivity : Activity(), SurfaceListener {
         if (st.page == 5) { st.fxView = 0; st.fxSub = 0 }
         if (st.page == 11) st.mixSub = 0
         hint("PAGE " + (st.pageNames2[st.page] ?: "?"))
+        lcd.invalidate()
+    }
+
+    private fun snapCaptureArm() {   // REC+PLAY : capture SNAP (mode d'emploi : flash 120 ms + icône caméra + lock 1,5 s + choix du pad)
+        val now = System.currentTimeMillis()
+        st.snapArm = true
+        st.snapArmUntil = now + 5000
+        st.flashUntil = now + 120
+        st.camUntil = now + 1500
+        st.camShrinkAt = 0
+        st.keysLockUntil = now + 1500
+        hint("SNAP: PAD?")
+        lcd.invalidate(); surface.invalidate()
+    }
+
+    private fun loopRecProc() {   // REC+GLO : procédure REC loop (bible) — fenêtre PAD? 2 s, armé 1,2 s, départ immédiat, stop quantizé
+        when (st.loopRecArm) {
+            -1 -> {
+                st.loopRecArm = -2
+                st.loopRecWinUntil = System.currentTimeMillis() + 2000
+                st.flashUntil = System.currentTimeMillis() + 120
+                st.camUntil = System.currentTimeMillis() + 1500
+                hint("LOOP REC: PAD?")
+            }
+            -2 -> hint("LOOP REC: PAD?")
+            else -> {
+                val s = st.loopRecArm
+                if (ZtekAudio.loopSlotRec(s)) { ZtekAudio.loopRecStop(s); st.recArmed = false; hint("REC STOP") }
+                else { ZtekAudio.loopRecStart(s, 1); st.recArmed = true; hint("REC ${s + 1}") }
+                st.loopRecArm = -1
+            }
+        }
         lcd.invalidate()
     }
 
@@ -1265,8 +1311,9 @@ class MainActivity : Activity(), SurfaceListener {
         if (!down) {
             if (label == "REC") recHeld = false
             if (label == "HOME" && homeDownAt > 0) {
-                if (System.currentTimeMillis() - homeDownAt < 600) cyclePart()
+                if (!homeCombo && System.currentTimeMillis() - homeDownAt < 600) cyclePart()
                 homeDownAt = 0
+                homeHeld = false
             }
             return
         }
@@ -1274,6 +1321,11 @@ class MainActivity : Activity(), SurfaceListener {
         if (down && label == "HOME") {
             if (shiftHeld) { cycleWorkPage(); return }
             homeDownAt = System.currentTimeMillis()
+            homeHeld = true; homeCombo = false
+        }
+        if (down && homeHeld) {   // undo/redo globaux : HOME+REC = undo, HOME+GLO = redo (à chaque tap)
+            if (label == "REC") { ZtekAudio.undo(); homeCombo = true; hint("UNDO"); lcd.invalidate(); return }
+            if (label == "GLO") { ZtekAudio.redo(); homeCombo = true; hint("REDO"); lcd.invalidate(); return }
         }
         // REC+FX (ancien process PoW!, slot 5 récupéré) = page SIREN
         if (label == "FX" && recHeld) {
@@ -1284,6 +1336,20 @@ class MainActivity : Activity(), SurfaceListener {
                 st.sirenLvl = 0.3f; st.sirenRate = 0.5f; st.sirenFb = 0f; st.sirenMix = ZtekAudio.sirenMixGet()
             }
             lcd.invalidate(); return
+        }
+        if (down && recHeld) {   // entrées de pages (mode d'emploi) : REC+EDIT/SAVE/ARP/SEQ/LFO/ENV/OCT±, REC+PLAY = capture SNAP, REC+GLO = proc REC loop
+            when (label) {
+                "EDIT" -> { st.page = if (st.page == 1) 0 else 1; lcd.invalidate(); return }     // page LOOP (bible REC+EDIT)
+                "SAVE" -> { st.page = if (st.page == 3) 0 else 3; lcd.invalidate(); return }     // page KIT (REC+SAVE)
+                "ARP" -> { st.page = if (st.page == 4) 0 else 4; lcd.invalidate(); return }      // page XY (REC+ARP)
+                "SEQ" -> { st.page = if (st.page == 14) 0 else 14; syncMacroSel(); lcd.invalidate(); return }  // page MACRO
+                "LFO" -> { st.page = if (st.page == 7) 0 else 7; setEncLabels(arrayOf("SUB", "SYN", "TRG", "K1", "K2", "K3", "K4")); lcd.invalidate(); return }
+                "ENV" -> { st.page = if (st.page == 8) 0 else 8; setEncLabels(arrayOf("SUB", "LOOP", "", "K1", "K2", "K3", "K4")); lcd.invalidate(); return }
+                "OCT-" -> { st.page = if (st.page == 9) 0 else 9; setEncLabels(arrayOf("DST", "SRC", "LUD", "DPT", "", "", "")); lcd.invalidate(); return }   // ASSIGN
+                "OCT+" -> { st.page = if (st.page == 10) 0 else 10; setEncLabels(arrayOf("SLT", "PRT", "", "LD", "SV", "CLR", "")); lcd.invalidate(); return } // PRESETS
+                "PLAY" -> { snapCaptureArm(); return }                                         // capture SNAP (REC+PLAY)
+                "GLO" -> { loopRecProc(); return }                                              // procédure REC loop
+            }
         }
         // pages SNAP / KIT / LOOP / XY : les boutons gardent des rôles de page
         when (st.page) {
@@ -1526,12 +1592,29 @@ class MainActivity : Activity(), SurfaceListener {
             else { ZtekAudio.punch(0, 0, 0f, 0f, 0f); ZtekAudio.punchTail(0.3f) }
             lcd.invalidate(); surface.invalidate(); return
         }
+        if (st.snapArm && down && !longPress) {   // capture SNAP armée (REC+PLAY) : tap du pad = destination, icône rétrécit en 0,8 s
+            ZtekAudio.snapStore(slot); st.snapFilled[slot] = true
+            st.snapArm = false
+            val n = System.currentTimeMillis()
+            st.camShrinkAt = n + 800; st.camUntil = n + 800
+            hint("SNAP ${slot + 1}")
+            lcd.invalidate(); surface.invalidate()
+            return
+        }
+        if ((st.page == 2 || st.page == 3) && recHeld && down && !longPress) {   // REC+touche = stocker (mode d'emploi)
+            if (st.page == 2) { ZtekAudio.snapStore(slot); st.snapFilled[slot] = true; hint("SNAP ${slot + 1} sauvé") }
+            else { ZtekAudio.kitStore(slot); st.kitFilled[slot] = true; hint("KIT ${slot + 1} sauvé") }
+            lcd.invalidate(); return
+        }
+        if (st.loopRecArm == -2 && down && !longPress) {   // proc REC+GLO : tap blanche = slot destination, armé 1,2 s
+            st.loopRecArm = slot
+            st.loopRecWinUntil = System.currentTimeMillis() + 1200
+            hint("PAD ${slot + 1} ARMÉ — REC+GLO = lancer")
+            lcd.invalidate(); return
+        }
         if (st.page == 2 || st.page == 3) {
             val now = System.currentTimeMillis()
-            if (longPress) {
-                if (st.page == 2) { ZtekAudio.snapStore(slot); st.snapFilled[slot] = true }
-                else { ZtekAudio.kitStore(slot); st.kitFilled[slot] = true }
-            } else if (down) {
+            if (down) {
                 if (st.page == 3 && slot == lastSlotTap && now - lastSlotTapTime < 350) {
                     // double-tap = copie vers le slot miroir (xor 8), comme les snaps ZU/LU
                     ZtekAudio.kitStore(slot xor 8); st.kitFilled[slot xor 8] = st.kitFilled[slot]
@@ -1566,6 +1649,7 @@ class MainActivity : Activity(), SurfaceListener {
             else Fm1Usb.remote("OFF") { ztfNoteOff(note) }
             return
         }
+        if (System.currentTimeMillis() < st.keysLockUntil) return   // clavier inactif 1,5 s pendant la capture SNAP (REC+PLAY)
         val bi = SurfaceView.BLACK_NOTES.indexOf(note)
         if (bi == 10) shiftHeld = down   // Shift (noire 10) global
         if (down && chokeCtx() && note == KEY_MONO) {   // MONO = bascule le pad/slot en mode choke
