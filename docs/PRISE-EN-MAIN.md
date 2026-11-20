@@ -42,6 +42,13 @@ en « All repositories ». Concernés :
 3. Crédits et paternité : Flying Zulu partout (.inscrit dans LICENSE/CREDITS).
 4. Dérivé d'ATEK303 (GPL-3.0) : distribuer impose de publier le code sous GPL-3.0
    avec crédits Animatek. Développer en privé est en règle.
+5. **Le mode d'emploi / la Bible est la source de vérité** (docs/ZULUTEK.md, docs/MODE_D_EMPLOI.md,
+   docs/ZULUTEK-MIDI-LOOPER.md « bible » @ a07f753, pages Notion BIBLE). Une fois qu'un comportement
+   est décrit là-bas et validé avec Flying Zulu, c'est exactement ça qu'on implémente — sans
+   réinventer, sans « simplifier ». Toute question sur un protocole/process : on cite d'abord le doc
+   (chemin + lignes), puis on dit si le code diverge. Si on doute ou si le code dérive trop du doc :
+   on se réfère au mode d'emploi / à la Bible, ou on pose la question / on fait un point avec
+   Flying Zulu. Un mode d'emploi et une machine qui ne correspondent pas, c'est un bug.
 
 ## Ordre suggéré pour démarrer
 
