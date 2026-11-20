@@ -86,7 +86,7 @@ index 2c8c77a..8c1bdd5 100644
      }
      for (i = 0; i < NPRESETS; i++)              /* a preset from another layout is not loaded */
 -        if (presets[i].used && (presets[i].used != 1u || !settings_ok(&presets[i].s)))
-+        if (presets[i].used && (presets[i].used & 1u) != 1u || !settings_ok(&presets[i].s)))
++        if (presets[i].used && ((presets[i].used & 1u) != 1u || !settings_ok(&presets[i].s)))
              presets[i].used = 0;
      if (!ok) {
          settings_defaults();

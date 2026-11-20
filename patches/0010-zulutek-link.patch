@@ -741,3 +741,23 @@ index ac32fc8..36038b9 100644
 -- 
 2.47.3
 
+--- a/atek303/app/app.c	2026-11-20 20:30:36.003932362 +0000
++++ b/atek303/app/app.c	2026-11-20 20:30:36.041932363 +0000
+@@ -134,7 +134,7 @@
+     uint8_t root;                              /* 0..11 */
+     uint8_t locked;
+     uint16_t tempo;                            /* BPM */
+-    uint32_t mutation_counter;
++    uint16_t mutation_counter;                 /* patch 0010 fix: preset_t <= 480 o (8 x <= PLAT_STORE_MAX 3840) */
+     acid_pattern_t pattern;
+     float fx[FX_NPARAMS];                      /* the effects: knobs 0..1, types and TIME as indices */
+ } settings_t;
+@@ -149,7 +149,7 @@
+ #define NPRESETS 32
+ #define PRESETS_PER_OBJ 8
+ typedef struct {
+-    char name[15];
++    char name[12];                             /* patch 0010 fix: idem, noms <= 11 cars */
+     uint8_t used;
+     settings_t s;
+ } preset_t;
