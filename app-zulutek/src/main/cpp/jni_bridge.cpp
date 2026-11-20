@@ -727,7 +727,7 @@ ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxslotMix(JNIEn
 {
     return ztek_fxslot_mix(zte(NULL, h), slot);
 }
-ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxchainOrder(JNIEnv *, jclass, jlong h, jintArray order)
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeFxchainOrder(JNIEnv *env, jclass, jlong h, jintArray order)
 {
     jint tmp[ZTEK_NCHAIN] = {0,1,2,3};
     if (!order) { ztek_fxchain_order(zte(NULL, h), tmp); return; }
