@@ -153,7 +153,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                     // écran « éteint » : tout noir, la lampe torche balaie le coin bas-droit
                     c.drawColor(Color.argb(255, 4, 4, 6))
                     if (st.torch) {
-                        val g = RadialGradient(216f, 216f, 8f, 216f, 216f, 70f,
+                        val g = RadialGradient(216f, 216f, 70f,
                             Color.argb(160, 255, 255, 240), Color.argb(0, 255, 255, 240),
                             android.graphics.Shader.TileMode.CLAMP)
                         val p = Paint().apply {
