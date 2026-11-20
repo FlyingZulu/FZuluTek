@@ -23,7 +23,7 @@ class LcdState {
     var engine = 0
     val engineNames = arrayOf("ATEK303", "PLUK", "FM", "SUB", "8BIT")
     var selSlot = 0
-    val encLabels = arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")
+    var encLabels = arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")   // re-labelled per page
     val encVals = floatArrayOf(0f, 0f, 0f, 0.7f, 0.25f, 0.5f, 0.55f)
     var driveType = 0
     val driveNames = arrayOf("OFF", "OD", "RAT", "FUZZ", "MOJO")
