@@ -407,3 +407,40 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePresetSlotSetName
     ztek_preset_set_name(zte(NULL, h), part, slot, s);
     if (s) env->ReleaseStringUTFChars(name, s);
 }
+
+/* ---- natives page MIX + baie de patch (branche looper, PR #1 @ 7d87264) ---- */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixSetVol(JNIEnv *, jclass, jlong h, jint slot, jfloat v)
+{
+    ztek_mix_set_vol(zte(NULL, h), slot, v);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixSetAux(JNIEnv *, jclass, jlong h, jint slot, jint on)
+{
+    ztek_mix_set_aux(zte(NULL, h), slot, on);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixSetGain(JNIEnv *, jclass, jlong h, jfloat g)
+{
+    ztek_mix_set_gain(zte(NULL, h), g);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMixGetGain(JNIEnv *, jclass, jlong h)
+{
+    return ztek_mix_get_gain(zte(NULL, h));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativePatchSet(JNIEnv *, jclass, jlong h, jint src, jint dst, jint on)
+{
+    ztek_patch_set(zte(NULL, h), src, dst, on);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativePatchGet(JNIEnv *, jclass, jlong h, jint src, jint dst)
+{
+    return ztek_patch_get(zte(NULL, h), src, dst);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativePatchCompat(JNIEnv *, jclass, jlong, jint src, jint dst)
+{
+    return ztek_patch_compat(src, dst);
+
+}
