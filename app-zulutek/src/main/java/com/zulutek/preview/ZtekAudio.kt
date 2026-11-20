@@ -257,7 +257,7 @@ object ZtekAudio {
     const val ZT_MDST_AUX0 = 100
     const val ZT_MDST_PATCH = 120
     const val ZT_MDST_POWT = 140
-    fun macroSet(slot: Int, dst: Int, sub: Int, val: Float) { if (handle != 0L) nativeMacroSet(handle, slot, dst, sub, val) }
+    fun macroSet(slot: Int, dst: Int, sub: Int, v: Float) { if (handle != 0L) nativeMacroSet(handle, slot, dst, sub, v) }
     fun macroApply(slot: Int) { if (handle != 0L) nativeMacroApply(handle, slot) }
     fun macroLevel(slot: Int, v: Float) { if (handle != 0L) nativeMacroLevel(handle, slot, v) }
     fun macroErase(slot: Int) { if (handle != 0L) nativeMacroErase(handle, slot) }
@@ -317,7 +317,7 @@ object ZtekAudio {
     private external fun nativeArpKnob(handle: Long, k: Int, v: Float)
     private external fun nativeArpKnobGet(handle: Long, k: Int): Float
     private external fun nativeArpHeld(handle: Long): Int
-    private external fun nativeMacroSet(handle: Long, slot: Int, dst: Int, sub: Int, val: Float)
+    private external fun nativeMacroSet(handle: Long, slot: Int, dst: Int, sub: Int, v: Float)
     private external fun nativeMacroApply(handle: Long, slot: Int)
     private external fun nativeMacroLevel(handle: Long, slot: Int, v: Float)
     private external fun nativeMacroErase(handle: Long, slot: Int)
