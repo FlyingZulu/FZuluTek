@@ -1,0 +1,933 @@
+From c38c9e182fcb508ebf6201e3ba4c80f5ae018b2f Mon Sep 17 00:00:00 2001
+From: Flying Zulu <zulu@tek>
+Date: Fri, 20 Nov 2026 06:13:44 +0000
+Subject: [PATCH] =?UTF-8?q?feat(atek303):=20patch=200008=20zuluTek=20?=
+ =?UTF-8?q?=E2=80=94=20MIDI=20looper=20UI=20(page=20LOOP=2012,=20REC+PLAY)?=
+ =?UTF-8?q?,=20macros=2016=20slots=20(page=20MACRO=2013,=20REC+SEQ),=20bus?=
+ =?UTF-8?q?=20drum=20dans=20la=20matrice=20ASSIGN=20(dst=2035..42),=20etat?=
+ =?UTF-8?q?=20modulation=20par=20partie=20des=20presets=20(ZSP2),=20ring?=
+ =?UTF-8?q?=20resample=204096=20(ML=5FRS=5FMAX=20via=20ztek=5Floop=5Ffm1.c?=
+ =?UTF-8?q?),=20fix=20include=20fastmath.h?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ atek303/app/app.c             | 112 ++++++++++++++++++---
+ atek303/app/dsp/midi_looper.h |   6 +-
+ atek303/app/fm1.toml          |   2 +-
+ atek303/app/ztek_drum.c       |  46 +++++++++
+ atek303/app/ztek_drum.h       |   5 +
+ atek303/app/ztek_loop.c       | 181 ++++++++++++++++++++++++++++++++++
+ atek303/app/ztek_loop.h       |  61 ++++++++++++
+ atek303/app/ztek_loop_fm1.c   |   9 ++
+ atek303/app/ztek_macro.c      | 128 ++++++++++++++++++++++++
+ atek303/app/ztek_macro.h      |  49 +++++++++
+ atek303/app/ztek_seqplus.c    |  12 ++-
+ atek303/app/ztek_seqplus.h    |   4 +-
+ 12 files changed, 598 insertions(+), 17 deletions(-)
+ create mode 100644 atek303/app/ztek_loop.c
+ create mode 100644 atek303/app/ztek_loop.h
+ create mode 100644 atek303/app/ztek_loop_fm1.c
+ create mode 100644 atek303/app/ztek_macro.c
+ create mode 100644 atek303/app/ztek_macro.h
+
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 4d0a8b6..7793de7 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -61,6 +61,8 @@
+ #include "ztek_seqplus.h"   /* patch 0005: pack SEQ+ (modulation 8/8, ASSIGN, TM, LUDIQUE, presets par partie) */
+ #include "ztek_arp.h"      /* patch 0006: arpégiateur (OCT- + ARP, K1..K3 quand actif) */
+ #include "ztek_drum.h"     /* patch 0007: drum machine, page DRUM (11) */
++#include "ztek_loop.h"     /* patch 0008: MIDI looper, page LOOP (12) */
++#include "ztek_macro.h"    /* patch 0008: macros 16 slots, page MACRO (13) */
+ 
+ /* the Animatek palette, as on the VCV Rack modules (UZZ-VCV-RACK src/ui/CommonWidgets.hpp, AcidEditor.hpp):
+  * the screens are slate, the values in the displays' blue, the selection in the logo's blue */
+@@ -435,6 +437,7 @@ static void preset_apply(int a)                /* a preset, whole, but the page
+     seq_render_grid();
+     loaded_preset = (int8_t)a;
+     loaded_n++;
++    zsp_mod_load_part(zsp_preset_part(a));   /* patch 0008: état de modulation de la partie du preset */
+ }
+ static void seq_play(int on)
+ {
+@@ -787,12 +790,16 @@ static void app_render_events(void)
+         if (kind == EV_NOTE_ON) {
+             if (zarp_on()) zarp_note_in((int)a); else held_on((int)a, b);   /* patch 0006: l'arp capture */
+             zsp_note_retrig();                    /* patch 0005: LFO TRIG */
++            zml_note_in((int)a, (int)b);          /* patch 0008: le looper enregistre ce qui est joue */
+         }
+         else if (kind == EV_NOTE_OFF) {
+             if (zarp_on()) zarp_note_out((int)a); else held_off((int)a);    /* patch 0006 */
++            zml_note_off_in((int)a);              /* patch 0008 */
+         }
+-        else if (kind == EV_PARAM)
++        else if (kind == EV_PARAM) {
+             at_set(&voice, (int)a, (float)b / 1000.0f);
++            zml_par_in((int)a, (float)b / 1000.0f);   /* patch 0008: automation de params dans les loops */
++        }
+         else if (kind == EV_PANIC) {
+             nheld = 0;
+             zarp_clear();                     /* patch 0006 */
+@@ -803,6 +810,7 @@ static void app_render_events(void)
+         } else if (kind == EV_PLAY) {
+             sq.ext = 0;
+             seq_play(!sq.running);
++            zml_play_sync();                      /* patch 0008: le looper suit le transport */
+         } else if (kind == EV_GENERATE) {
+             if (sq.running && sq.started)
+                 pend_gen = 1;                  /* on at the next bar (16 steps) */
+@@ -885,15 +893,17 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
+         n = APP_BLOCK;
+     app_render_events();
+     app_render_voice(mono, n);
+-    zdr_render(n);                           /* patch 0007: drum machine, bus stéréo */
++    zdr_render(n);                           /* patch 0007: drum machine, bus stereo */
++    zml_render(n, mono);                     /* patch 0008: MIDI looper (events + ring resample) */                           /* patch 0007: drum machine, bus stéréo */
+     app_render_fx(mono, lr, n, master_q12);
+     {   /* patch 0007: bus drum mixé en post-FX (même gain que la chaîne FX) */
+         const float *dl = zdr_bus_l(), *dr = zdr_bus_r();
++        const float *zl = zml_bus_l(), *zr = zml_bus_r();
+         int32_t g = (int32_t)(((float)master_q12 / 4096.0f) * 8300000.0f);
+         uint32_t i;
+         for (i = 0; i < n; i++) {
+-            lr[2 * i] += (int32_t)(dl[i] * (float)g);
+-            lr[2 * i + 1] += (int32_t)(dr[i] * (float)g);
++            lr[2 * i] += (int32_t)((dl[i] + zl[i]) * (float)g);
++            lr[2 * i + 1] += (int32_t)((dr[i] + zr[i]) * (float)g);
+         }
+     }
+ }
+@@ -1091,6 +1101,8 @@ void app_init(void)
+     zsp_flash_load();                     /* patch 0005: SEQ+ state from OBJ_ZSEQ */
+     zarp_init((float)SR);                 /* patch 0006: arpégiateur */
+     zdr_init((float)SR);                  /* patch 0007: drum machine */
++    zml_init((float)SR);                  /* patch 0008: MIDI looper */
++    zmac_init();                          /* patch 0008: macros */
+     int i;
+     at_init(&voice, SR);
+     options_load();
+@@ -1113,8 +1125,8 @@ void app_init(void)
+ /* --------------------------------------------------------------------- UI --- */
+ /* a knob of a page: a voice parameter (0..), or a sequencer control */
+ enum { K_NONE = -1, K_SQ = 100, K_STEPS = 200, K_SCALE, K_TEMPO, K_ROOT, K_FX = 300 };
+-#define NPAGES 12                          /* patch 0005: + LFO(8) ENV(9) ASSIGN(10); patch 0007: + DRUM(11) */
+-static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB", "LFO", "ENV", "ASSIGN", "DRUM"};   /* patch 0005 + 0007 */
++#define NPAGES 14                          /* patch 0005: + LFO(8) ENV(9) ASSIGN(10); patch 0007: + DRUM(11); patch 0008: + LOOP(12) MACRO(13) */
++static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB", "LFO", "ENV", "ASSIGN", "DRUM", "LOOP", "MACRO"};   /* patch 0005 + 0007 + 0008 */
+ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "DECAY"},
+                                             {"ACCENT", "TUNE", "WAVE", "GATE"},
+                                             {"DENSITY", "RANGE", "ACCENTS", "SLIDES"},
+@@ -1125,7 +1137,9 @@ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "
+                                             {"DECAY", "DAMP", "PRE-DELAY", "MIX"},
+                                             {"RATE", "WAVE", "DEPTH", "SHAPE"},   /* patch 0005: page LFO */
+                                             {"A", "D", "S", "R"},                 /* patch 0005: page ENV */
+-                                            {"DST", "SRC", "LUD", "DEPTH"}};      /* patch 0005: page ASSIGN */
++                                            {"DST", "SRC", "LUD", "DEPTH"},      /* patch 0005: page ASSIGN */
++                                            {"-", "-", "-", "-"},              /* patch 0008: page LOOP, via zml_encoder */
++                                            {"-", "-", "-", "-"}};             /* patch 0008: page MACRO, via zmac_encoder */
+ static const int PAGE_KNOB[NPAGES][4] = {{AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT_DECAY},
+                                     {AT_ACCENT, AT_TUNING, AT_WAVE, K_SQ + SQ_GATE},
+                                     {K_SQ + SQ_DENSITY, K_SQ + SQ_RANGE, K_SQ + SQ_ACCENT, K_SQ + SQ_SLIDE},
+@@ -1137,7 +1151,9 @@ static const int PAGE_KNOB[NPAGES][4] = {{AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT
+                                     {K_NONE, K_NONE, K_NONE, K_NONE},   /* patch 0005: page LFO, via zsp_page_turn */
+                                     {K_NONE, K_NONE, K_NONE, K_NONE},   /* patch 0005: page ENV */
+                                     {K_NONE, K_NONE, K_NONE, K_NONE},  /* patch 0005: page ASSIGN */
+-                                    {K_NONE, K_NONE, K_NONE, K_NONE}}; /* patch 0007: page DRUM, via zdr_encoder */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE}, /* patch 0007: page DRUM, via zdr_encoder */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE}, /* patch 0008: page LOOP */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE}}; /* patch 0008: page MACRO */
+ 
+ static struct {
+     char msg[2][24];
+@@ -1160,6 +1176,7 @@ static struct {
+     uint8_t opts, opt_cur, opt_dirty;          /* the OPTIONS menu: up, its item, changed (saved as it closes) */
+     uint8_t seqadv;                            /* patch 0005: SEQ+ sub-mode (double-tap SEQ) */
+     uint32_t last_seq_tap, last_env_tap, last_lfo_tap, last_arp_tap, last_glo_tap;   /* patch 0007 */
++    uint8_t rec_hold, rec_used;              /* patch 0008: REC maintenu = combos (+PLAY = LOOP 12, +SEQ = MACRO 13) */
+ } ui;
+ 
+ /* ---- ztek_seqplus accessors (patch 0005) ---- */
+@@ -1185,6 +1202,15 @@ float zarp_sr(void) { return (float)SR; }
+ float zdr_sr(void) { return (float)SR; }
+ int  zdr_tempo(void) { return set.tempo; }
+ void zdr_say(const char *a, const char *b) { app_say(a, b); }
++
++/* patch 0008: accesseurs pour ztek_loop.c / ztek_macro.c */
++float zml_sr(void) { return (float)SR; }
++int   zml_tempo(void) { return set.tempo; }
++int   zml_playing(void) { return sq.running; }
++void  zml_gate(int on, int note, int accent, int slide) { at_gate(&voice, on, note, accent, slide); }
++void  zml_param(int key, float v) { if (key >= 0 && key < AT_NPARAMS) { set.param[key] = v; at_set(&voice, key, v); } }
++void  zml_say(const char *a, const char *b) { app_say(a, b); }
++void  zmac_say(const char *a, const char *b) { app_say(a, b); }
+ int  app_preset_used_raw(int slot) { return presets[slot].used; }
+ void app_preset_set_used_raw(int slot, int raw) { presets[slot].used = (unsigned)raw; set_dirty = 1; }
+ 
+@@ -1414,6 +1440,7 @@ static void preset_save(int slot, const char *name)
+         presets[slot].name[i] = name[i];
+     presets[slot].s = set;
+     presets[slot].used = 1;
++    zsp_mod_save_part(zsp_preset_part(slot));   /* patch 0008: l'état de modulation courant suit la partie du preset */
+     bank = slot / PRESETS_PER_OBJ;
+     ok = plat_store_save((uint32_t)(OBJ_PRESETS_A + bank), &presets[bank * PRESETS_PER_OBJ],
+                          sizeof(preset_t) * PRESETS_PER_OBJ) == 0;
+@@ -1621,6 +1648,16 @@ static void input(void)
+                     if (bi < 8) zdr_pad_hit(bi);
+                 }
+                 ui.redraw = 1;
++            } else if (set.page == 12u) {     /* patch 0008: page LOOP — 16 blanches = les 16 slots */
++                int w;
++                for (w = 0; w < 16; w++)
++                    if (WHITE_KEY[w] == k) { zml_slot_toggle(w); break; }
++                ui.redraw = 1;
++            } else if (set.page == 13u) {     /* patch 0008: page MACRO — 16 blanches = les 16 slots macro */
++                int w;
++                for (w = 0; w < 16; w++)
++                    if (WHITE_KEY[w] == k) { zmac_slot(w); break; }
++                ui.redraw = 1;
+             } else {
+             uint32_t v = touch_vel(k);
+             if (ui.edit) {                     /* the editor: the key is the step's note; on to the next step */
+@@ -1712,6 +1749,32 @@ static void input(void)
+             ui.redraw = 1;
+             continue;
+         }
++        if ((set.page == 12u || set.page == 13u) && k == B_GLO) {  /* patch 0008: GLO quitte LOOP/MACRO */
++            set.page = 0u;
++            ui.redraw = 1;
++            continue;
++        }
++        if (set.page == 12u) {                /* patch 0008: page LOOP — boutons routés au looper */
++            if (k == B_PLAY) zml_act_play();
++            else if (k == B_REC) zml_act_rec();
++            else if (k == B_ENV) zml_act_od();
++            else if (k == B_LFO) zml_act_erase();
++            else if (k == B_EDIT) zml_act_rs();
++            else if (k == B_SEQ) zml_act_mutate();
++            else if (k == B_ARP) zml_act_rand();
++            ui.redraw = 1;
++            continue;
++        }
++        if (set.page == 13u) {                /* patch 0008: page MACRO — boutons routés aux macros */
++            if (k == B_REC) zmac_store();
++            else if (k == B_PLAY) zmac_apply();
++            else if (k == B_SEQ) zmac_apply_all();
++            else if (k == B_EDIT) zmac_erase();
++            else if (k == B_ENV) zmac_step(-1);
++            else if (k == B_LFO) zmac_step(1);
++            ui.redraw = 1;
++            continue;
++        }
+         if (k == B_OCTDN) {
+             ui.oct_hold = 1;                   /* on release, unless held for a combination meanwhile: + HOME
+                                                   OPTIONS, + K4 in the editor STEPS */
+@@ -1719,13 +1782,27 @@ static void input(void)
+         }
+         else if (k == B_OCTUP)
+             octave_step(1);
++        else if (k == B_PLAY && ui.rec_hold) {   /* patch 0008: REC maintenu + PLAY = page LOOP (12) */
++            ui.rec_used = 1;
++            set.page = 12u;
++            ui.edit = ui.list = 0;
++            app_say("LOOP", "PAGE 12");
++            ui.redraw = 1;
++        }
+         else if (k == B_PLAY)
+             post(EV_PLAY, 0, 0);
+         else if (k == B_FX) {                  /* the effect pages: in, then the next one */
+-            set.page = (uint8_t)(set.page < 4u || set.page == NPAGES - 1u ? 4u : set.page + 1u);
++            set.page = (uint8_t)(set.page < 4u || set.page >= 11u ? 4u : set.page + 1u);   /* patch 0008: FX saute les pages 11..13 */
+             set_dirty = 1;
+             ui.redraw = 1;
+         }
++        else if (k == B_SEQ && ui.rec_hold) {   /* patch 0008: REC maintenu + SEQ = page MACRO (13) */
++            ui.rec_used = 1;
++            set.page = 13u;
++            ui.edit = ui.list = 0;
++            app_say("MACRO", "PAGE 13");
++            ui.redraw = 1;
++        }
+         else if (k == B_SEQ && ui.oct_hold) {  /* OCT- + SEQ: LOCK (GENERATE mutates instead of a new seed) */
+             ui.oct_used = 1;
+             set.locked = (uint8_t)!set.locked;
+@@ -1795,8 +1872,10 @@ static void input(void)
+             }
+         } else if (k == B_HOME)
+             home_pages();
+-        else if (k == B_REC)
+-            post(EV_UNDO, 0, 0);
++        else if (k == B_REC) {                   /* patch 0008: REC maintenu = combos; seul = UNDO (au relâché) */
++            ui.rec_hold = 1;
++            ui.rec_used = 0;
++        }
+         else if (k == B_SAVE) {
+             save_open();
+             ui.redraw = 1;
+@@ -1807,6 +1886,11 @@ static void input(void)
+         if (!ui.oct_used)
+             octave_step(-1);
+     }
++    if (ui.rec_hold && !(btn >> B_REC & 1u)) {     /* patch 0008: REC relâché: UNDO si pas utilisé en combo */
++        ui.rec_hold = 0;
++        if (!ui.rec_used)
++            post(EV_UNDO, 0, 0);
++    }
+     for (k = 0; k < NE; k++) {
+         if ((e = plat_enc((int)k)) == 0)
+             continue;
+@@ -1856,6 +1940,12 @@ static void input(void)
+         } else if (set.page == 11u) {          /* patch 0007: page DRUM — SELECT=pad PRESET=page ALGO=swing K1..K4=params */
+             zdr_encoder(k, e);
+             ui.redraw = 1;
++        } else if (set.page == 12u) {          /* patch 0008: page LOOP */
++            zml_encoder(k, e);
++            ui.redraw = 1;
++        } else if (set.page == 13u) {          /* patch 0008: page MACRO */
++            zmac_encoder(k, e);
++            ui.redraw = 1;
+         } else if (k == EN_ALGO) {             /* ALGO: the wave, wherever you are (the VOICE page's WAVE) */
+             char t[24];
+             knob_turn(AT_WAVE, e > 0 ? 1 : -1);
+diff --git a/atek303/app/dsp/midi_looper.h b/atek303/app/dsp/midi_looper.h
+index 2278630..0890469 100644
+--- a/atek303/app/dsp/midi_looper.h
++++ b/atek303/app/dsp/midi_looper.h
+@@ -19,7 +19,11 @@
+ #define ML_MAXPEV 48         /* param events per slot */
+ #define ML_BAR64 64          /* one 4/4 bar = 64 sixty-fourths */
+ #define ML_MAXLEN 2048       /* longest loop: 32 bars, in 1/64 bar (1 beat = 16) */
+-#define ML_RS_MAX 16384      /* resample ring max, samples (auto-sized down on low RAM) */
++#ifndef ML_RS_MAX
++#define ML_RS_MAX 16384      /* resample ring max, samples (auto-sized down on low RAM).
++                              * patch 0008 (FM-1): ztek_loop_fm1.c / ztek_loop.c définissent
++                              * ML_RS_MAX 4096 avant d'inclure ce header (RAM du FM-1). */
++#endif
+ 
+ /* slot param indices for ml_set_sp / ml_get_sp */
+ enum { ML_SP_PITCH, ML_SP_POS, ML_SP_MODE, ML_SP_MUT, ML_SP_SRC, ML_SP_FX, ML_SP_VOL, ML_SP_N };
+diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+index b5a9afd..1d56d06 100644
+--- a/atek303/app/fm1.toml
++++ b/atek303/app/fm1.toml
+@@ -10,7 +10,7 @@ usb_audio_out = false
+ backup = true                  # copia y restauración de los presets por USB (tools/fm1_backup.py --magic AT64)
+ words = "words.tsv"
+ include = ["dsp"]
+-o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c"]   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) */   # el motor, el generador y los efectos, a -O2
++o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c"]   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
+ # el sitio
+ title = "ATEK303"              # el nombre que ve la gente (si no, firmware.json saldría como «Animatek»)
+ tagline = "The ATEK303 acid voice on the M-VAVE FM-1"
+diff --git a/atek303/app/ztek_drum.c b/atek303/app/ztek_drum.c
+index f667295..b7c4b90 100644
+--- a/atek303/app/ztek_drum.c
++++ b/atek303/app/ztek_drum.c
+@@ -140,3 +140,49 @@ void zdr_act_clear(void)
+     drum_clear_pat(&d, s_pad);
+     zdr_say(DR_PAD_NAMES[s_pad], "CLEAR");
+ }
++
++/* patch 0008: modulation du bus drum (matrice ASSIGN + macros). v 0..1. */
++void zdr_mod_set(int k, float v)
++{
++    int on;
++    float thr, ratio, mk;
++    v = clamp01(v);
++    switch (k) {
++    case 0: d.master = v; break;
++    case 1: d.swing = v * 0.5f; break;
++    case 2:
++        drum_get_comp(&d, &on, &thr, &ratio, &mk);
++        drum_set_comp(&d, on, thr, 1.0f + v * 19.0f, mk);
++        break;
++    case 3:
++        drum_get_comp(&d, &on, &thr, &ratio, &mk);
++        drum_set_comp(&d, v >= 0.5f ? 1 : 0, thr, ratio, mk);
++        break;
++    case 4: d.gmut = (int)(v * 255.0f); break;
++    case 5: d.glitch = v; break;
++    case 6: d.fx.dly_wet = v; break;
++    case 7: d.fx.rev_wet = v; break;
++    default: break;
++    }
++}
++
++float zdr_mod_get(int k)
++{
++    int on;
++    float thr, ratio, mk;
++    switch (k) {
++    case 0: return d.master;
++    case 1: return d.swing * 2.0f;
++    case 2:
++        drum_get_comp(&d, &on, &thr, &ratio, &mk);
++        return ratio > 1.0f ? (ratio - 1.0f) / 19.0f : 0.0f;
++    case 3:
++        drum_get_comp(&d, &on, &thr, &ratio, &mk);
++        return on ? 1.0f : 0.0f;
++    case 4: return d.gmut / 255.0f;
++    case 5: return d.glitch;
++    case 6: return d.fx.dly_wet;
++    case 7: return d.fx.rev_wet;
++    default: return 0.0f;
++    }
++}
+diff --git a/atek303/app/ztek_drum.h b/atek303/app/ztek_drum.h
+index 448e100..9ec7ec7 100644
+--- a/atek303/app/ztek_drum.h
++++ b/atek303/app/ztek_drum.h
+@@ -44,3 +44,8 @@ void  zdr_act_rand(void);                /* SEQ : RAND du pad sel */
+ void  zdr_act_clear(void);               /* ARP : clear du pad sel */
+ int   zdr_playing(void);
+ int   zdr_sel_pad(void);
++
++/* patch 0008: cibles de modulation du bus drum (matrice ASSIGN du pack SEQ+ + macros) :
++ * k 0..7 = 0 MASTER 1 SWING 2 COMP RATIO 3 COMP ON 4 GMUT 5 GLITCH 6 DLY WET 7 REV WET */
++void  zdr_mod_set(int k, float v);       /* v 0..1 */
++float zdr_mod_get(int k);
+diff --git a/atek303/app/ztek_loop.c b/atek303/app/ztek_loop.c
+new file mode 100644
+index 0000000..0c028fa
+--- /dev/null
++++ b/atek303/app/ztek_loop.c
+@@ -0,0 +1,181 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_loop.c — glue FM-1 du MIDI looper (voir ztek_loop.h). C99, pas d'allocation dynamique.
++ * Le moteur lui-même est dsp/midi_looper.c, compilé pour le FM-1 via ztek_loop_fm1.c avec un
++ * ring resample réduit (ML_RS_MAX 4096, ~8 Ko au lieu de 32 Ko) — même macro que DR_FM1_ECO. */
++#include <string.h>
++#include "ztek_loop.h"
++
++#define ML_RS_MAX 4096                   /* doit matcher ztek_loop_fm1.c (taille de ml_t) */
++#include "dsp/midi_looper.h"
++
++static ml_t ml;
++static float busL[ZML_BUS_MAX], busR[ZML_BUS_MAX];
++static float pv[7];                      /* page: 0 SEL(slot) 1 ALGO(src) 2 PRESET(len) 3..6 K1..K4 */
++static int od, mut_layer;
++
++static float clamp01(float v) { return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; }
++
++static void say_slot(const char *a, int slot, const char *b)
++{
++    char t[8];
++    t[0] = 'L';
++    t[1] = (char)('0' + (slot + 1) / 10);
++    t[2] = (char)('0' + (slot + 1) % 10);
++    t[3] = 0;
++    zml_say(a, t);
++    (void)b;
++}
++
++/* callbacks ml (thread audio) -> app.c */
++static void cb_note_on(void *ctx, int slot, int note, int vel)
++{ (void)ctx; (void)slot; zml_gate(1, note, vel >= 100 ? 1 : 0, 0); }
++static void cb_note_off(void *ctx, int slot, int note)
++{ (void)ctx; (void)slot; zml_gate(0, note, 0, 0); }
++static void cb_param(void *ctx, int slot, int key, float v)
++{ (void)ctx; (void)slot; zml_param(key, v); }
++
++void zml_init(float sr)
++{
++    int i;
++    ml_init(&ml, sr);
++    ml_set_cb(&ml, NULL, cb_note_on, cb_note_off, cb_param);
++    ml_set_bpm(&ml, (float)zml_tempo());
++    ml.loop_gain = 0.8f;
++    ml.playing = zml_playing();
++    for (i = 0; i < ML_NSLOTS; i++) ml.slot[i].sp.src = 3;   /* source REC = ALL par défaut (la voix FM-1 = classe synth) */
++    for (i = 0; i < 7; i++) pv[i] = 0.0f;
++    pv[2] = 0.0f;                        /* len 0 = auto */
++    od = 0;
++    mut_layer = 1;
++    ml_set_randp(&ml, 0.0f);
++}
++
++void zml_render(uint32_t n, const float *in)
++{
++    uint32_t i;
++    if (n > ZML_BUS_MAX) n = ZML_BUS_MAX;
++    ml_set_bpm(&ml, (float)zml_tempo());
++    if (ml.rs_rec && in)
++        ml_rs_feed(&ml, in, n);
++    ml_render(&ml, n);
++    for (i = 0; i < n; i++) { busL[i] = 0.0f; busR[i] = 0.0f; }
++    ml_rs_render(&ml, busL, busR, n);
++}
++
++const float *zml_bus_l(void) { return busL; }
++const float *zml_bus_r(void) { return busR; }
++
++void zml_note_in(int note, int vel) { ml_note_in(&ml, note, vel, 4, 1); }   /* classe 1 = synth */
++void zml_note_off_in(int note) { ml_note_off_in(&ml, note); }
++void zml_par_in(int key, float v) { ml_par_in(&ml, key, v, 1); }
++void zml_play_sync(void) { ml_play(&ml, zml_playing()); }
++
++void zml_slot_toggle(int slot)
++{
++    if (slot < 0 || slot >= ML_NSLOTS) return;
++    ml_toggle(&ml, slot);
++    say_slot(ml.slot[slot].on ? "ON" : "OFF", slot, "");
++}
++
++/* enc: 0 SELECT 1 ALGO 2 PRESET 3..6 K1..K4 (ordre enum) */
++void zml_encoder(int enc, int32_t det)
++{
++    int slot;
++    float v;
++    if (det == 0) return;
++    slot = (int)(clamp01(pv[0]) * 15.99f);
++    if (slot >= ML_NSLOTS) slot = ML_NSLOTS - 1;
++    ml.sel = slot;
++    if (enc == 0) {                      /* SELECT = slot */
++        pv[0] = clamp01(pv[0] + (float)det * 0.02f);
++        slot = (int)(pv[0] * 15.99f);
++        ml.sel = slot;
++        say_slot("SLOT", slot, "");
++    } else if (enc == 2) {               /* PRESET = longueur 0..2048 (0 = auto) */
++        pv[2] = clamp01(pv[2] + (float)det * 0.02f);
++        ml_set_len(&ml, slot, (int)(pv[2] * 2048.99f));
++        zml_say("LEN", pv[2] < 0.001f ? "AUTO" : "SET");
++    } else if (enc == 1) {               /* ALGO = source REC */
++        pv[1] = clamp01(pv[1] + (float)det * 0.05f);
++        ml_set_sp(&ml, slot, ML_SP_SRC, pv[1] * 6.99f);
++        zml_say("SRC", "");
++    } else if (enc >= 3 && enc <= 6) {    /* K1..K4 = PITCH / POS / MODE / MUT */
++        int k = enc - 3;
++        pv[3 + k] = clamp01(pv[3 + k] + (float)det * 0.05f);
++        v = pv[3 + k];
++        if (k == 0) ml_set_sp(&ml, slot, ML_SP_PITCH, v * 24.0f - 12.0f);
++        else if (k == 1) ml_set_sp(&ml, slot, ML_SP_POS, v * 2047.0f);
++        else if (k == 2) ml_set_sp(&ml, slot, ML_SP_MODE, v * 3.99f);
++        else ml_set_sp(&ml, slot, ML_SP_MUT, v);
++        zml_say(k == 0 ? "PITCH" : k == 1 ? "POS" : k == 2 ? "MODE" : "MUT", "");
++    }
++}
++
++void zml_act_play(void)
++{
++    ml_play(&ml, !ml.playing);
++    zml_say("LOOP", ml.playing ? "PLAY" : "STOP");
++}
++
++void zml_act_rec(void)
++{
++    int i, rec = -1;
++    if (ml.rs_rec) { ml_rs_stop(&ml); zml_say("RESAMPLE", "STOP"); return; }
++    for (i = 0; i < ML_NSLOTS; i++)
++        if (ml.slot[i].rec) { rec = i; break; }
++    if (rec >= 0) {
++        ml_rec_stop(&ml, rec);
++        say_slot("REC STOP", rec, "");
++    } else {
++        ml_rec_start(&ml, ml.sel, od);
++        say_slot(od ? "REC OD" : "REC NEW", ml.sel, "");
++    }
++}
++
++void zml_act_od(void)
++{
++    od = !od;
++    zml_say("OVERDUB", od ? "ON" : "OFF");
++}
++
++void zml_act_erase(void)
++{
++    ml_erase(&ml, ml.sel);
++    say_slot("ERASED", ml.sel, "");
++}
++
++void zml_act_rs(void)
++{
++    if (ml.rs_rec) { ml_rs_stop(&ml); zml_say("RESAMPLE", "STOP"); return; }
++    {
++        uint16_t mm = 0;
++        int i;
++        for (i = 0; i < ML_NSLOTS; i++)
++            if (ml.slot[i].on) mm |= (uint16_t)(1u << i);
++        ml_rs_start(&ml, ml.sel, mm, ML_RS_MAX, 1, 32);   /* µ-law, ring 32 kHz */
++        say_slot("RESAMPLE", ml.sel, "");
++    }
++}
++
++void zml_act_mutate(void)
++{
++    static const char *const LN[4] = {"-", "TIME", "PITCH", "ARTIC"};
++    mut_layer = mut_layer % 3 + 1;
++    ml_mutate(&ml, ml.sel, mut_layer);
++    say_slot("MUTATE", ml.sel, LN[mut_layer]);
++}
++
++void zml_act_rand(void)
++{
++    float p = ml.randp;
++    p = p >= 0.99f ? 0.0f : p + 0.25f;
++    ml_set_randp(&ml, p);
++    zml_say("RAND", p < 0.01f ? "0%" : p < 0.4f ? "25%" : p < 0.7f ? "50%" : "100%");
++}
++
++int zml_sel(void) { return ml.sel; }
++
++void zml_gain(float g) { ml.loop_gain = clamp01(g); }
++float zml_gain_get(void) { return ml.loop_gain; }
+diff --git a/atek303/app/ztek_loop.h b/atek303/app/ztek_loop.h
+new file mode 100644
+index 0000000..2783555
+--- /dev/null
++++ b/atek303/app/ztek_loop.h
+@@ -0,0 +1,61 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_loop: le MIDI looper zuluTek (dsp/midi_looper.c, pack SEQ+ de la PR #3) piloté depuis
++ * le FM-1 — page LOOP (patch 0008).
++ *
++ * Layout page LOOP (12) :
++ *   - 16 touches blanches = les 16 slots (tap = play/stop du slot, ml_toggle)
++ *   - encodeurs : SELECT = slot, ALGO = source REC (ml_sp.src), PRESET = longueur
++ *                 (0 = auto quantizée à l'arrêt de REC), K1..K4 = PITCH / POS / MODE / MUT du slot
++ *   - boutons : PLAY = transport du looper, REC = REC (start sur le slot SEL; re-REC = stop;
++ *               si un resample tourne: stop), ENV = overdub on/off, LFO = efface le slot SEL,
++ *               EDIT = resample (ring audio) start/stop, SEQ = mutate (layer TIME/PITCH/ARTIC),
++ *               ARP = RAND global (randp 0/25/50/100 %), SAVE = volume du slot SEL (via K1? non :
++ *               consommé, voir ci-dessous), GLO = quitte la page
++ *   - REC maintenu + PLAY = page LOOP (12) ; REC maintenu + SEQ = page MACRO (13)
++ *
++ * Le looper enregistre ce qui est joué : EV_NOTE_ON/OFF -> zml_note_in/zml_note_off_in (classe
++ * synth), EV_PARAM -> zml_par_in (automation de params). La lecture se fait par ml_render :
++ * les callbacks notent la voix via zml_gate (thread audio, comme l'arp). Le resample (ring
++ * audio) est mixé en post-FX par app.c via zml_bus_l/r, comme le bus drum.
++ *
++ * Le module est découplé d'app.c via les accesseurs zml_* définis dans app.c. */
++#pragma once
++#include <stdint.h>
++
++#define ZML_BUS_MAX 256u                 /* APP_BLOCK fm1-base = 256 */
++
++/* ---- fournis par app.c (patch 0008) ---- */
++float zml_sr(void);
++int   zml_tempo(void);
++int   zml_playing(void);                 /* le séquenceur tourne */
++void  zml_gate(int on, int note, int accent, int slide);
++void  zml_param(int key, float v);
++void  zml_say(const char *a, const char *b);
++
++/* ---- le module ---- */
++void  zml_init(float sr);
++void  zml_render(uint32_t n, const float *in);   /* in = bus mono du synth (resample) */
++const float *zml_bus_l(void);
++const float *zml_bus_r(void);
++
++/* recording (app.c -> ici depuis la file d'événements) */
++void  zml_note_in(int note, int vel);
++void  zml_note_off_in(int note);
++void  zml_par_in(int key, float v);
++void  zml_play_sync(void);               /* EV_PLAY : le looper suit le transport */
++
++/* page LOOP (12) : app.c route les touches/boutons/encodeurs ici */
++void  zml_slot_toggle(int slot);         /* touche blanche 0..15 */
++void  zml_encoder(int enc, int32_t det); /* enc = ordre enum : 0 SELECT 1 ALGO 2 PRESET 3..6 K1..K4 */
++void  zml_act_play(void);
++void  zml_act_rec(void);
++void  zml_act_od(void);
++void  zml_act_erase(void);
++void  zml_act_rs(void);
++void  zml_act_mutate(void);
++void  zml_act_rand(void);
++int   zml_sel(void);
++void  zml_gain(float g);                 /* macro / matrice ASSIGN : loop_gain 0..1 */
++float zml_gain_get(void);
+diff --git a/atek303/app/ztek_loop_fm1.c b/atek303/app/ztek_loop_fm1.c
+new file mode 100644
+index 0000000..ddd05e7
+--- /dev/null
++++ b/atek303/app/ztek_loop_fm1.c
+@@ -0,0 +1,9 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * patch 0008: dsp/midi_looper.c compilé pour le FM-1 avec un ring resample réduit
++ * (ML_RS_MAX 4096 ~ 8 Ko au lieu de 16384 ~ 32 Ko) — même principe que ztek_drum_fm1.c
++ * (DR_FM1_ECO). ztek_loop.c définit le même ML_RS_MAX avant d'inclure midi_looper.h,
++ * pour que sizeof(ml_t) soit identique dans les deux unités de compilation. */
++#define ML_RS_MAX 4096
++#include "dsp/midi_looper.c"
+diff --git a/atek303/app/ztek_macro.c b/atek303/app/ztek_macro.c
+new file mode 100644
+index 0000000..34a571d
+--- /dev/null
++++ b/atek303/app/ztek_macro.c
+@@ -0,0 +1,128 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_macro.c — glue FM-1 des macros (voir ztek_macro.h). C99, pas d'allocation dynamique.
++ * L'application d'une cible passe par les accesseurs du pack SEQ+ (zsp_*), du drum
++ * (zdr_mod_set) et du looper (zml_gain), définis dans leurs modules / app.c. */
++#include <string.h>
++#include "ztek_macro.h"
++#include "ztek_drum.h"
++#include "ztek_loop.h"
++
++typedef struct { int dst; float val; int used; } zmac_slot_t;
++
++static zmac_slot_t mac[ZMAC_N];
++static int sel;
++static float pv[7];                      /* 0 SEL 1 ALGO(dst) 3 K1(niveau) */
++
++static float clamp01(float v) { return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; }
++
++static void say2(const char *a, int slot)
++{
++    char t[8];
++    t[0] = 'M';
++    t[1] = (char)('0' + (slot + 1) / 10);
++    t[2] = (char)('0' + (slot + 1) % 10);
++    t[3] = 0;
++    zmac_say(a, t);
++}
++
++/* applique une cible <- niveau (même mapping que la matrice ASSIGN, patch 0005/0008) */
++static void apply_dst(int dst, float val)
++{
++    if (dst < 0 || dst >= ZMAC_NDST) return;
++    val = clamp01(val);
++    if (dst < AT_NPARAMS)
++        zsp_at_set(dst, val);
++    else if (dst < ZSP_SEQ_DST0)
++        zsp_fx_set(dst - AT_NPARAMS, val);
++    else if (dst < ZSP_DST_DRUM0) {
++        int k = dst - ZSP_SEQ_DST0;
++        if (k == 1) zsp_set_scale((int)(val * 7.99f));
++        else if (k == 2) zsp_set_tempo((int)(val * 300.0f));
++        else if (k == 3) zsp_set_root(24 + (int)(val * 48.99f));
++        else zsp_set_seqk(k - 4, val);
++    }
++    else if (dst < ZSP_NDST)
++        zdr_mod_set(dst - ZSP_DST_DRUM0, val);
++    else
++        zml_gain(val);                   /* ZMAC_DST_LOOP */
++}
++
++void zmac_init(void)
++{
++    memset(mac, 0, sizeof mac);
++    sel = 0;
++    memset(pv, 0, sizeof pv);
++}
++
++void zmac_store(void)
++{
++    mac[sel].dst = (int)(clamp01(pv[1]) * (ZMAC_NDST - 0.001f));
++    mac[sel].val = clamp01(pv[3]);
++    mac[sel].used = 1;
++    say2("STORED", sel);
++}
++
++void zmac_apply(void)
++{
++    if (!mac[sel].used) { say2("EMPTY", sel); return; }
++    apply_dst(mac[sel].dst, mac[sel].val);
++    say2("APPLY", sel);
++}
++
++void zmac_apply_all(void)
++{
++    int m, n = 0;
++    for (m = 0; m < ZMAC_N; m++)
++        if (mac[m].used) { apply_dst(mac[m].dst, mac[m].val); n++; }
++    zmac_say("APPLY ALL", n ? "OK" : "NONE");
++}
++
++void zmac_erase(void)
++{
++    mac[sel].used = 0;
++    mac[sel].dst = 0;
++    mac[sel].val = 0.0f;
++    say2("ERASED", sel);
++}
++
++void zmac_slot(int slot)
++{
++    if (slot < 0 || slot >= ZMAC_N) return;
++    sel = slot;
++    if (mac[sel].used)
++        apply_dst(mac[sel].dst, mac[sel].val);
++    say2(mac[sel].used ? "APPLY" : "SLOT", sel);
++}
++
++void zmac_step(int d)
++{
++    sel = (sel + d + ZMAC_N) % ZMAC_N;
++    say2("SLOT", sel);
++}
++
++/* enc = 0 SELECT 1 ALGO 2 PRESET 3..6 K1..K4 (ordre enum) */
++void zmac_encoder(int enc, int32_t det)
++{
++    float v;
++    if (det == 0) return;
++    if (enc == 0) {                      /* SELECT = slot */
++        pv[0] = clamp01(pv[0] + (float)det * 0.02f);
++        sel = (int)(pv[0] * (ZMAC_N - 0.001f));
++        if (sel >= ZMAC_N) sel = ZMAC_N - 1;
++        say2("SLOT", sel);
++    } else if (enc == 1) {               /* ALGO = dst (pas fin : 50 positions pour 44 dst) */
++        pv[1] = clamp01(pv[1] + (float)det * 0.02f);
++        zmac_say("DST", "");
++    } else if (enc == 3) {               /* K1 = niveau */
++        pv[3] = clamp01(pv[3] + (float)det * 0.05f);
++        zmac_say("LEVEL", "");
++    }
++    (void)v;
++}
++
++int   zmac_sel(void) { return sel; }
++int   zmac_used(int slot) { return (slot >= 0 && slot < ZMAC_N) ? mac[slot].used : 0; }
++int   zmac_dst(int slot) { return (slot >= 0 && slot < ZMAC_N) ? mac[slot].dst : 0; }
++float zmac_val(int slot) { return (slot >= 0 && slot < ZMAC_N) ? mac[slot].val : 0.0f; }
+diff --git a/atek303/app/ztek_macro.h b/atek303/app/ztek_macro.h
+new file mode 100644
+index 0000000..ac32fc8
+--- /dev/null
++++ b/atek303/app/ztek_macro.h
+@@ -0,0 +1,49 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_macro: les macros zuluTek sur le FM-1 (patch 0008) — page MACRO (13).
++ *
++ * Un macro = un conteneur assignable : cible (dst) + niveau 0..1, PAS un séquenceur
++ * d'actions (même sémantique que l'APK, PR #3 page 14). 16 slots.
++ *
++ * Cibles (dst), même espace que la matrice ASSIGN du pack SEQ+ (patch 0005) + drum (0008) :
++ *   0..AT_NPARAMS-1        params voix (zsp_at_set)
++ *   AT_NPARAMS..           params FX (zsp_fx_set)
++ *   ZSP_SEQ_DST0..         seq (scale/tempo/root/seqk, comme la matrice)
++ *   ZSP_DST_DRUM0..        bus drum (zdr_mod_set : MASTER/SWING/COMP/…)
++ *   ZMAC_DST_LOOP          loop_gain (niveau de retour des loops MIDI)
++ *
++ * Layout page MACRO (13) :
++ *   - 16 touches blanches = les 16 slots (tap = sélectionne, et applique si utilisé)
++ *   - encodeurs : SELECT = slot, PRESET = preset (global), ALGO = dst par pas de 8,
++ *                 K1 = niveau 0..1, K2..K4 libres
++ *   - boutons : REC = store (sélection courante -> slot SEL), PLAY = applique le slot SEL,
++ *               SEQ = applique tous les slots utilisés, EDIT = efface le slot SEL,
++ *               ENV = slot -1, LFO = slot +1, GLO = quitte la page
++ *   - REC maintenu + SEQ = page MACRO (13)
++ *
++ * Les macros vivent en RAM (pas en flash) en v1. */
++#pragma once
++#include <stdint.h>
++#include "ztek_seqplus.h"
++
++#define ZMAC_N 16
++#define ZMAC_DST_LOOP ZSP_NDST              /* +0 = loop_gain */
++#define ZMAC_NDST (ZSP_NDST + 1)
++
++/* ---- fourni par app.c (patch 0008) ---- */
++void zmac_say(const char *a, const char *b);
++
++/* ---- le module ---- */
++void  zmac_init(void);
++void  zmac_store(void);                  /* REC : sélection courante -> slot SEL */
++void  zmac_apply(void);                  /* PLAY : applique le slot SEL */
++void  zmac_apply_all(void);              /* SEQ */
++void  zmac_erase(void);                  /* EDIT : efface le slot SEL */
++void  zmac_slot(int slot);               /* touche blanche : sélectionne (+ applique si utilisé) */
++void  zmac_step(int d);                  /* ENV/LFO : slot +/- 1 */
++void  zmac_encoder(int enc, int32_t det);/* enc = 0 SEL 1 ALGO 2 PRESET 3..6 K1..K4 */
++int   zmac_sel(void);
++int   zmac_used(int slot);
++int   zmac_dst(int slot);
++float zmac_val(int slot);
+diff --git a/atek303/app/ztek_seqplus.c b/atek303/app/ztek_seqplus.c
+index 20ae092..df708a0 100644
+--- a/atek303/app/ztek_seqplus.c
++++ b/atek303/app/ztek_seqplus.c
+@@ -6,10 +6,11 @@
+  * on the AC791N: negligible next to the voice and the FX which run per sample. */
+ #include "ztek_seqplus.h"
+ #include "app.h"                 /* OBJ_ZSEQ, plat_store_* */
+-#include "dsp/fastmath.h"
++#include "ztek_drum.h"         /* patch 0008: destinations drum dans la matrice ASSIGN */
++#include "fastmath.h"           /* patch 0008: comme les dsp/*.c — résolu via fm1-base (include/) au build FM-1 */
+ #include <string.h>
+ 
+-#define ZSP_MAGIC 0x5A535031u          /* 'ZSP1' */
++#define ZSP_MAGIC 0x5A535032u          /* 'ZSP2' (patch 0008: + dst drum, + part_saved) */
+ 
+ typedef struct {
+     float mod_knob[ZSP_NSRC][4];
+@@ -25,6 +26,7 @@ typedef struct {
+ typedef struct {
+     uint32_t magic;
+     uint8_t ludique;
++    uint8_t part_saved[3];       /* patch 0008: la partie a un état de modulation sauvé */
+     zsp_modstate_t cur;
+     zsp_modstate_t by_part[3];
+ } zsp_flash_t;
+@@ -329,7 +331,7 @@ static void matrix_block(void)
+         v = fm_clampf(dst_base[d] + (src_val[s] - 0.5f) * 2.0f * depth, 0.0f, 1.0f);
+         if (d < AT_NPARAMS) zsp_at_set(d, v);
+         else if (d < ZSP_SEQ_DST0) zsp_fx_set(d - AT_NPARAMS, v);
+-        else {
++        else if (d < ZSP_DST_DRUM0) {
+             int k = d - ZSP_SEQ_DST0;
+             if (k == 0) { /* steps: sanitize+render via the grid */ }
+             else if (k == 1) zsp_set_scale((int)(v * 7.99f));
+@@ -337,6 +339,7 @@ static void matrix_block(void)
+             else if (k == 3) zsp_set_root(24 + (int)(v * 48.99f));
+             else M->seqk5[k - 4] = v;
+         }
++        else zdr_mod_set(d - ZSP_DST_DRUM0, v);   /* patch 0008: bus drum dans la matrice */
+     }
+ }
+ 
+@@ -363,6 +366,7 @@ void zsp_mod_init(void)
+     for (d = 0; d < ZSP_NDST; d++) { M->asg_src[d] = 255; M->asg_depth[d] = 0.0f; dst_base[d] = 0.5f; }
+     for (d = 0; d < AT_NPARAMS; d++) dst_base[d] = zsp_at_params()[d];
+     for (d = 0; d < FX_NPARAMS; d++) dst_base[8 + d] = zsp_fx_params()[d];
++    for (d = 0; d < ZSP_NDRUM; d++) dst_base[ZSP_DST_DRUM0 + d] = zdr_mod_get(d);   /* patch 0008 */
+     for (k = 0; k < ZSP_NSEQK; k++) M->seqk5[k] = 0.0f;
+     zf.ludique = 1;
+     zf.magic = ZSP_MAGIC;
+@@ -489,12 +493,14 @@ void zsp_mod_save_part(int part)
+ {
+     if (part < 0 || part > 2) return;
+     zf.by_part[part] = zf.cur;
++    zf.part_saved[part] = 1;               /* patch 0008 */
+     zsp_flash_save();
+ }
+ 
+ int zsp_mod_load_part(int part)
+ {
+     if (part < 0 || part > 2) return 0;
++    if (!zf.part_saved[part]) return 0;    /* patch 0008: ne rien écraser si jamais sauvé */
+     zf.cur = zf.by_part[part];
+     M = &zf.cur;
+     memcpy(env_loop, M->env_loop, sizeof env_loop);
+diff --git a/atek303/app/ztek_seqplus.h b/atek303/app/ztek_seqplus.h
+index e6a8e8b..01d7d92 100644
+--- a/atek303/app/ztek_seqplus.h
++++ b/atek303/app/ztek_seqplus.h
+@@ -51,8 +51,10 @@ int   zsp_mutate_ops(void);                 /* burst size from MUT (for EV_MUTAT
+ 
+ /* ---- modulation 8/8 + ASSIGN (pages 8 LFO, 9 ENV, 10 ASSIGN) ----------------------- */
+ #define ZSP_NSRC 16
+-#define ZSP_NDST (AT_NPARAMS + FX_NPARAMS + 9)      /* 0..7 voice, 8.. FX, 26..34 seq */
+ #define ZSP_SEQ_DST0 (AT_NPARAMS + FX_NPARAMS)
++#define ZSP_NDRUM 8                                     /* patch 0008: destinations bus drum */
++#define ZSP_DST_DRUM0 (ZSP_SEQ_DST0 + 9)
++#define ZSP_NDST (ZSP_DST_DRUM0 + ZSP_NDRUM)            /* 0..7 voix, 8.. FX, seq 26..34, drum 35..42 */
+ void  zsp_mod_init(void);
+ void  zsp_mod_chunk(uint32_t n, float dt);       /* called per CHUNK in app_render_voice */
+ void  zsp_mod_knob(int src, int k, float v);     /* src 0..15, k 0..3 */
+-- 
+2.47.3
+
