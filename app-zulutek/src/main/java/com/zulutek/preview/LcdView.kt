@@ -149,6 +149,7 @@ class LcdState {
     var chokePad = -1                               // pad/slot en cours d'édition choke
     var polyArmed = false                           // POLY pressé : le prochain pad tapé sera désigné leader
     var ecoOn = false                               // OPTIONS > ECO ON : LCD throttlé + blink figé
+    var labelsZulu = false                          // OPTIONS > LABELS = ZULU (APK only, cosmétique)
     var optRow = 0                                  // page OPTIONS (9) : ligne sélectionnée
     var mixStrip = 0                                // page MIX (11) : tranche sélectionnée (0..3, 4=master)
     val stripCut = FloatArray(4)                    // filtre traversant par tranche
@@ -943,7 +944,9 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             text(c, 6f, 15f, "OPTIONS", FLUO_TURQ, 12f)
             text(c, 6f, 60f, "ECO", FLUO_TURQ, 10f)
             text(c, 90f, 60f, if (st.ecoOn) "ON" else "OFF", if (st.ecoOn) FLUO_YEL else INK, 10f)
-            text(c, 6f, 232f, "K1=ON/OFF ECO   REC=quitte", DIM, 8f)
+            text(c, 6f, 80f, "LABELS", FLUO_TURQ, 10f)
+            text(c, 90f, 80f, if (st.labelsZulu) "ZULU" else "FM1", if (st.labelsZulu) FLUO_YEL else INK, 10f)
+            text(c, 6f, 232f, "K1=ECO  K2=LABELS   REC=quitte", DIM, 8f)
             c.restore()
             return
         }

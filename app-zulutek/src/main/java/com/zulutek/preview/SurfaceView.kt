@@ -35,6 +35,9 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         /* the FM-1's 14 buttons, same order (BTN_NAMES of the firmware) */
         val BTN_LABELS = arrayOf("FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME",
                                  "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+")
+        /* labels custom Zulu (ancienne surface), affichés si OPTIONS > LABELS = ZULU ; le dispatch reste par index */
+        val ZULU_LABELS = arrayOf("PLAY", "REC", "SEQ", "GEN", "TAP", "SCL", "R-",
+                                  "R+", "ERS", "DRV", "DLY", "REV", "POW", "MUT")
         // 27 keys F3..G5: white keys (16) carry slot indices, black keys (11) MIDI notes
         val BLACK_NOTES = intArrayOf(54, 56, 58, 61, 63, 66, 68, 70, 73, 75, 78)
         val WHITE_NOTES = intArrayOf(53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79)
@@ -146,7 +149,8 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             c.drawRect(x0, y0, x0 + bw - 6f, y0 + 24f, frame)
             mono.color = if (active) LcdView.INK else LcdView.DIM
             mono.textSize = 9f
-            c.drawText(BTN_LABELS[i], x0 + 4f, y0 + 16f, mono)
+            val labels = if (st.labelsZulu) ZULU_LABELS else BTN_LABELS
+            c.drawText(labels[i], x0 + 4f, y0 + 16f, mono)
         }
 
         // ---- keys: whites then blacks on top ----
