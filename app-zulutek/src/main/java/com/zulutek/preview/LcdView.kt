@@ -1104,7 +1104,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             text(c, 6f, 105f, "LINK", FLUO_TURQ, 10f)
             text(c, 60f, 105f, when (st.linkTab) { 0 -> "FM-1"; 1 -> "LOCAL"; 2 -> "PARAMS"; else -> "PRESETS" }, INK, 9f)
             if (st.linkTab == 1) text(c, 110f, 105f, "ZSMP$st.linkDst", DIM, 8f)
-            else if (st.linkTab == 3) text(c, 110f, 105f, "PRT ${ZtekAudio.PART_NAMES.getOrElse(st.linkDst) { "?" }}", DIM, 8f)
+            else if (st.linkTab == 3) text(c, 110f, 105f, "PRT ${ZtekAudio.PART_NAMES.getOrElse(st.linkDst) { "?" }} ZPRE", DIM, 8f)
             text(c, 180f, 105f, if (Fm1Usb.connected) "USB" else "off",
                 if (Fm1Usb.connected) FLUO_TURQ else REC_RED, 8f)
             val list = when (st.linkTab) { 0 -> st.linkFiles; 1 -> st.linkLocal; 2 -> st.linkParams; else -> st.linkPresets }
@@ -1118,7 +1118,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 0 -> "(SAVE = scan USB)"
                 1 -> "(SEQ = importer WAV)"
                 2 -> "(miroir live 0x62 — SAVE = watch)"
-                else -> "(PLAY = export ZTP1, SEQ = import, ARP = load)"
+                else -> "(PLAY = export+push ZPRE, SEQ = import, ARP = load)"
             }, DIM, 8f)
             text(c, 6f, 216f, st.linkStatus, AMBER, 8f)
             if (st.linkProg.isNotEmpty()) text(c, 6f, 228f, st.linkProg, FLUO_TURQ, 8f)

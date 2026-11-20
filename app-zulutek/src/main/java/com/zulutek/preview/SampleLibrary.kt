@@ -174,6 +174,13 @@ object SampleLibrary {
         } catch (e: Exception) { false }
     }
 
-    /** nom de fichier de pull pour un nom FM-1 (ZSMP00 -> ZSMP00.zsm1, etc.) */
-    fun pullName(fm1Name: String): String = "$fm1Name.zlk"
+    /** préfixe companion d'un nom FM-1 (ZSMP/ZLUP/ZMAC/ZPRE/ZKIT), sinon null */
+    fun companionKind(fm1Name: String): String? =
+        listOf("ZSMP", "ZLUP", "ZMAC", "ZPRE", "ZKIT").firstOrNull { fm1Name.startsWith(it) }
+
+    /** nom de fichier de pull pour un nom FM-1, extension selon le blob
+     *  (ZSMP→.zsm1, ZLUP→.zlb1, ZMAC→.zmc1, ZPRE→.ztp1, ZKIT→.zkt1, sinon .zlk) */
+    fun pullName(fm1Name: String): String = "$fm1Name." + when (companionKind(fm1Name)) {
+        "ZSMP" -> "zsm1"; "ZLUP" -> "zlb1"; "ZMAC" -> "zmc1"; "ZPRE" -> "ztp1"; "ZKIT" -> "zkt1"; else -> "zlk"
+    }
 }

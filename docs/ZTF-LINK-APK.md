@@ -105,10 +105,10 @@ La page LINK 17 gagne la **télécommande live** et le **miroir d'état** :
   **SEQ = import** d'un `.ztp1` (SAF) → `nativePresetImport` + load, **ARP = load** dans l'APK.
 - Transfert des **banques de presets du FM-1** (objets `PRESETS_A..D`, `ZSEQ`) : déjà possible en
   onglet FM-1 (push/pull 0x61, blobs opaques, sûrs — le format ATEK303 preset_t diffère du ZTP1 APK).
-- ⚠️ Pour pousser un preset **ZTP1 édité sur le téléphone vers le store par partie du FM-1**
-  (flash ZSP2 du patch 0008), il faudra exposer ce store comme fichier companion `ZPRE` dans le
-  patch 0010 (PR #12) — à faire quand #11/#12 seront mergées (zone libre restante :
-  0xD2000..0xD3FFF, soit 1 page de 0x1000).
+- ✅ Côté APK (PR #20) : push d'un preset ZTP1 édité sur le téléphone vers le FM-1 est prêt — onglet PRESETS,
+  PLAY = export local `.ztp1` **+ push vers `ZPRE%02d`** quand l'USB est up ; pull des `ZPRE*` en `.ztp1`
+  (ré-importable), `ZKIT*` en `.zkt1`. Le store `ZPRE` côté FM-1 reste à exposer par un prochain patch
+  firmware (0010 = ZSMP/ZLUP/ZMAC seulement ; zone libre 0xD2000..0xD3FFF, 1 page de 0x1000).
 
 ## 5. Limites v1/v2 connues
 

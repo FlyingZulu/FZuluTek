@@ -75,6 +75,12 @@ plus fenêtres XDATA en option ; plafond par fichier `APP_FILE_OBJ_MAX`) :
 | `ZLUP` | `ZLB1` + état `ml_t` (événements, sp, len ; ring non persisté) | banque de loops MIDI (16 slots) |
 | `ZPRE00..31` | blob `ZTP1` existant (`ztek_preset_export`) | presets — même format APK/FM-1, interchangeables |
 | `ZMAC` | 16 slots {dst, val} | banque de macros |
+| `ZKIT` | blob opaque (côté APK : pull en `.zkt1`) | banque de kits — exposé par un prochain patch firmware (0010 n'a que ZSMP/ZLUP/ZMAC) |
+
+> Côté APK (PR #20) : `ZPRE`/`ZKIT` reconnus dès maintenant — `SampleLibrary.pullName` met l'extension du blob
+> (`.ztp1` pour ZPRE, `.zkt1` pour ZKIT, etc.), push/pull 0x61 par nom génériques, et l'onglet PRESETS pousse
+> le ZTP1 local vers `ZPRE%02d` quand l'USB est up. Le mapping exact ZPRE (part×slot) sera confirmé quand le
+> patch firmware exposera ces fichiers.
 
 Règles : un sample « long » reste sur le téléphone ; on ne pousse dans le FM-1 que des extraits courts
 (µ-law 44,1 kHz ≈ 44 Ko/s → ~1-2 s max par slot selon l'espace libre). La bibliothèque complète vit
