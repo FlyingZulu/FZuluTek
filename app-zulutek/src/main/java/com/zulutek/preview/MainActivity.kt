@@ -240,6 +240,13 @@ class MainActivity : Activity(), SurfaceListener {
                 lcd.invalidate()
             }
             "REC" -> if (st.page == 1) { st.page = 0; lcd.invalidate() } else ZtekAudio.redo()
+            "REV" -> if (st.page == 1) {
+                // resample : enregistre les slots actifs dans le slot sélectionné (ring µ-law 32 kHz)
+                var mask = 0
+                for (i in 0 until 16) if (ZtekAudio.loopSlotOn(i)) mask = mask or (1 shl i)
+                ZtekAudio.loopRsStart(st.selSlot, mask, 1, 32)
+                st.recArmed = true
+            } else { st.page = if (st.page == 5) 0 else 5; lcd.invalidate() }   // page POW!
             "TAP" -> {                                                    // sirène on/off
                 st.sirenOn = !st.sirenOn
                 ZtekAudio.siren(if (st.sirenOn) 1 else 0, 0.3f, 0.5f, 0.0f)
@@ -260,6 +267,17 @@ class MainActivity : Activity(), SurfaceListener {
                        st.xyTargetNames[0] = st.targetName(xyT[0]); st.xyTargetNames[1] = st.targetName(xyT[1]) }
                 3 -> { st.xyX = v; if (st.xyOn) ZtekAudio.xySet(1, st.xyX, st.xyY) }
                 4 -> { st.xyY = v; if (st.xyOn) ZtekAudio.xySet(1, st.xyX, st.xyY) }
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 5) {                     // page POW! : K1=type K2=a K3=b K4=mix PRE=slot
+            when (i) {
+                1 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
+                3 -> st.punchType = (v * 14.999f).toInt().coerceIn(0, 14)
+                4 -> st.punchA = v
+                5 -> st.punchB = v
+                6 -> st.punchMix = v
             }
             lcd.invalidate()
             return
@@ -343,7 +361,8 @@ class MainActivity : Activity(), SurfaceListener {
                 when (label) {
                     "REC" -> {
                         val s = st.selSlot
-                        if (ZtekAudio.loopSlotRec(s)) { ZtekAudio.loopRecStop(s); st.recArmed = false }
+                        if (ZtekAudio.loopRsRec()) { ZtekAudio.loopRsStop(); st.recArmed = false }
+                        else if (ZtekAudio.loopSlotRec(s)) { ZtekAudio.loopRecStop(s); st.recArmed = false }
                         else { ZtekAudio.loopRecStart(s, 1); st.recArmed = true }
                     }
                     "ERS" -> ZtekAudio.loopErase(st.selSlot)
@@ -366,6 +385,10 @@ class MainActivity : Activity(), SurfaceListener {
                     ZtekAudio.xyHold(if (st.xyHold) 1 else 0)
                     lcd.invalidate()
                 }
+                return
+            }
+            5 -> { // POW! : REC = quitter
+                if (label == "REC") { st.page = 0; ZtekAudio.punch(0, 0, 0f, 0f, 0f); lcd.invalidate() }
                 return
             }
         }
@@ -448,6 +471,11 @@ class MainActivity : Activity(), SurfaceListener {
     override fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean) {
         if (st.smpPage && down && !longPress) { ZtekAudio.smpPlay(1); return }
         st.selSlot = slot
+        if (st.page == 5) {                     // PoW! momentané tant que la touche est maintenue
+            if (down) ZtekAudio.punch(1, st.punchType, st.punchA, st.punchB, st.punchMix)
+            else { ZtekAudio.punch(0, 0, 0f, 0f, 0f); ZtekAudio.punchTail(0.3f) }
+            return
+        }
         if (st.page == 2 || st.page == 3) {
             val now = System.currentTimeMillis()
             if (longPress) {

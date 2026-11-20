@@ -147,6 +147,11 @@ object ZtekAudio {
     /* sirène */
     fun siren(on: Int, lvl: Float, t: Float, fb: Float) { if (handle != 0L) nativeSiren(handle, on, lvl, t, fb) }
 
+    /* resample dans un slot looper (ring audio) */
+    fun loopRsStart(dst: Int, monmask: Int, fmt: Int, khz: Int) { if (handle != 0L) nativeLoopRsStart(handle, dst, monmask, fmt, khz) }
+    fun loopRsStop() { if (handle != 0L) nativeLoopRsStop(handle) }
+    fun loopRsRec(): Boolean = handle != 0L && nativeLoopRsRec(handle)
+
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeStart(handle: Long): Boolean
@@ -191,4 +196,7 @@ object ZtekAudio {
     private external fun nativeXyHold(handle: Long, hold: Int)
     private external fun nativeSiren(handle: Long, on: Int, lvl: Float, t: Float, fb: Float)
     private external fun nativeLoopGetSp(handle: Long, slot: Int, idx: Int): Float
+    private external fun nativeLoopRsStart(handle: Long, dst: Int, monmask: Int, fmt: Int, khz: Int)
+    private external fun nativeLoopRsStop(handle: Long)
+    private external fun nativeLoopRsRec(handle: Long): Boolean
 }

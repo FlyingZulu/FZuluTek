@@ -53,6 +53,10 @@ void ztek_loop_set_sp(ztek_t *z, int slot, int idx, float v);
 int  ztek_loop_slot_on(const ztek_t *z, int slot);
 int  ztek_loop_slot_rec(const ztek_t *z, int slot);
 float ztek_loop_get_sp(const ztek_t *z, int slot, int idx);   /* ML_SP_* */
+/* resample (reloop) : enregistre le bus monitoré dans un slot en ring audio (µ-law 8 bits) */
+void ztek_loop_rs_start(ztek_t *z, int dst, uint16_t monmask, int fmt, int khz);
+void ztek_loop_rs_stop(ztek_t *z);
+int  ztek_loop_rs_rec(const ztek_t *z);
 
 /* the acid pattern sequencer (dsp/acid_pattern.h) */
 void ztek_acid_generate(ztek_t *z, uint32_t seed);

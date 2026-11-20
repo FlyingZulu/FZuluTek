@@ -245,3 +245,19 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSiren(JNIEnv *, j
 {
     ztek_siren(zte(NULL, h), on, lvl, t, fb);
 }
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopRsStart(JNIEnv *, jclass, jlong h,
+    jint dst, jint monmask, jint fmt, jint khz)
+{
+    ztek_loop_rs_start(zte(NULL, h), dst, (uint16_t)monmask, fmt, khz);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopRsStop(JNIEnv *, jclass, jlong h)
+{
+    ztek_loop_rs_stop(zte(NULL, h));
+}
+
+ZTEK_JNI jboolean JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopRsRec(JNIEnv *, jclass, jlong h)
+{
+    return ztek_loop_rs_rec(zte(NULL, h)) ? JNI_TRUE : JNI_FALSE;
+}

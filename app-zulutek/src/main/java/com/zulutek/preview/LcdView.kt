@@ -79,6 +79,14 @@ class LcdState {
     var xyHold = false
     var xyTargetNames = arrayOf("CUT", "RES")
 
+    // page POW! (5) : réglages du punch-in
+    var punchType = 8
+    var punchA = 0.5f
+    var punchB = 0.5f
+    var punchMix = 0.8f
+    val punchNames = arrayOf("OFF", "REPEAT", "1/16REP", "1/8DN", "1/8UP", "SHRINK", "BUILD",
+        "STRETCH", "ECHO", "REVERSE", "STOP", "SCRATCH", "LPF", "CRUSH", "GATE")
+
     val targetNames = arrayOf(
         "TUN", "CUT", "RES", "ENV", "DEC", "ACC", "WAV", "ENG",
         "DRVT", "DRV", "TONE", "LVL", "MODT", "RATE", "DEPT", "MIX",
@@ -306,6 +314,27 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             }
             text(c, 6f, 216f, "SEL=Xtarget PRE=Ytarget ALG=swap  dbl-tap=hold/mom", DIM, 8f)
             text(c, 6f, 230f, "long-GEN = quitter", DIM, 8f)
+            c.restore()
+            return
+        }
+
+        // ---- page POW! (5) : réglages punch-in, maintenu sur une touche blanche ----
+        if (st.page == 5) {
+            text(c, 6f, 15f, "POW!", REC_RED, 12f)
+            text(c, 60f, 15f, "slot ${st.selSlot + 1}", DIM, 9f)
+            text(c, 6f, 40f, "TYPE", DIM, 9f)
+            text(c, 60f, 40f, st.punchNames[st.punchType], FLUO_YEL, 12f)
+            val bars = arrayOf("a" to st.punchA, "b" to st.punchB, "MIX" to st.punchMix)
+            for (i in bars.indices) {
+                val y0 = 60f + i * 40f
+                text(c, 6f, y0 + 12f, bars[i].first, DIM, 9f)
+                box(c, 60f, y0, 234f, y0 + 20f, DIM)
+                frame.color = FLUO_TURQ
+                c.drawLine(62f, y0 + 10f, 62f + 168f * bars[i].second, y0 + 10f, frame)
+                text(c, 200f, y0 + 15f, "${(bars[i].second * 100).toInt()}", INK, 9f)
+            }
+            text(c, 6f, 200f, "K1=type K2=a K3=b K4=mix PRE=slot", DIM, 8f)
+            text(c, 6f, 214f, "maintenir une touche blanche = PoW!  long-REV = quitter", DIM, 8f)
             c.restore()
             return
         }

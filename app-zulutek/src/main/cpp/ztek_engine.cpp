@@ -363,6 +363,16 @@ float ztek_loop_get_sp(const ztek_t *z, int slot, int idx)
     return ml_get_sp((ml_t *)&z->loop, slot, idx);
 }
 
+void ztek_loop_rs_start(ztek_t *z, int dst, uint16_t monmask, int fmt, int khz)
+{
+    /* cap auto : µ-law = 2x ML_RS_MAX octets ; on prend le max, le ring s'arrête à rs_len */
+    ml_rs_start(&z->loop, dst, monmask, ML_RS_MAX, fmt, khz);
+}
+
+void ztek_loop_rs_stop(ztek_t *z) { ml_rs_stop(&z->loop); }
+
+int ztek_loop_rs_rec(const ztek_t *z) { return z->loop.rs_rec; }
+
 void ztek_acid_generate(ztek_t *z, uint32_t seed)
 {
     z->ap.scale = z->scale;
