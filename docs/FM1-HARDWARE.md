@@ -7,6 +7,9 @@
   (JieLi AC791N/WL82, flash 1 Mo, écran 240×240) est compatible avec notre cible.
   Cela ne prouve **pas** que la carte flash est identique en taille/mapping : ATEK303
   n'utilise pas forcément les zones hautes de la flash que nous réservons à ZTF.
+- **⚠️ Le FM-1 de l'utilisateur est DÉJÀ BRIQUÉ** (ne boot plus). Un programmateur
+  **Seeed** est en attente de livraison pour le remettre d'aplomb (unbrick via
+  JTAG/SWD sur AC791N, voir `terceros/rescate/`).
 
 ## Ce que ça change concrètement
 
@@ -25,13 +28,31 @@
    récent que notre base `8934f53`, re-vérifier (voire rebaser) les patches
    `patches/0001..0010` avant `git apply`.
 
+## Cas particulier : FM-1 déjà briqué (état actuel)
+
+Le FM-1 de l'utilisateur ne boot plus ; un programmateur Seeed arrive pour l'unbrick.
+Conséquences concrètes :
+
+1. **Plus de backup « propre » via USB-MIDI** (la machine ne répond plus) — mais avec
+   le programmateur Seeed (JTAG/SWD), on peut **dumper la flash complète directement**
+   même briqué. C'est notre backup : le faire **avant tout autre écriture**.
+2. Le dump sert aussi à **lire la taille/révision réelle de la carte flash** de la rev
+   2026-10 → vérification concrète de nos offsets ZTF (`0xB0000..0xD1FFF`, store
+   `0xD4000..`) au lieu de supposer.
+3. Il y a quand même un risque résiduel : écrire à de mauvais offsets peut empêcher
+   l'unbrick. D'où l'ordre : dump flash → ému/host sim verts → flash du build zuluTek.
+   Avec le dump en main, on peut toujours restaurer l'état d'origine.
+
 ## Ordre des opérations (règle absolue)
 
 1. **Émulateur d'abord** : build `.fwsc` → `fm1-emu` / `fm1-live` (voir
    `docs/FM1-EMULATEUR.md`) + host simulator (`X0X_FONTSET=terminus python3
    base/tools/build.py app --host`) → tests unitaires (`tools/test_ztf_codec.py`,
    tests host zlk).
-2. **Ensuite** lecture identité + backup sur le vrai hardware.
-3. **Enfin seulement** : flash (USB-MIDI SysEx, `docs/FM1-RESSOURCES.md`).
+2. **Ensuite** lecture identité + backup sur le vrai hardware (USB-MIDI si boot OK,
+   dump flash via programmateur Seeed si briqué).
+3. **Enfin seulement** : flash (USB-MIDI SysEx, `docs/FM1-RESSOURCES.md`, ou
+   programmateur si la voie USB est morte).
 
-Jamais l'inverse. Un flash sur une mauvaise cible = brick assuré.
+Jamais l'inverse. Un flash sur une mauvaise cible = brick assuré (et plus dur à
+réparer sans dump préalable).
