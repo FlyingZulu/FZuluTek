@@ -151,3 +151,34 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAcidKnob(JNIEnv *
 {
     ztek_acid_knob(zte(NULL, h), which, v);
 }
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSmpRec(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_smp_rec(zte(NULL, h), on);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSmpPlay(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_smp_play(zte(NULL, h), on);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSmpSet(JNIEnv *, jclass, jlong h, jint which, jfloat v)
+{
+    ztek_smp_set(zte(NULL, h), which, v);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSmpLen(JNIEnv *, jclass, jlong h)
+{
+    return ztek_smp_len(zte(NULL, h));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSmpPeaks(JNIEnv *env, jclass, jlong h, jfloatArray out)
+{
+    ztek_t *z = zte(NULL, h);
+    jsize n = env->GetArrayLength(out);
+    jfloat *el = env->GetFloatArrayElements(out, NULL);
+    if (el) {
+        ztek_smp_peaks(z, el, n / 2);
+        env->ReleaseFloatArrayElements(out, el, 0);
+    }
+}

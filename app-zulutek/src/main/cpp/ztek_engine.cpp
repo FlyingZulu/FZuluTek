@@ -50,21 +50,40 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
 
     std::shared_ptr<oboe::AudioStream> out;
 
-    oboe::DataCallbackResult onAudioReady(oboe::AudioStream *, void *audioData, int32_t numFrames) override
+    /* SMP page: 4 s audio-in buffer + one-shot player */
+    std::shared_ptr<oboe::AudioStream> in;
+    float *smp;                     /* ZTEK_SMP_SECONDS * sr frames, heap (".pool" on the FM-1) */
+    uint32_t smp_cap, smp_len, smp_wr;
+    int smp_rec, smp_play;
+    float smp_start, smp_end, smp_vol, smp_pitch;   /* 0..1, 0..1, 0..1, 0..1 (±24 st) */
+    int smp_mode;                   /* 0 OFF 1 BEAT 2 CLEAN 3 OLD */
+    double smp_pos;                 /* play position, in frames within [start,end) */
+    int32_t smp_delay;              /* BEAT: samples until the next beat */
+
+    oboe::DataCallbackResult onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) override
     {
-        float *o = static_cast<float *>(audioData);
-        uint32_t done = 0;
-        while (done < (uint32_t)numFrames) {
-            uint32_t blk = (uint32_t)numFrames - done;
-            if (blk > ZTEK_MAX_BLOCK) blk = ZTEK_MAX_BLOCK;
-            memset(lbuf, 0, blk * sizeof(float));
-            memset(rbuf, 0, blk * sizeof(float));
-            ztek_render(this, lbuf, rbuf, blk);
-            for (uint32_t i = 0; i < blk; i++) {
-                o[(done + i) * 2] = lbuf[i];
-                o[(done + i) * 2 + 1] = rbuf[i];
+        if (stream == out.get()) {
+            float *o = static_cast<float *>(audioData);
+            uint32_t done = 0;
+            while (done < (uint32_t)numFrames) {
+                uint32_t blk = (uint32_t)numFrames - done;
+                if (blk > ZTEK_MAX_BLOCK) blk = ZTEK_MAX_BLOCK;
+                memset(lbuf, 0, blk * sizeof(float));
+                memset(rbuf, 0, blk * sizeof(float));
+                ztek_render(this, lbuf, rbuf, blk);
+                for (uint32_t i = 0; i < blk; i++) {
+                    o[(done + i) * 2] = lbuf[i];
+                    o[(done + i) * 2 + 1] = rbuf[i];
+                }
+                done += blk;
             }
-            done += blk;
+        } else if (stream == in.get() && smp_rec) {
+            /* record the audio-in into the SMP buffer */
+            const float *ip = static_cast<const float *>(audioData);
+            for (int32_t i = 0; i < numFrames; i++) {
+                if (smp_wr < smp_cap) smp[smp_wr++] = ip[i];
+            }
+            if (smp_wr >= smp_cap) smp_wr = 0;   /* ring: overwrite the oldest */
         }
         return oboe::DataCallbackResult::Continue;
     }
@@ -174,7 +193,14 @@ ztek_t *ztek_create(float sr)
     z->seq_note = -1;
 
     z->mono = (float *)malloc(ZTEK_MAX_BLOCK * sizeof(float));
-    if (!z->mono) { delete z; return NULL; }
+    z->smp_cap = (uint32_t)(ZTEK_SMP_SECONDS * sr);
+    z->smp = (float *)malloc(z->smp_cap * sizeof(float));
+    if (!z->mono || !z->smp) { free(z->mono); free(z->smp); delete z; return NULL; }
+    z->smp_len = 0; z->smp_wr = 0;
+    z->smp_rec = 0; z->smp_play = 0;
+    z->smp_start = 0.0f; z->smp_end = 1.0f; z->smp_vol = 0.8f; z->smp_pitch = 0.5f;
+    z->smp_mode = 2;                 /* CLEAN par défaut */
+    z->smp_pos = 0.0; z->smp_delay = 0;
     return z;
 }
 
@@ -182,7 +208,9 @@ void ztek_destroy(ztek_t *z)
 {
     if (!z) return;
     ztek_stop(z);
+    if (z->in) { z->in->stop(); z->in->close(); z->in.reset(); }
     free(z->mono);
+    free(z->smp);
     delete z;
 }
 
@@ -298,6 +326,89 @@ void ztek_acid_knob(ztek_t *z, int which, float v)
     }
 }
 
+/* ---- SMP page (audio-in sampler) ------------------------------------------------ */
+
+void ztek_smp_rec(ztek_t *z, int on)
+{
+    if (on && !z->in) {
+        oboe::AudioStreamBuilder b;
+        b.setDirection(oboe::Direction::Input)
+         ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
+         ->setSharingMode(oboe::SharingMode::Shared)
+         ->setSampleRate((int32_t)z->sr)
+         ->setChannelCount(1)
+         ->setFormat(oboe::AudioFormat::Float)
+         ->setDataCallback(z);
+        if (b.openStream(z->in) != oboe::Result::OK) return;
+        if (z->in->requestStart() != oboe::Result::OK) { z->in->close(); z->in.reset(); return; }
+    }
+    if (on) {
+        z->smp_wr = 0;
+        z->smp_len = 0;
+        z->smp_rec = 1;
+    } else {
+        z->smp_rec = 0;
+        z->smp_len = z->smp_wr;
+        if (z->in) { z->in->stop(); z->in->close(); z->in.reset(); }
+    }
+}
+
+void ztek_smp_play(ztek_t *z, int on)
+{
+    if (on && z->smp_len > 0) {
+        z->smp_pos = 0.0;
+        z->smp_delay = 0;
+        if (z->smp_mode == 1 && z->loop.playing) {
+            /* BEAT : démarre sur le prochain temps (1/16) de l'horloge du looper */
+            float beat64 = 16.0f * 60.0f / z->bpm;            /* 1/64 bar en samples */
+            float next = (fm_floorf(z->loop.clk / 16.0f) + 1.0f) * 16.0f;   /* next beat, in 1/64 */
+            float d = (next - z->loop.clk) * beat64 / 16.0f;
+            z->smp_delay = (int32_t)(d > 0.0f ? d : beat64);
+        }
+        z->smp_play = 1;
+    } else {
+        z->smp_play = 0;
+    }
+}
+
+void ztek_smp_set(ztek_t *z, int which, float v)
+{
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    switch (which) {
+    case 0: z->smp_start = v; break;
+    case 1: z->smp_end = v; if (z->smp_end <= z->smp_start) z->smp_end = z->smp_start + 0.01f; break;
+    case 2: z->smp_vol = v; break;
+    case 3: z->smp_pitch = v; break;
+    case 4: z->smp_mode = (int)(v * 3.999f); break;
+    }
+}
+
+int ztek_smp_len(const ztek_t *z) { return (int)z->smp_len; }
+
+void ztek_smp_peaks(const ztek_t *z, float *out, int nbuckets)
+{
+    /* min/max par bucket pour la waveform du LCD */
+    int i;
+    uint32_t len = z->smp_len;
+    for (i = 0; i < nbuckets; i++) { out[i * 2] = 0.0f; out[i * 2 + 1] = 0.0f; }
+    if (len == 0) return;
+    for (i = 0; i < nbuckets; i++) {
+        uint32_t b0 = (uint32_t)((uint64_t)i * len / nbuckets);
+        uint32_t b1 = (uint32_t)((uint64_t)(i + 1) * len / nbuckets);
+        float mn = 0.0f, mx = 0.0f;
+        uint32_t k;
+        if (b1 <= b0) b1 = b0 + 1;
+        for (k = b0; k < b1 && k < len; k++) {
+            float x = z->smp[k];
+            if (x < mn) mn = x;
+            if (x > mx) mx = x;
+        }
+        out[i * 2] = mn;
+        out[i * 2 + 1] = mx;
+    }
+}
+
 /* one 1/64-bar of the acid sequencer: gate the grid's step */
 static void ztek_acid_step(ztek_t *z)
 {
@@ -355,6 +466,31 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
         fx_process(z->mono, outL + done, outR + done, blk);
         ml_rs_feed(&z->loop, z->mono, blk);
         ml_rs_render(&z->loop, outL + done, outR + done, blk);
+
+        /* 4b. SMP page: one-shot playback of the audio-in buffer, START..END, pitch/mode */
+        if (z->smp_play && z->smp_len > 0) {
+            uint32_t s0 = (uint32_t)(z->smp_start * (float)z->smp_len);
+            uint32_t s1 = (uint32_t)(z->smp_end * (float)z->smp_len);
+            if (s1 <= s0) s1 = s0 + 1;
+            if (s1 > z->smp_len) s1 = z->smp_len;
+            /* ratio de lecture : PITCH ±24 demi-tons ; OLD = décimation x2 en plus */
+            float semis = (z->smp_pitch - 0.5f) * 48.0f;
+            float ratio = fm_exp2f(semis / 12.0f);
+            if (z->smp_mode == 3) ratio *= 0.5f;
+            uint32_t span = s1 - s0;
+            for (uint32_t i = 0; i < blk; i++) {
+                if (z->smp_delay > 0) { z->smp_delay--; continue; }
+                uint32_t p = (uint32_t)z->smp_pos;
+                if (p >= span) { z->smp_play = 0; break; }
+                float fr = (float)p - fm_floorf((float)p);
+                uint32_t p1 = p + 1 < span ? p + 1 : p;
+                float x = z->smp[s0 + p] + (z->smp[s0 + p1] - z->smp[s0 + p]) * fr;
+                x *= z->smp_vol * 0.9f;
+                outL[done + i] += x;
+                outR[done + i] += x;
+                z->smp_pos += (double)ratio;
+            }
+        }
 
         done += blk;
     }

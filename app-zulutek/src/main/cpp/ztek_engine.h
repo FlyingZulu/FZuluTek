@@ -58,6 +58,16 @@ void ztek_acid_generate(ztek_t *z, uint32_t seed);
 void ztek_acid_play(ztek_t *z, int on);
 void ztek_acid_knob(ztek_t *z, int which, float v);    /* 0 density 1 accent 2 slide 3 range 4 tie */
 
+/* the SMP page (audio-in sampler, docs/ZULUTEK.md page 17): 4 s buffer @ sr, recorded from
+ * the input stream; played one-shot between START and END. which: 0 START 1 END 2 VOL
+ * 3 PITCH 4 MODE (0 OFF 1 BEAT snapped to the tempo 2 CLEAN resample 3 OLD = x2 decimation) */
+#define ZTEK_SMP_SECONDS 4
+void ztek_smp_rec(ztek_t *z, int on);
+void ztek_smp_play(ztek_t *z, int on);
+void ztek_smp_set(ztek_t *z, int which, float v);
+int  ztek_smp_len(const ztek_t *z);                    /* recorded frames */
+void ztek_smp_peaks(const ztek_t *z, float *out, int nbuckets);   /* min/max per bucket for the LCD */
+
 #ifdef __cplusplus
 }
 #endif

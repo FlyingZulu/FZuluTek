@@ -58,6 +58,10 @@ class MainActivity : Activity(), SurfaceListener {
                 else -> 0f
             }
             st.torch = ph == 3 && (now % 30_000) < 3_000
+            if (st.smpPage) {
+                st.smpLen = ZtekAudio.smpLen()
+                ZtekAudio.smpPeaks(st.smpPeaks)
+            }
             lcd.invalidate()
             handler.postDelayed(this, 250)
         }
@@ -106,18 +110,40 @@ class MainActivity : Activity(), SurfaceListener {
         super.onDestroy()
     }
 
-    // ---- appui long sur un bouton : PLAY bascule la veille auto ----
+    // ---- appui long sur un bouton : PLAY bascule la veille auto, SEQ ouvre la page SMP ----
     override fun onButtonLong(i: Int) {
-        if (SurfaceView.BTN_LABELS[i] == "PLAY") {
-            st.veilleOn = !st.veilleOn
-            st.veillePhase = 0
-            lcd.invalidate()
+        when (SurfaceView.BTN_LABELS[i]) {
+            "PLAY" -> {
+                st.veilleOn = !st.veilleOn
+                st.veillePhase = 0
+                lcd.invalidate()
+            }
+            "SEQ" -> {
+                st.smpPage = !st.smpPage
+                if (st.smpPage && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 42)
+                }
+                lcd.invalidate()
+            }
         }
     }
 
     // ---- encoders ----
     override fun onEncoder(i: Int, v: Float) {
         st.pop(i)
+        if (st.smpPage) {
+            // page SMP : SEL = mode de stretch, K1..K4 = START/END/VOL/PITCH
+            when (i) {
+                0 -> { st.smpMode = (v * 3.999f).toInt().coerceIn(0, 3); ZtekAudio.smpSet(4, v) }
+                3 -> ZtekAudio.smpSet(0, v)   // START
+                4 -> ZtekAudio.smpSet(1, v)   // END
+                5 -> ZtekAudio.smpSet(2, v)   // VOL
+                6 -> ZtekAudio.smpSet(3, v)   // PITCH
+            }
+            lcd.invalidate()
+            return
+        }
         when (i) {
             0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
             1 -> {
@@ -139,6 +165,18 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- 14 buttons ----
     override fun onButton(i: Int, down: Boolean) {
+        if (st.smpPage) {
+            when (SurfaceView.BTN_LABELS[i]) {
+                "REC" -> if (down) {
+                    st.smpRecOn = !st.smpRecOn
+                    ZtekAudio.smpRec(if (st.smpRecOn) 1 else 0)
+                }
+                "PLAY" -> if (down) ZtekAudio.smpPlay(1)
+                "ERS" -> if (down) { st.smpRecOn = false; ZtekAudio.smpRec(0) }
+            }
+            lcd.invalidate()
+            return
+        }
         when (SurfaceView.BTN_LABELS[i]) {
             "PLAY" -> if (down) {
                 st.playing = !st.playing
@@ -189,8 +227,9 @@ class MainActivity : Activity(), SurfaceListener {
         surface.invalidate()
     }
 
-    // ---- white keys = looper slots ----
+    // ---- white keys = looper slots (page SMP : PLAY) ----
     override fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean) {
+        if (st.smpPage && down && !longPress) { ZtekAudio.smpPlay(1); return }
         st.selSlot = slot
         if (longPress) {
             if (ZtekAudio.loopSlotRec(slot)) { ZtekAudio.loopRecStop(slot); st.recArmed = false }

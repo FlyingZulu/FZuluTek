@@ -47,6 +47,14 @@ class LcdState {
     var catX = 0f                     // 0..1 across the 240 px
     var coucouUntil = 0L             // pop de réveil au centre
     var torch = false                // lampe torche (écran éteint, toutes les 30 s)
+
+    // page SMP (sampleur audio-in, page 17)
+    var smpPage = false
+    var smpRecOn = false
+    var smpMode = 2                  // 0 OFF 1 BEAT 2 CLEAN 3 OLD
+    val smpModeNames = arrayOf("OFF", "BEAT", "CLEAN", "OLD")
+    var smpLen = 0
+    val smpPeaks = FloatArray(240)   // min/max par bucket (120 buckets x 2)
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -165,6 +173,44 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 }
             }
             if (now < st.coucouUntil) drawCat(c, W / 2f, H / 2f, 1.6f)   // coucou au réveil
+            c.restore()
+            return
+        }
+
+        // ---- page SMP : waveform turquoise, marqueurs START/END jaunes, point REC rouge ----
+        if (st.smpPage) {
+            text(c, 6f, 15f, "SMP", FLUO_TURQ, 12f)
+            text(c, 60f, 15f, st.smpModeNames[st.smpMode], INK, 10f)
+            if (st.smpRecOn && blink) {
+                mono.color = REC_RED
+                c.drawCircle(226f, 11f, 5f, mono)
+            }
+            text(c, 6f, 30f, "LEN ${(st.smpLen / 48000.0).toString().take(4)}s", DIM, 9f)
+            text(c, 90f, 30f, "K1..K4 STA/END/VOL/PIT", DIM, 8f)
+            // waveform, y 60..170
+            val wy0 = 60f; val wy1 = 170f; val wym = (wy0 + wy1) / 2f
+            box(c, 6f, wy0, 234f, wy1, DIM)
+            frame.color = FLUO_TURQ
+            frame.strokeWidth = 1f
+            val nb = st.smpPeaks.size / 2
+            for (i in 0 until nb) {
+                val x = 8f + (226f - 8f) * i / (nb - 1).coerceAtLeast(1)
+                val mn = st.smpPeaks[i * 2]
+                val mx = st.smpPeaks[i * 2 + 1]
+                c.drawLine(x, wym - mx * 50f, x, wym - mn * 50f, frame)
+            }
+            // marqueurs START/END (jaunes)
+            frame.color = FLUO_YEL
+            frame.strokeWidth = 2f
+            val sx = 8f + (st.encVals[3] * (226f - 8f))
+            val ex = 8f + (st.encVals[4] * (226f - 8f))
+            c.drawLine(sx, wy0, sx, wy1, frame)
+            c.drawLine(ex, wy0, ex, wy1, frame)
+            // valeurs K3/K4 en dessous
+            text(c, 8f, 190f, "VOL ${(st.encVals[5] * 100).toInt()}", INK, 10f)
+            text(c, 90f, 190f, "PITCH ${((st.encVals[6] - 0.5f) * 48).toInt()}st", INK, 10f)
+            text(c, 8f, 210f, "REC: PRESET  PLAY: touche blanche / PLAY", DIM, 8f)
+            text(c, 8f, 226f, "long-SEQ = fermer la page", DIM, 8f)
             c.restore()
             return
         }

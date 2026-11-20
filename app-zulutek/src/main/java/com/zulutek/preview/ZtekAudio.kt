@@ -118,6 +118,13 @@ object ZtekAudio {
     fun acidPlay(on: Int) { if (handle != 0L) nativeAcidPlay(handle, on) }
     fun acidKnob(which: Int, v: Float) { if (handle != 0L) nativeAcidKnob(handle, which, v) }
 
+    /* page SMP (sampleur audio-in) : which = 0 START 1 END 2 VOL 3 PITCH 4 MODE */
+    fun smpRec(on: Int) { if (handle != 0L) nativeSmpRec(handle, on) }
+    fun smpPlay(on: Int) { if (handle != 0L) nativeSmpPlay(handle, on) }
+    fun smpSet(which: Int, v: Float) { if (handle != 0L) nativeSmpSet(handle, which, v) }
+    fun smpLen(): Int = if (handle != 0L) nativeSmpLen(handle) else 0
+    fun smpPeaks(out: FloatArray) { if (handle != 0L) nativeSmpPeaks(handle, out) }
+
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeStart(handle: Long): Boolean
@@ -145,4 +152,9 @@ object ZtekAudio {
     private external fun nativeAcidGenerate(handle: Long, seed: Int)
     private external fun nativeAcidPlay(handle: Long, on: Int)
     private external fun nativeAcidKnob(handle: Long, which: Int, v: Float)
+    private external fun nativeSmpRec(handle: Long, on: Int)
+    private external fun nativeSmpPlay(handle: Long, on: Int)
+    private external fun nativeSmpSet(handle: Long, which: Int, v: Float)
+    private external fun nativeSmpLen(handle: Long): Int
+    private external fun nativeSmpPeaks(handle: Long, out: FloatArray)
 }
