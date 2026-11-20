@@ -7,7 +7,21 @@ Firmware ATEK303 personnalisé (dérivé GPL-3.0 d'Animatek — crédits : Anima
 code publié en GPL-3.0 + crédits Animatek, nouvelle clé de signature générée (l'actuelle
 reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
 
-## État des branches (maj 2026-11-20 ~06:30Z) — 9 PR draft ouvertes
+## État des branches (maj 2026-11-20 ~09:45Z) — PR #2..#9 MERGÉES dans `main` (CI verte après chaque merge), seule PR #1 ouverte (session B)
+
+- **Mergées dans main** (ordre : #3 → #9 → #5 → #2 → #4 → #6 → #7 → #8 ; `gh pr merge` bloqué par le proxy → merges via `git merge --no-ff` + `git push origin main`, branches conservées) :
+  - **PR #3** `vibe/zulutek-seq-plus-c9ef18` — pack SEQ+ APK (modulation 8/8, ASSIGN typée LUDIQUE, presets, ARP page 13, MACRO page 14)
+  - **PR #9** `vibe/zulutek-presets-parts-c9ef18` — presets usine pré-patchés **par partie** (BASSE/LEAD/DRUMS, 4 slots macro remplis chacun)
+  - **PR #5** `vibe/zulutek-drum-analog-c9ef18` — drum machine analog v2 (8 pads PERKONS-like, comp bus Fac Smash)
+  - **PR #2** `vibe/atek303-mojo-patch-c9ef18` — patches firmware 0001-0004
+  - **PR #4** `vibe/fm1-patch-seqplus-c9ef18` — patch 0005 SEQ+ FM-1 + `docs/FM1-EMULATEUR.md`
+  - **PR #6** `vibe/fm1-patch-arp-c9ef18` — patch 0006 arpégiateur FM-1
+  - **PR #7** `vibe/fm1-patch-drums-c9ef18` — patch 0007 drum machine FM-1 (page DRUM 11)
+  - **PR #8** `vibe/fm1-patch-looper-macro-c9ef18` — patch 0008 : page LOOP 12 + MACRO 13 FM-1, bus drum dans ASSIGN (dst 35..42), presets pré-patchés par partie (flash ZSP2)
+- **PR #1** `vibe/zulutek-midi-looper-c9ef18` (`85e342a`) — **ouverte, session B** : à rebaser sur main (conflits sur `dsp/midi_looper.c`, `ztek_engine.cpp`, `LcdView.kt`, `MainActivity.kt` — chevauchement avec le pack SEQ+ de #3).
+- ⚠️ la série de patches firmware **0001-0008 n'a jamais été buildée avec la toolchain JieLi** ni testée dans fm1-emu (`docs/FM1-EMULATEUR.md`) — à faire **avant tout flash**.
+
+<details><summary>Détail des PR mergées (archive)</summary>
 
 - **PR #8** `vibe/fm1-patch-looper-macro-c9ef18` (`0748389`) — **firmware FM-1** : patch
   `patches/0008-zulutek-looper-macro.patch` : page **LOOP 12** (REC maintenu+PLAY : MIDI looper UI,
@@ -44,6 +58,8 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
   module `app-zulutek-drums` (l'ancienne branche/PR #5 de `fm1-Zulu` était perdue avec le dépôt
   supprimé) : drum machine analogique 8 pads + seq 16 steps, moteur C99 autonome
   (`drum_engine.c`), APK `ZuluTekDrums-*.apk`. Voir `docs/ZULUTEK-DRUMS.md`.
+
+</details>
 
 ## Docs
 
