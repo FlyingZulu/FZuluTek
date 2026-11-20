@@ -438,7 +438,7 @@ ZTEK_JNI jstring JNICALL Java_com_zulutek_preview_ZtekAudio_nativeBankName(JNIEn
 {
     ztek_t *z = zte(NULL, h);
     if (ztek_preset_used(z, part, slot)) return env->NewStringUTF(ztek_preset_slot_name(z, part, slot));
-    if (slot >= 0 && slot < ZT_NPRESETS) return env->NewStringUTF(ztek_preset_name(slot));
+    if (slot >= 0 && slot < ZT_NPRESETS) return env->NewStringUTF(ztek_preset_name_part(part, slot));
     return env->NewStringUTF("");
 }
 

@@ -1461,6 +1461,63 @@ void ztek_preset(ztek_t *z, int i)
     }
 }
 
+/* ---- factory presets per part (bass/lead/drums), pre-patched with macros -------------
+ * Each part gets its own 8 factory presets, built on the generic ztek_preset() (modulation
+ * pre-assigned) + part-specific engine/sound + 4 macro slots filled (the "patch" containers).
+ * ztek_bank_load() loads these when the slot has no user save. */
+static const char *const ZT_PRESET_NAMES_PART[ZT_NPARTS][ZT_NPRESETS] = {
+    /* BASSE */ {"SUB 808", "ACID LOW", "FUZZ BASS", "PLUK 303", "FM BASS", "DRONE SUB", "8BIT BASS", "TALK BASS"},
+    /* LEAD  */ {"ACID 303", "FILTRE WOBBLE", "PITCH DRIFT", "GATE 303", "SLIDE CITY", "LABO CHAOS", "TM MAX", "MAREE"},
+    /* DRUMS */ {"KIT ZULU", "808 HAT", "909 CLAP", "TM DRUMS", "GLITCH KIT", "POW LOOP", "RAND BOX", "SMASH BUS"},
+};
+
+const char *ztek_preset_name_part(int part, int i)
+{
+    if (part < 0) part = 0;
+    if (part >= ZT_NPARTS) part = ZT_NPARTS - 1;
+    if (i < 0) i = 0;
+    if (i >= ZT_NPRESETS) i = ZT_NPRESETS - 1;
+    return ZT_PRESET_NAMES_PART[part][i];
+}
+
+void ztek_preset_factory(ztek_t *z, int part, int i)
+{
+    if (i < 0) i = 0;
+    if (i >= ZT_NPRESETS) i = ZT_NPRESETS - 1;
+    if (part < 0) part = 0;
+    if (part >= ZT_NPARTS) part = ZT_NPARTS - 1;
+    ztek_preset(z, i);                     /* generic pre-patched base (LFO/ENV/labo/TM assigned) */
+    if (part == 0) {                       /* BASSE: low root, bass engines (PLUK/FM/SUB/8BIT), dark filter */
+        ztek_set_engine(z, 1 + (i % 4));
+        ztek_set_root(z, z->root - 12);
+        ztek_set_param(z, AT_CUTOFF, 0.3f);
+        ztek_set_param(z, AT_DECAY, 0.75f);
+        ztek_set_bpm(z, 100.0f + (float)(i % 4) * 5.0f);
+        ztek_macro_set(z, 0, AT_CUTOFF, 0, 0.15f + 0.1f * (float)(i % 4));
+        ztek_macro_set(z, 1, AT_RESONANCE, 0, 0.6f);
+        ztek_macro_set(z, 2, AT_DECAY, 0, 0.9f);
+        ztek_macro_set(z, 3, ZT_MDST_POWT, 0, 8.0f / (float)(PN_NTYPES - 1));   /* ECHO au prochain PoW! */
+    } else if (part == 1) {                /* LEAD: ATEK303 bright, macros cutoff/envmod/delay */
+        ztek_set_engine(z, 0);
+        ztek_set_param(z, AT_CUTOFF, 0.85f);
+        ztek_set_param(z, AT_RESONANCE, 0.45f);
+        ztek_set_bpm(z, 128.0f);
+        ztek_macro_set(z, 0, AT_CUTOFF, 0, 0.9f);
+        ztek_macro_set(z, 1, AT_ENVMOD, 0, 0.8f);
+        ztek_macro_set(z, 2, 8 + FX_DLY_TIME, 0, 0.4f);
+    } else {                               /* DRUMS: SEQ+ heavy, loop return up, macros aux->PoW!/baie/PoW! type */
+        ztek_set_engine(z, 0);
+        ztek_seq_knob(z, 5, 0.7f);         /* TM LOCK */
+        ztek_seq_knob(z, 8, 0.9f);         /* PLAY = PING-PONG */
+        ztek_seq_knob(z, 9, 0.2f + 0.1f * (float)(i % 4));   /* RAND */
+        ztek_mix_set_gain(z, 0.9f);
+        ztek_macro_set(z, 0, ZT_MDST_AUX0 + 0, 0, 1.0f);    /* loop 0 -> PoW! */
+        ztek_macro_set(z, 1, ZT_MDST_AUX0 + 1, 0, (i % 2) ? 1.0f : 0.0f);
+        ztek_macro_set(z, 2, ZT_MDST_POWT, 0, 8.0f / (float)(PN_NTYPES - 1));   /* ECHO */
+        ztek_macro_set(z, 3, ZT_MDST_PATCH + 0, 0, 1.0f);   /* baie: VOIX -> FX */
+    }
+}
+
 /* ---- user presets per part (bass/lead/drums) -------------------------------------- */
 
 static int ztek_pslot_ok(int part, int slot)
@@ -1541,7 +1598,7 @@ void ztek_bank_load(ztek_t *z, int part, int slot)
 {
     if (!ztek_pslot_ok(part, slot)) return;
     if (z->pstore[part][slot].magic == 0x5A545031u) ztek_preset_load(z, part, slot);
-    else if (slot < ZT_NPRESETS) ztek_preset(z, slot);
+    else if (slot < ZT_NPRESETS) ztek_preset_factory(z, part, slot);   /* factory pre-patched, per part */
 }
 
 void ztek_preset_clear(ztek_t *z, int part, int slot)
