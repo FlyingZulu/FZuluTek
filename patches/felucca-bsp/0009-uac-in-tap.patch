@@ -1,0 +1,32 @@
+SPDX-License-Identifier: GPL-3.0-or-later
+Copyright (C) 2026 FlyingZulu
+
+Patch felucca-bsp (à appliquer APRÈS `herramientas/clonar-terceros.sh`, dans le clone de
+Hugelton-Instruments/felucca-bsp) — jumeau de patches/fm1-base/0009-app-usb-in.patch.
+
+But : exposer en lecture NON destructive les trames UAC-out entrantes (l'audio que
+l'ordinateur/téléphone envoie au FM-1 quand usb_audio_out = true), via :
+
+    uint32_t uac_in_peek(int32_t *dst, uint32_t n);   /* copie jusqu'à n trames stéréo 24-bit
+                                                       * depuis le ring UAC-out sans consommer ;
+                                                       * renvoie le nombre copié */
+
+à ajouter dans chip/usb.c à côté de uac_play() (même ring, même rate tracking : la copie
+ne touche pas à la position de lecture de uac_play). Appelée par device/uac_mix.h (patch
+fm1-base jumeau) quand APP_USB_IN est défini, pour alimenter app_usb_in() -> le firmware
+zuluTek peut alors échantillonner l'audio venant du téléphone (ring resample du looper).
+
+--- a/chip/usb.c
++++ b/chip/usb.c
+@@ (dans la zone de uac_play, qui lit le ring UAC-out)
++uint32_t uac_in_peek(int32_t *dst, uint32_t n)
++{
++    /* copie non destructive depuis le ring UAC-out : même source que uac_play,
++     * sans déplacer sa position de lecture */
++    ... implementation au build JieLi (voir uac_play ci-dessus pour le ring et son rate) ...
++}
+*** End of patch ***
+
+Note de revue : template — le contexte exact de uac_play dans chip/usb.c sera calé au
+premier build JieLi (felucca-bsp cloné par clonar-terceros.sh). Sans ce patch + le patch
+fm1-base jumeau, le firmware zuluTek fonctionne normalement (app_usb_in jamais appelé).
