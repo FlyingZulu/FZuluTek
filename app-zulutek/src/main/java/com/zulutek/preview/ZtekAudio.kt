@@ -377,6 +377,11 @@ object ZtekAudio {
     fun bankLoad(part: Int, slot: Int) { if (handle != 0L) nativeBankLoad(handle, part, slot) }
     fun bankName(part: Int, slot: Int): String =
         if (handle != 0L) nativeBankName(handle, part, slot) else ""
+    /* v3 ZTF : blob ZTP1 brut pour export/import fichier (filesDir/ztek/presets, partage, push FM-1) */
+    fun presetExportBlob(part: Int, slot: Int): ByteArray? =
+        if (handle != 0L) nativePresetExport(handle, part, slot) else null
+    fun presetImportBlob(part: Int, slot: Int, data: ByteArray): Boolean =
+        handle != 0L && nativePresetImport(handle, part, slot, data)
 
     private external fun nativeSeqKnob(handle: Long, k: Int, v: Float)
     private external fun nativeSeqKnobGet(handle: Long, k: Int): Float
