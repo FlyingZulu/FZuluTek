@@ -45,6 +45,8 @@ void ztek_fx_set(ztek_t *z, int param, float v);       /* the FX_ ids (see dsp/f
 float ztek_fx_get(const ztek_t *z, int param);         /* readback (UI mixeur) */
 void ztek_set_eco(ztek_t *z, int on);                  /* OPTIONS > ECO : runtime DSP éco (fx/drum/loop) */
 int  ztek_get_eco(const ztek_t *z);
+void ztek_set_luxe(ztek_t *z, int on);                 /* OPTIONS > LUXE (APK only) : caps reverb relevées, eco neutralisé */
+int  ztek_get_luxe(const ztek_t *z);
 void ztek_punch(ztek_t *z, int on, int type, float a, float b, float mix);
 void ztek_punch_tail(ztek_t *z, float t);
 

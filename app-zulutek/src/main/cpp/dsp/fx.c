@@ -118,7 +118,11 @@ static inline float mod_read(const float *b, float delay)   /* delay in samples,
 }
 
 /* -------------------------------------------------------------------- delay --- */
+#ifdef ZTEK_LUXE_BUF
+#define DLY_N (26460u * 4u)                    /* LUXE (APK only): delay x4, ~2.4 s each side */
+#else
 #define DLY_N 26460u                           /* 0.6 s each side, 16-bit */
+#endif
 static int16_t dly_buf[2][DLY_N] FX_POOL;
 static struct {
     uint32_t w;
@@ -161,7 +165,11 @@ enum { R_PRE, R_IN1, R_IN2, R_IN3, R_IN4, R_IN5, R_IN6, R_AP1L, R_D1L, R_AP2L, R
 #define PRE_MAX 2205u                          /* 50 ms */
 #define EXC 48u                                /* the tank modulation's excursion, in samples (Black Hole swirl) */
 static uint32_t r_len[R_NLINES], r_off[R_NLINES], r_pos[R_NLINES];
+#ifdef ZTEK_LUXE_BUF
+#define RV_N (PRE_MAX + 35200u * 2u)         /* LUXE (APK only): Black Hole x2 */
+#else
 #define RV_N (PRE_MAX + 35200u)              /* the lines below add up to ~37123 */
+#endif
 #ifdef FX_RV_Q                                 /* the plate's lines in 16 bits, FX_RV_Q a unit (a smaller build) */
 typedef int16_t rv_t;
 static inline float rv_ld(rv_t v) { return (float)v * (1.0f / (float)FX_RV_Q); }

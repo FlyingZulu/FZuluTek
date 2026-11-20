@@ -120,6 +120,7 @@ class MainActivity : Activity(), SurfaceListener {
             st.sirenMode = sirenModePersistent
             if (st.snapArm && now > st.snapArmUntil) st.snapArm = false
             if (st.loopRecArm == -2 && now > st.loopRecWinUntil) st.loopRecArm = -1
+            updateViewCompact()   // OPTIONS > VUE = AUTO : vue compacte selon état du lien
             val ph = when {
                 !st.veilleOn -> 0
                 idle < 150_000 -> 0
@@ -300,7 +301,10 @@ class MainActivity : Activity(), SurfaceListener {
         // (CHOKE LDR est supprimé d'OPTIONS : remplacé par le LDR par tranche, page MIX)
         st.ecoOn = optsPrefs.getBoolean("eco", false)
         st.labelsZulu = optsPrefs.getBoolean("labels_zulu", false)
+        st.viewMode = optsPrefs.getInt("vue", 0).coerceIn(0, 2)
+        st.luxeOn = optsPrefs.getBoolean("luxe", false)
         ZtekAudio.setEco(if (st.ecoOn) 1 else 0)
+        ZtekAudio.setLuxe(if (st.luxeOn) 1 else 0)
         ZtekAudio.setEngine(0)
         // page FINE (18) : options persistées (équivalent OBJ_OPTIONS côté FM-1, patch 0012)
         for (i in 0 until ZtekAudio.FINE_NOPT) {
@@ -328,6 +332,7 @@ class MainActivity : Activity(), SurfaceListener {
         rootLayout.addView(surface, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(rootLayout)
+        updateViewCompact()   // OPTIONS > VUE (vue compacte initiale, views prêtes)
         handler.postDelayed(tick, 250)
 
         /* ZuluLink : l'APK est CONSOLE (surface + horloge). Le FM-1 (module) suit notre
@@ -729,6 +734,32 @@ class MainActivity : Activity(), SurfaceListener {
         }
     }
 
+    // ---- OPTIONS (page 16, liste) : SEL=navigue, ALG=valeur live, Shift=reset ----
+    private fun optSet(row: Int, v: Float) {
+        when (row.coerceIn(0, 3)) {
+            0 -> { st.ecoOn = v > 0.5f; ZtekAudio.setEco(if (st.ecoOn) 1 else 0); optsPrefs.edit().putBoolean("eco", st.ecoOn).apply() }
+            1 -> { st.labelsZulu = v > 0.5f; optsPrefs.edit().putBoolean("labels_zulu", st.labelsZulu).apply(); surface.invalidate() }
+            2 -> { st.viewMode = (v * 2.999f).toInt().coerceIn(0, 2); optsPrefs.edit().putInt("vue", st.viewMode).apply(); updateViewCompact() }
+            3 -> { st.luxeOn = v > 0.5f; ZtekAudio.setLuxe(if (st.luxeOn) 1 else 0); optsPrefs.edit().putBoolean("luxe", st.luxeOn).apply() }
+        }
+        lcd.invalidate()
+    }
+    private fun optReset(row: Int) {   // Shift court = reset de la ligne courante
+        optSet(row, 0f)
+        hint("reset " + arrayOf("ECO", "LABELS", "VUE", "LUXE")[row.coerceIn(0, 3)])
+    }
+    private fun optResetAll() { for (r in 0..3) optSet(r, 0f) }   // Shift long = reset all
+
+    // ---- OPTIONS > VUE = PLEIN/CLAV/AUTO (APK only) : AUTO = CLAV si FM-1/ZTF ou peer ZuluLink up (+ pop singe 400 ms)
+    private fun linkUpNow() = Fm1Usb.connected || ZuluLink.peersSnapshot().any { !it.lost }
+    private fun updateViewCompact() {
+        val up = linkUpNow()
+        val compact = when (st.viewMode.coerceIn(0, 2)) { 1 -> true; 2 -> up; else -> false }
+        if (compact != st.viewCompact) { st.viewCompact = compact; surface.invalidate() }
+        if (up && !prevLinkUp) { st.monkeyUntil = System.currentTimeMillis() + 400; lcd.invalidate() }
+        prevLinkUp = up
+    }
+
     // ---- encoders ----
     override fun onEncoderPress(i: Int) {
         if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40)
@@ -1054,17 +1085,9 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
             return
         }
-        if (st.page == 16) {                     // page OPTIONS : K1=ECO, K2=LABELS FM1/ZULU (APK only)
-            if (i == 3) {
-                st.ecoOn = !st.ecoOn
-                ZtekAudio.setEco(if (st.ecoOn) 1 else 0)
-                optsPrefs.edit().putBoolean("eco", st.ecoOn).apply()
-            }
-            if (i == 4) {
-                st.labelsZulu = !st.labelsZulu
-                optsPrefs.edit().putBoolean("labels_zulu", st.labelsZulu).apply()
-                surface.invalidate()
-            }
+        if (st.page == 16) {                     // OPTIONS liste : SEL=navigue, ALG=valeur live
+            if (i == 0) st.optRow = (v * 3.999f).toInt().coerceIn(0, 3)
+            if (i == 2) optSet(st.optRow, v)
             lcd.invalidate()
             return
         }
@@ -1224,6 +1247,20 @@ class MainActivity : Activity(), SurfaceListener {
     private var op5ShiftFired = false
     private var gloTap1 = 0L            // triple-tap GLO = mode SIREN
     private var gloTap2 = 0L
+    private var gloDown = false         // GLO enfoncé (détection simple tap = OPTIONS)
+    private var prevLinkUp = false      // pop singe à la connexion link (OPTIONS > VUE = AUTO)
+    private var shiftLongFired = false  // long-Shift en page OPTIONS déjà consommé
+    private val gloSingleRunnable = Runnable {   // simple tap GLO = page OPTIONS (B_GLO -> OPTIONS sur FM-1, app.c:1644)
+        val now = System.currentTimeMillis()
+        if (!gloDown && lastGloTap > 0 && now - lastGloTap >= 380 && !recHeld && st.page == 0) {
+            st.page = 16
+            setEncLabels(encDefault)
+            lcd.invalidate()
+        }
+    }
+    private val shiftLongRunnable = Runnable {   // long-Shift en page OPTIONS = reset all
+        if (shiftHeld && st.page == 16) { shiftLongFired = true; optResetAll(); hint("OPTIONS reset all") }
+    }
     private var sirenMom = -1           // noire sirène momentanée en cours (-1 = aucune)
     private var sirenModePersistent = false   // mode SIREN (triple-tap GLO) persistant
     private var prevPage = 0
@@ -1310,6 +1347,7 @@ class MainActivity : Activity(), SurfaceListener {
         val label = SurfaceView.BTN_LABELS[i]
         if (!down) {
             if (label == "REC") recHeld = false
+            if (label == "GLO") gloDown = false
             if (label == "HOME" && homeDownAt > 0) {
                 if (!homeCombo && System.currentTimeMillis() - homeDownAt < 600) cyclePart()
                 homeDownAt = 0
@@ -1414,9 +1452,9 @@ class MainActivity : Activity(), SurfaceListener {
                 }
                 return
             }
-            16 -> { // OPTIONS : REC=quitte
-                if (label == "REC") { st.page = 0; lcd.invalidate() }
-                return
+            16 -> { // OPTIONS liste : REC ou n'importe quel bouton = quitte (encDefault restauré)
+                if (label == "HOME") homeDownAt = 0   // évite le cyclePart au relâchement
+                st.page = 0; setEncLabels(encDefault); lcd.invalidate(); return
             }
             17 -> { // LINK (ZTF) : REC=quitte PLAY=push/pull SEQ=import SAVE=scan+ping ARP=LOAD/preset FX=rm ENV=audio OCT+=play EDIT=vue étendue
                 when (label) {
@@ -1490,6 +1528,7 @@ class MainActivity : Activity(), SurfaceListener {
             }
             if (label == "SEQ") lastSeqTap = now
             if (label == "GLO") lastGloTap = now
+            if (label == "GLO") { gloDown = true; handler.postDelayed(gloSingleRunnable, 400) }   // simple tap GLO = OPTIONS
         }
         if (st.smpPage) {
             when (SurfaceView.BTN_LABELS[i]) {
@@ -1651,7 +1690,16 @@ class MainActivity : Activity(), SurfaceListener {
         }
         if (System.currentTimeMillis() < st.keysLockUntil) return   // clavier inactif 1,5 s pendant la capture SNAP (REC+PLAY)
         val bi = SurfaceView.BLACK_NOTES.indexOf(note)
-        if (bi == 10) shiftHeld = down   // Shift (noire 10) global
+        if (bi == 10) {   // Shift (noire 10) global ; en page OPTIONS : court = reset ligne, long = reset all
+            shiftHeld = down
+            if (st.page == 16) {
+                if (down) { shiftLongFired = false; handler.postDelayed(shiftLongRunnable, 600) }
+                else {
+                    handler.removeCallbacks(shiftLongRunnable)
+                    if (!shiftLongFired) { optReset(st.optRow); lcd.invalidate() }
+                }
+            }
+        }
         if (down && chokeCtx() && note == KEY_MONO) {   // MONO = bascule le pad/slot en mode choke
             chokeToggleMono()
             lcd.invalidate(); surface.invalidate()

@@ -224,12 +224,17 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
 - Entrées de pages câblées (mode d'emploi) : **REC+EDIT** = LOOP (1), **REC+SEL** = SNAP (2), **REC+SAVE** = KIT (3),
   **REC+ARP** = XY (4), REC+FX = menu FX (5), dbl-SEQ = SEQ+ (6), **REC+LFO** = LFO (7), **REC+ENV** = ENV (8),
   REC+OCT- = ASSIGN (9), REC+OCT+ = PRESETS (10), SEL = MIX (11), dbl-GLO ou REC+SEQ = MACRO (14), ARP = ARP (13),
+  **tap simple GLO = OPTIONS (16)** (comme `B_GLO`→OPTIONS sur FM-1, app.c:1644),
   long-HOME = LINK (17), PRE = FINE (18). **REC+PLAY** = capture SNAP (flash 120 ms + icône caméra + lock clavier
   1,5 s + choix du pad + rétrécissement 0,8 s ; REC+PLAY+OCT± choisit le contenu), **REC+GLO** = procédure REC loop.
   En page SNAP/KIT : REC+touche = stocker, tap = charger, dbl-tap = copie miroir (xor 8) ; page SNAP : K1 = ZU/LU, K4 = FLY.
 - Undo/redo globaux : **HOME+REC** = undo, **HOME+GLO** = redo (à chaque tap) ; dbl-REC = undo, long-REC = redo (mode d'emploi).
 
-## OPTIONS (page 9 APK, long-SCL ; OBJ_OPTIONS OPT6 côté FM-1)
+## OPTIONS (page 16 APK, tap simple GLO — comme `B_GLO`→OPTIONS sur FM-1 app.c:1644 ; OBJ_OPTIONS OPT6 côté FM-1)
+
+- **Navigation dans OPTIONS** : **SEL** = navigue dans la liste, **ALG** = change la valeur (live),
+  **REC ou n'importe quel bouton** = quitte, **Shift** (noire 10) = reset de la ligne courante (court) /
+  reset de toutes les options (long).
 
 - **OPTIONS > ECO = OFF/ON** (« MODE ECO (BATTERIE) », comme Zulu v0.33) — mode éco DSP/RAM :
   runtime (flag `ztek_set_eco`, lu dans le render) : entrée crush 96 + loudness `tanh` (style Zulu),
@@ -241,10 +246,20 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
 - **LDR par tranche** (page MIX 11, Shift+OPx) — remplace l'ancien OPTIONS > CHOKE LDR : ON = **LEADER** (hybride),
   OFF = **NORMAL** (Koala). Choke des séquenceurs (MONO/POLY, noires 9e/10e) inchangé, voir `docs/ZULUTEK-LOOP.md`.
 - **OPTIONS > LABELS = FM1/ZULU** (**APK only**, cosmétique — rien à voir avec le hardware FM-1 dont les
-  sérigraphies sont fixes) : K2 en page OPTIONS 16. ZULU affiche les anciens labels custom Zulu
+  sérigraphies sont fixes) : ligne LABELS de la liste OPTIONS 16 (SEL=nav, ALG=valeur). ZULU affiche les
+  anciens labels custom Zulu
   (PLAY/REC/SEQ/GEN/TAP/SCL/R-/R+/ERS/DRV/DLY/REV/POW/MUT) sur les 14 boutons de la surface ; le dispatch
   reste par **index** (labels FM-1), donc aucun changement de comportement. Persistance : SharedPreferences
   (`labels_zulu`). Non porté côté FM-1.
+- **OPTIONS > VUE = PLEIN/CLAV/AUTO** (**APK only**) : CLAV = clavier rétréci ~30 % à l'écran, contrôles
+  agrandis (layout `SurfaceView` selon `st.viewCompact`) ; AUTO = CLAV dès qu'un lien est up
+  (`Fm1Usb.connected` ou peer ZuluLink vivant) + **pop singe 400 ms** à la connexion (LCD). Persistance :
+  SharedPreferences (`vue`). Non porté côté FM-1 (écran 240×240 fixe).
+- **OPTIONS > LUXE = OFF/ON** (**APK only**) : decay reverb Black Hole relevé à **0.99** (0.89 sinon),
+  pre-delay max, BBD **stéréo**, swirl actif, drums **8 voix** — LUXE gagne sur ECO si les deux sont ON
+  (`ztek_set_luxe`, `ztek_engine.cpp`). Build APK avec `-DZTEK_LUXE_BUF` (`app-zulutek/build.gradle`) :
+  `DLY_N`×4 (~2,4 s/côté) et `RV_N`×2 (Black Hole ×2) dans `dsp/fx.c`. Persistance : SharedPreferences
+  (`luxe`). Non porté côté FM-1.
 
 ## Table de mixage principale (page MIX, 4 tranches)
 

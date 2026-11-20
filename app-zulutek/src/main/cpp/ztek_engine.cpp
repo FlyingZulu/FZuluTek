@@ -43,6 +43,7 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     float master_peak;              /* VU master, retenu avec decay dans ztek_render */
     int engine;                     /* 0..AT_NENGINES-1 */
     int eco;                        /* OPTIONS > ECO ON/OFF (runtime DSP éco) */
+    int luxe;                       /* OPTIONS > LUXE ON/OFF (APK only) : decay 0.99, pre max, BBD stéréo, drums 8 voix */
     int root;                       /* MIDI note of the acid scale root */
     int scale;
 
@@ -647,8 +648,9 @@ void ztek_fx_set(ztek_t *z, int param, float v)
     if (param < 0 || param >= FX_NPARAMS) return;
     if (v < 0.0f) v = 0.0f;
     if (v > 1.0f) v = 1.0f;
-    if (param == FX_REV_DECAY && v > (z->eco ? 0.70f : 0.89f)) v = z->eco ? 0.70f : 0.89f;
-    if (param == FX_REV_PRE && z->eco && v > 0.5f) v = 0.5f;   /* eco: pre-delay max réduit */
+    float cap = z->luxe ? 0.99f : (z->eco ? 0.70f : 0.89f);   /* luxe (APK only) relève le decay à 0.99 */
+    if (param == FX_REV_DECAY && v > cap) v = cap;
+    if (param == FX_REV_PRE && z->eco && !z->luxe && v > 0.5f) v = 0.5f;   /* eco: pre-delay max réduit (luxe: pre max) */
     z->fx_base[param] = v;
     z->fxparam[param] = v;
     if (param < ZT_NDST - 8) z->dst_base[8 + param] = v;
@@ -658,14 +660,28 @@ void ztek_fx_set(ztek_t *z, int param, float v)
 void ztek_set_eco(ztek_t *z, int on)
 {
     z->eco = on ? 1 : 0;
-    fx_set_eco(z->eco);                    /* crush 96+tanh, BBD mono, swirl off, pre/2 */
-    drum_set_eco(&z->drum, z->eco);        /* polyphonie drums 8 -> 5 */
-    ml_set_eco(&z->loop, z->eco);          /* resample loop: µ-law+lo-fi, ring 32 kHz, capa /2 */
-    ztek_fx_set(z, FX_REV_DECAY, z->fxparam[FX_REV_DECAY]);   /* re-clamp selon eco */
+    int eff = z->eco && !z->luxe;           /* luxe (APK only) gagne sur eco si les deux sont ON */
+    fx_set_eco(eff);                        /* crush 96+tanh, BBD mono, swirl off, pre/2 */
+    drum_set_eco(&z->drum, eff);            /* polyphonie drums 8 -> 5 */
+    ml_set_eco(&z->loop, eff);              /* resample loop: µ-law+lo-fi, ring 32 kHz, capa /2 */
+    ztek_fx_set(z, FX_REV_DECAY, z->fxparam[FX_REV_DECAY]);   /* re-clamp selon eco/luxe */
     ztek_fx_set(z, FX_REV_PRE, z->fxparam[FX_REV_PRE]);
 }
 
 int ztek_get_eco(const ztek_t *z) { return z->eco; }
+
+void ztek_set_luxe(ztek_t *z, int on)
+{
+    z->luxe = on ? 1 : 0;
+    int eff = z->eco && !z->luxe;           /* luxe ON neutralise eco (BBD stéréo, swirl, pre max, drums 8 voix) */
+    fx_set_eco(eff);
+    drum_set_eco(&z->drum, eff);
+    ml_set_eco(&z->loop, eff);
+    ztek_fx_set(z, FX_REV_DECAY, z->fxparam[FX_REV_DECAY]);   /* re-clamp: decay 0.99 en luxe */
+    ztek_fx_set(z, FX_REV_PRE, z->fxparam[FX_REV_PRE]);
+}
+
+int ztek_get_luxe(const ztek_t *z) { return z->luxe; }
 
 float ztek_fx_get(const ztek_t *z, int param)
 {
