@@ -280,6 +280,7 @@ class LcdState {
     var camShrinkAt = 0L                          // rétrécissement vers le fond (0,8 s) à partir de là
     var snapSide = 0                              // page SNAP : 0 = ZU (8 gauches), 1 = LU (8 droites) — K1
     var loopRecArm = -1                           // proc REC+GLO : -2 = fenêtre PAD?, >=0 = slot armé, -1 = rien
+    var loopRecWinUntil = 0L                      // fin de la fenêtre PAD? (2 s) ou du slot armé (1,2 s)
     var psSlot = 0
     var psUsed = false
     var psName = ""
