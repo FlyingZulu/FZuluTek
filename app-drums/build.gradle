@@ -7,13 +7,16 @@ android {
     namespace 'com.zulu.drums'
     compileSdk 34
 
+    def zuluKs = rootProject.file('signing/zulu.p12')
     signingConfigs {
-        zulu {
-            storeFile rootProject.file('signing/zulu.p12')
-            storeType 'PKCS12'
-            storePassword 'zuluzulu2000'
-            keyAlias 'zulu'
-            keyPassword 'zuluzulu2000'
+        if (zuluKs.exists()) {
+            zulu {
+                storeFile zuluKs
+                storeType 'PKCS12'
+                storePassword 'zuluzulu2000'
+                keyAlias 'zulu'
+                keyPassword 'zuluzulu2000'
+            }
         }
     }
 
@@ -43,10 +46,10 @@ android {
 
     buildTypes {
         debug {
-            signingConfig signingConfigs.zulu
+            signingConfig signingConfigs.findByName('zulu') ?: signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.zulu
+            signingConfig signingConfigs.findByName('zulu')
             minifyEnabled false
         }
     }

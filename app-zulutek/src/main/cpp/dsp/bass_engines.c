@@ -1,0 +1,184 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2026 Javier (Animatek)
+ * See bass_engines.h. Engines ported from the ZuluFx app (FlyingZulu/fm1-Zulu, GPL-3.0):
+ * PLUK = its t==18 Karplus-Strong, FM = its t==14 melodic FM, SUB = sine sub-octave, 8BIT = cheaptune
+ * (pulse duties / triangle / noise, 3-bit quantized, hard envelopes, no portamento). */
+#include "bass_engines.h"
+#include "fastmath.h"
+
+#define KS_MAX 2304u                            /* the string's max length: sr/20 Hz */
+
+const char *const AT_ENGINE_NAME[AT_NENGINES] = {"ATEK303", "PLUK", "FM", "SUB", "8BIT"};
+
+int at_engine_index(float v)
+{
+    int k;
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    k = (int)(v * (float)(AT_NENGINES - 1) + 0.5f);
+    return k < 0 ? 0 : k >= AT_NENGINES ? AT_NENGINES - 1 : k;
+}
+
+static inline float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
+
+static float note_hz(const bass_t *b, int note)
+{
+    float tuning = 400.0f + 80.0f * b->param[AT_TUNING];
+    return tuning * fm_exp2f((float)(note - 69) * (1.0f / 12.0f));
+}
+
+static void ks_trigger(bass_t *b)
+{
+    uint32_t n = (uint32_t)(b->sr / (b->freq_t < 20.0f ? 20.0f : b->freq_t));
+    uint32_t i;
+    if (n < 8u) n = 8u;
+    if (n > KS_MAX) n = KS_MAX;
+    for (i = 0; i < n; i++) {
+        b->rng ^= b->rng << 13;
+        b->rng ^= b->rng >> 17;
+        b->rng ^= b->rng << 5;
+        b->ks[i] = ((float)(b->rng >> 8) * (2.0f / 16777216.0f) - 1.0f) * (b->accent ? 1.3f : 0.9f);
+    }
+    b->ks_n = n;
+    b->ks_pos = 0;
+    b->ks_last = 0.0f;
+}
+
+void bass_init(bass_t *b, float sr)
+{
+    uint8_t *p = (uint8_t *)b;
+    uint32_t i;
+    for (i = 0; i < sizeof *b; i++)
+        p[i] = 0;
+    b->sr = sr;
+    b->param[AT_TUNING] = 0.5f;
+    b->param[AT_DECAY] = 0.4f;
+    b->param[AT_CUTOFF] = 0.5f;
+    b->rng = 0x9E3779B9u;
+    b->freq = b->freq_t = 110.0f;
+    b->held = -1;
+}
+
+void bass_set(bass_t *b, int param, float value)
+{
+    if (param >= 0 && param < AT_NPARAMS)
+        b->param[param] = clampf(value, 0.0f, 1.0f);
+}
+
+void bass_gate(bass_t *b, int gate, int note, int accent, int slide)
+{
+    int eng = at_engine_index(b->param[AT_ENGINE]);
+    if (gate && !b->gate) {                     /* a new note */
+        b->freq_t = note_hz(b, note);
+        if (eng != 1 && eng != 4)
+            b->freq = b->freq_t;                /* PLUK re-strikes, 8BIT steps */
+        b->accent = accent;
+        if (eng == 1)
+            ks_trigger(b);
+        b->held = note;
+    } else if (gate && b->gate && note != b->held) {
+        b->freq_t = note_hz(b, note);
+        b->accent = accent;
+        if (eng == 1)
+            ks_trigger(b);                      /* the string re-strikes on a new note */
+        else if (eng != 4 && !slide)
+            b->freq = b->freq_t;                /* slide slews in render; 8BIT never slides */
+        b->held = note;
+    }
+    b->gate = gate;
+    b->slide = slide;
+}
+
+void bass_panic(bass_t *b)
+{
+    b->gate = 0;
+    b->env = 0.0f;
+    b->held = -1;
+}
+
+void bass_render(bass_t *b, float *out, uint32_t n)
+{
+    int eng = at_engine_index(b->param[AT_ENGINE]);
+    float sr = b->sr, fsr = 1.0f / sr;
+    float decay = b->param[AT_DECAY];
+    float rel_c = fm_expf(-fsr / (0.02f + 0.6f * decay));   /* release when the gate is up */
+    float g = 1.0f + 0.5f * (float)b->accent;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        float y = 0.0f;
+        if (eng != 4) {                          /* 8BIT has a hard attack, the others soft */
+            if (b->gate)
+                b->env += (1.0f - b->env) * 0.25f;
+            else
+                b->env *= rel_c;
+            if (b->env > 1.0f) b->env = 1.0f;
+            if (b->gate && b->slide)
+                b->freq += (b->freq_t - b->freq) * 0.02f;   /* portamento */
+            else
+                b->freq = b->freq_t;
+        } else {
+            if (b->gate)
+                b->env = 1.0f;
+            else {
+                b->env -= fsr * (0.2f + 3.0f * decay);      /* hard linear decay */
+                if (b->env < 0.0f) b->env = 0.0f;
+            }
+            b->freq = b->freq_t;                 /* chiptune: steps, no portamento */
+        }
+        switch (eng) {
+        case 1: {                                /* PLUK: Karplus-Strong */
+            float damp = 0.999f - 0.095f * decay;
+            float br = b->param[AT_CUTOFF];
+            y = b->ks[b->ks_pos];
+            b->ks[b->ks_pos] = damp * (br * 0.5f * (y + b->ks_last) + (1.0f - br) * y);
+            b->ks_last = y;
+            if (++b->ks_pos >= b->ks_n)
+                b->ks_pos = 0;
+            y *= b->env * g;
+            break;
+        }
+        case 2: {                                /* FM: sine carrier, sine modulator */
+            float r = 1.0f + 3.0f * b->param[AT_WAVE];
+            float idx = 6.0f * b->param[AT_ENVMOD] * g;
+            b->ph_m += b->freq * r * fsr;
+            if (b->ph_m >= 1.0f) b->ph_m -= 1.0f;
+            y = fm_sin_turns(b->ph + 0.5f * idx * fm_sin_turns(b->ph_m));
+            b->ph += b->freq * fsr;
+            if (b->ph >= 1.0f) b->ph -= 1.0f;
+            y *= b->env * g;
+            break;
+        }
+        case 3: {                                /* SUB: sine sub-octave, WAVE blends the octave in */
+            float w = b->param[AT_WAVE];
+            b->ph += b->freq * fsr;
+            if (b->ph >= 1.0f) b->ph -= 1.0f;
+            y = fm_sin_turns(b->ph * 0.5f) * (1.0f - w) + fm_sin_turns(b->ph) * w;
+            y *= b->env * g;
+            break;
+        }
+        case 4: {                                /* 8BIT: 4 pulse duties, triangle, noise; 3-bit quantized */
+            static const float duty[4] = {0.125f, 0.25f, 0.5f, 0.75f};
+            int w = (int)(b->param[AT_WAVE] * 5.99f);   /* 0..5 */
+            if (w > 5) w = 5;
+            b->ph += b->freq * fsr;
+            if (b->ph >= 1.0f) b->ph -= 1.0f;
+            if (w < 4)
+                y = b->ph < duty[w] ? 1.0f : -1.0f;      /* pulse */
+            else if (w == 4)
+                y = 1.0f - 4.0f * fm_fabsf(b->ph - 0.5f); /* triangle */
+            else {                                       /* noise */
+                b->rng ^= b->rng << 13;
+                b->rng ^= b->rng >> 17;
+                b->rng ^= b->rng << 5;
+                y = (float)(b->rng >> 8) * (2.0f / 16777216.0f) - 1.0f;
+            }
+            y = fm_floorf(y * 4.0f + 0.5f) * 0.25f;      /* 3-bit crunch */
+            y *= b->env * g;
+            break;
+        }
+        default:
+            y = 0.0f;
+        }
+        out[i] = clampf(y, -1.2f, 1.2f);
+    }
+}
