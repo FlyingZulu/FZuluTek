@@ -17,6 +17,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.cos
+import kotlin.math.sin
 
 interface SurfaceListener {
     fun onEncoder(i: Int, v: Float)
@@ -116,7 +118,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             val v = st.encVals[i]
             frame.color = LcdView.FLUO_TURQ
             val a = -2.356f + v * 4.712f
-            c.drawLine(cx, cy, cx + 18f * Math.cos(a).toFloat(), cy + 18f * Math.sin(a).toFloat(), frame)
+            c.drawLine(cx, cy, cx + 18f * cos(a), cy + 18f * sin(a), frame)
             mono.color = LcdView.DIM; mono.textSize = 9f
             c.drawText(st.encLabels[i], cx - 9f, 66f, mono)
         }
