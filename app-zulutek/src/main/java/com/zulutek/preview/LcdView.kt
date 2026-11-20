@@ -288,6 +288,10 @@ class LcdState {
     var psSlot = 0
     var psUsed = false
     var psName = ""
+    var psSaveArm = false                       // page PRESETS : mode enregistrement (SEL maintenu + SAVE)
+    var psSaveName = ""                         // nom en cours d'édition (SEL = lettre/chiffre, Shift = espace, appui SEL = valide)
+    var psNameEdit = false                      // édition du nom active
+    var psNameCur = 0                           // curseur dans le nom
     var presetName = "ACID 303"
 
     // page LINK (17) : liaison ZTF APK <-> FM-1 (Fm1Usb / ZtfTransport / SampleLibrary)
@@ -1122,6 +1126,11 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                     text(c, 116f, 105f, "SLT", DIM, 8f)
                     text(c, 140f, 105f, "${st.psSlot + 1}${if (st.psUsed) "*" else " "}", INK, 9f)
                     text(c, 170f, 105f, if (st.psName.isEmpty()) "-" else st.psName, if (st.psUsed) FLUO_YEL else DIM, 9f)
+                    if (st.psSaveArm) {
+                        val nm = st.psSaveName + (if (st.psNameEdit) "_" else "")
+                        text(c, 6f, 92f, "SAVE? nom: " + nm.ifEmpty { "-" }, FLUO_YEL, 9f)
+                        text(c, 6f, 140f, "SEL=nom Shift=esp appui SEL=ok SAVE=save", DIM, 8f)
+                    } else text(c, 6f, 140f, "appui SEL=LOAD  SEL+touche=load K2=SV K3=CLR", DIM, 8f)
                 }
                 13 -> {
                     val m = (st.arpVals[0] * 4.99f).toInt().coerceIn(0, 4)

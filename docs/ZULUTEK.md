@@ -228,6 +228,10 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
   long-HOME = LINK (17), PRE = FINE (18). **REC+PLAY** = capture SNAP (flash 120 ms + icône caméra + lock clavier
   1,5 s + choix du pad + rétrécissement 0,8 s ; REC+PLAY+OCT± choisit le contenu), **REC+GLO** = procédure REC loop.
   En page SNAP/KIT : REC+touche = stocker, tap = charger, dbl-tap = copie miroir (xor 8) ; page SNAP : K1 = ZU/LU, K4 = FLY.
+- Page **PRESETS (10)** (REC+OCT+, validé) : presets par partie (PRE = BASSE/LEAD/DRUMS, SEL = slot 1..16).
+  **Appui SEL = LOAD** du preset affiché ; **SEL maintenu + touche blanche = LOAD direct** du slot ; à la rotation seule, rien ne se charge.
+  **Enregistrement** : **SEL maintenu + SAVE** = mode save ; nommage : SEL = lettre/chiffre (A-Z 0-9), **Shift = espace**, **appui SEL = valide le nom** ; slot via SEL ou touche blanche 1..16 ; **SAVE = confirme** → preset assigné au slot (**si aucun nom saisi : nom aléatoire attribué**). K2 = SAVE direct, K3 = efface, REC = quitte. (validé Flying Zulu ~23:55Z)
+  Divergence FM-1 documentée : la liste hardware charge à la fin du pattern (NEXT) au curseur + SEL = load immédiat (`atek303/app/app.c:43-47`) ; l'APK ne charge que sur appui SEL / SEL+touche.
 - Undo/redo globaux : **HOME+REC** = undo, **HOME+GLO** = redo (à chaque tap) — **seule manip** undo/redo (dbl-REC / long-REC supprimés, remplacés par HOME+REC / HOME+GLO).
 
 ## OPTIONS (page 16 APK, tap simple GLO — comme `B_GLO`→OPTIONS sur FM-1 app.c:1644 ; OBJ_OPTIONS OPT6 côté FM-1)

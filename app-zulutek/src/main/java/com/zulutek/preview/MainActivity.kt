@@ -111,6 +111,8 @@ class MainActivity : Activity(), SurfaceListener {
             val idle = now - lastActivity
             if (st.page != prevPage) {
                 prevPage = st.page
+                selHeld = false
+                st.psSaveArm = false
                 if (sirenModePersistent) {
                     sirenModePersistent = false
                     st.sirenOn = false
@@ -761,9 +763,36 @@ class MainActivity : Activity(), SurfaceListener {
     }
 
     // ---- encoders ----
+    override fun onEncoderHold(i: Int) { if (i == 0) selHeld = true }
     override fun onEncoderPress(i: Int) {
-        if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40)
+        if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40) ; page PRESETS 10 : appui SEL = LOAD (confirme le choix)
             if (recHeld) st.page = if (st.page == 2) 0 else 2
+            else if (st.page == 10 && st.psSaveArm) {   // mode enregistrement PRESETS : appui SEL = char suivante / valide le nom
+                selHeld = false
+                if (st.psNameEdit) {
+                    if (st.psNameCur >= st.psSaveName.length || st.psNameCur >= 11) {
+                        st.psNameEdit = false
+                        st.psSaveName = st.psSaveName.trim()
+                        hint(if (st.psSaveName.isEmpty()) "nom auto" else "NOM " + st.psSaveName)
+                    } else st.psNameCur++
+                } else {
+                    st.psNameEdit = true
+                    st.psNameCur = st.psSaveName.length.coerceIn(0, 10)
+                }
+                lcd.invalidate()
+                return
+            }
+            else if (st.page == 10) {
+                selHeld = false
+                val nm = ZtekAudio.bankName(st.psPart, st.psSlot)
+                if (nm.isNotEmpty()) {
+                    ZtekAudio.bankLoad(st.psPart, st.psSlot)
+                    st.presetName = nm
+                    hint("LOAD " + ZtekAudio.PART_NAMES.getOrElse(st.psPart) { "?" } + " " + (st.psSlot + 1) + ": " + nm)
+                } else hint("SLT ${st.psSlot + 1} vide")
+                lcd.invalidate()
+                return
+            }
             else st.page = if (st.page == 11) 0 else 11
             if (st.page == 11) st.patchView = 0
             lcd.invalidate()
@@ -847,17 +876,10 @@ class MainActivity : Activity(), SurfaceListener {
                     }
                     3 -> { st.asgDepth = v; ZtekAudio.assign(st.sub, st.asgSrc, v) }
                 }
-                10 -> when (i) {
-                    0 -> st.psSlot = (v * (ZtekAudio.ZT_PSLOTS - 0.001f)).toInt().coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
+                10 -> when (i) {   // PRESETS : LOAD uniquement par appui SEL ou SEL maintenu+touche — jamais à la rotation ; en mode save+nom, SEL édite le nom
+                    0 -> if (st.psSaveArm && st.psNameEdit) psSetChar(PS_CHARS[(v * (PS_CHARS.length - 0.001f)).toInt()])
+                         else st.psSlot = (v * (ZtekAudio.ZT_PSLOTS - 0.001f)).toInt().coerceIn(0, ZtekAudio.ZT_PSLOTS - 1)
                     1 -> st.psPart = (v * 2.999f).toInt().coerceIn(0, ZtekAudio.ZT_NPARTS - 1)
-                    3 -> {
-                        val nm = ZtekAudio.bankName(st.psPart, st.psSlot)
-                        if (nm.isNotEmpty()) {
-                            ZtekAudio.bankLoad(st.psPart, st.psSlot)
-                            st.presetName = nm
-                            hint("LOAD " + ZtekAudio.PART_NAMES[st.psPart] + " " + (st.psSlot + 1) + ": " + nm)
-                        }
-                    }
                     4 -> {
                         ZtekAudio.presetSave(st.psPart, st.psSlot)
                         hint("SAVE " + ZtekAudio.PART_NAMES[st.psPart] + " " + (st.psSlot + 1))
@@ -1242,6 +1264,7 @@ class MainActivity : Activity(), SurfaceListener {
         lcd.invalidate(); surface.invalidate()
     }
     private var shiftHeld = false
+    private var selHeld = false       // SEL (encodeur 0) maintenu — page PRESETS : SEL+touche blanche = LOAD direct
     private var op5Held = false
     private var op5ShiftAt = 0L         // appui long OP5+Shift = sous-menu master
     private var op5ShiftFired = false
@@ -1250,6 +1273,20 @@ class MainActivity : Activity(), SurfaceListener {
     private var gloDown = false         // GLO enfoncé (détection simple tap = OPTIONS)
     private var prevLinkUp = false      // pop singe à la connexion link (OPTIONS > VUE = AUTO)
     private var shiftLongFired = false  // long-Shift en page OPTIONS déjà consommé
+    private val PS_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"   // nommage preset : SEL = lettre/chiffre, Shift = espace
+    private val nameA = arrayOf("ACID", "WOB", "GATE", "SLIDE", "PITCH", "LABO", "TM", "MAR", "FIL", "DRIFT", "BASS", "LEAD")
+    private val nameB = arrayOf("303", "WOBBLE", "CITY", "CHAOS", "MAX", "RUN", "HIT", "DRIFT", "303X", "PARK")
+    private fun randomPresetName() =   // repli : aucun nom saisi au SAVE -> nom aléatoire
+        nameA[(Math.random() * nameA.size).toInt()] + " " + nameB[(Math.random() * nameB.size).toInt()]
+    private fun psSetChar(ch: Char) {   // pose le caractère au curseur du nom (mode enregistrement PRESETS)
+        val cur = st.psNameCur.coerceIn(0, 10)
+        st.psSaveName = if (cur < st.psSaveName.length)
+            st.psSaveName.substring(0, cur) + ch + st.psSaveName.substring(cur + 1)
+        else st.psSaveName + ch
+        st.psNameCur = cur + 1
+        if (st.psNameCur > 11) st.psNameEdit = false
+        lcd.invalidate()
+    }
     private val gloSingleRunnable = Runnable {   // simple tap GLO = page OPTIONS (B_GLO -> OPTIONS sur FM-1, app.c:1644)
         val now = System.currentTimeMillis()
         if (!gloDown && lastGloTap > 0 && now - lastGloTap >= 380 && !recHeld && st.page == 0) {
@@ -1384,7 +1421,7 @@ class MainActivity : Activity(), SurfaceListener {
                 "LFO" -> { st.page = if (st.page == 7) 0 else 7; setEncLabels(arrayOf("SUB", "SYN", "TRG", "K1", "K2", "K3", "K4")); lcd.invalidate(); return }
                 "ENV" -> { st.page = if (st.page == 8) 0 else 8; setEncLabels(arrayOf("SUB", "LOOP", "", "K1", "K2", "K3", "K4")); lcd.invalidate(); return }
                 "OCT-" -> { st.page = if (st.page == 9) 0 else 9; setEncLabels(arrayOf("DST", "SRC", "LUD", "DPT", "", "", "")); lcd.invalidate(); return }   // ASSIGN
-                "OCT+" -> { st.page = if (st.page == 10) 0 else 10; setEncLabels(arrayOf("SLT", "PRT", "", "LD", "SV", "CLR", "")); lcd.invalidate(); return } // PRESETS
+                "OCT+" -> { st.page = if (st.page == 10) 0 else 10; setEncLabels(arrayOf("SLT", "PRT", "", "", "SV", "CLR", "")); lcd.invalidate(); return } // PRESETS (LOAD = appui SEL, pas K1)
                 "PLAY" -> { snapCaptureArm(); return }                                         // capture SNAP (REC+PLAY)
                 "GLO" -> { loopRecProc(); return }                                              // procédure REC loop
             }
@@ -1400,6 +1437,24 @@ class MainActivity : Activity(), SurfaceListener {
                 if (label == "REC") {
                     st.page = 0
                     setEncLabels(arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4"))
+                    lcd.invalidate()
+                }
+                else if (st.page == 10 && label == "SAVE") {   // PRESETS : SEL maintenu + SAVE = mode enregistrement ; SAVE = confirme (sauve dans le slot choisi)
+                    if (selHeld && !st.psSaveArm) {
+                        st.psSaveArm = true
+                        st.psSaveName = ZtekAudio.presetSlotName(st.psPart, st.psSlot)
+                        st.psNameEdit = true
+                        st.psNameCur = 0
+                        hint("SAVE? SEL=nom Shift=espace appui SEL=valide")
+                    } else if (st.psSaveArm) {
+                        val nm = st.psSaveName.trim().ifEmpty { randomPresetName() }   // pas de nom saisi -> nom aléatoire
+                        ZtekAudio.presetSaveNamed(st.psPart, st.psSlot, nm)
+                        st.psUsed = true
+                        st.psName = ZtekAudio.presetSlotName(st.psPart, st.psSlot)
+                        hint("SAVED " + ZtekAudio.PART_NAMES.getOrElse(st.psPart) { "?" } + " " + (st.psSlot + 1) + ": " + st.psName)
+                        st.psSaveArm = false
+                    }
+                    selHeld = false
                     lcd.invalidate()
                 }
                 return
@@ -1584,6 +1639,23 @@ class MainActivity : Activity(), SurfaceListener {
             return
         }
         if (st.smpPage && down && !longPress) { ZtekAudio.smpPlay(1); return }
+        if (st.psSaveArm && st.page == 10 && down && !longPress) {   // mode enregistrement PRESETS : touche blanche = choix du slot (pas de LOAD)
+            st.psSlot = slot
+            hint("SLT ${slot + 1}")
+            lcd.invalidate()
+            return
+        }
+        if (selHeld && down && !longPress && st.page == 10) {   // SEL maintenu + touche blanche = LOAD direct du slot (page PRESETS)
+            selHeld = false
+            val nm = ZtekAudio.bankName(st.psPart, slot)
+            if (nm.isNotEmpty()) {
+                ZtekAudio.bankLoad(st.psPart, slot)
+                st.psSlot = slot; st.presetName = nm
+                hint("LOAD " + ZtekAudio.PART_NAMES.getOrElse(st.psPart) { "?" } + " " + (slot + 1) + ": " + nm)
+            } else hint("SLT ${slot + 1} vide")
+            lcd.invalidate()
+            return
+        }
         if (st.chokeWin && chokeCtx() && down && !longPress) {
             // fenêtre choke ouverte : POLY armé -> ce pad devient leader (manip terminée) ;
             // sinon tap = assigne le pad/slot au groupe courant (multi-pads d'un coup)
@@ -1689,8 +1761,9 @@ class MainActivity : Activity(), SurfaceListener {
         }
         if (System.currentTimeMillis() < st.keysLockUntil) return   // clavier inactif 1,5 s pendant la capture SNAP (REC+PLAY)
         val bi = SurfaceView.BLACK_NOTES.indexOf(note)
-        if (bi == 10) {   // Shift (noire 10) global ; en page OPTIONS : court = reset ligne, long = reset all
+        if (bi == 10) {   // Shift (noire 10) global ; page OPTIONS : reset ; page PRESETS en mode save : espace dans le nom
             shiftHeld = down
+            if (down && st.page == 10 && st.psSaveArm && st.psNameEdit) psSetChar(' ')
             if (st.page == 16) {
                 if (down) { shiftLongFired = false; handler.postDelayed(shiftLongRunnable, 600) }
                 else {

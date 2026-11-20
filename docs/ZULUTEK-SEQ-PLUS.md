@@ -110,9 +110,10 @@ Deux niveaux de presets :
   CUTOFF 0.9 / ENVMOD 0.8 / DLY TIME ; **DRUMS** = SEQ+ (TM LOCK 0.7, PING-PONG, RAND), loop gain
   0.9, macros loop0→PoW! (aux), type PoW! ECHO, baie VOIX→FX. `ztek_bank_load(part, slot)` charge
   le preset usine **de la partie** quand le slot n'a pas de save user ; `bankName` affiche son nom.
-- **Presets par partie, banc LIBRE** : page **PRESETS** (double-tap ERS, page 10) — **3 parties × 16 slots**
-  (0 = BASSE, 1 = LEAD, 2 = DRUMS) ; SEL = slot, PRE = partie, K1 = LOAD, K2 = SAVE,
-  K3 = effacer. Le banc est libre : les 8 premiers slots contiennent les presets usine,
+- **Presets par partie, banc LIBRE** : page **PRESETS** (REC+OCT+ côté APK — validé Flying Zulu ; double-tap ERS historique) — **3 parties × 16 slots**
+  (0 = BASSE, 1 = LEAD, 2 = DRUMS) ; SEL = slot, PRE = partie, K2 = SAVE direct, K3 = effacer.
+  **LOAD** : uniquement sur **appui SEL** (confirme le slot affiché) ou **SEL maintenu + touche blanche** (load direct du slot) — à la rotation seule, rien ne se charge.
+  **Enregistrement** : **SEL maintenu + SAVE** = mode save → nommage : **SEL = lettre/chiffre** (A-Z 0-9), **Shift = espace**, **appui SEL = valide le nom** ; puis slot (SEL ou touche blanche 1..16), et **SAVE = confirme** → preset assigné au slot (**nom vide = nom aléatoire attribué**), procédure terminée (REC = annule). (validé Flying Zulu 2026-11-20 ~23:55Z). Le banc est libre : les 8 premiers slots contiennent les presets usine,
   mais **n'importe quel slot peut être écrasé par un save user** (pas de séparation fixe
   8+8). `ztek_bank_load(part, slot)` charge le save user s'il existe, sinon le preset
   usine **de la partie** si le slot est dans la plage usine. Un preset = snapshot POD complet de l'état
