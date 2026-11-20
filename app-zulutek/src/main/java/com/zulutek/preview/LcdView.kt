@@ -113,9 +113,22 @@ class LcdState {
 
     /* pack SEQ+ (PR #3) : pages 6 SEQ+, 7 LFO, 8 ENV, 9 ASSIGN, 10 PRESETS */
     val pageNames2 = mapOf(6 to "SEQ+", 7 to "LFO", 8 to "ENV", 9 to "ASSIGN", 10 to "PRESETS",
-        11 to "MIX", 12 to "PATCH", 13 to "ARP")
+        11 to "MIX", 12 to "PATCH", 13 to "ARP", 14 to "MACRO")
     var arpOn = false
     val arpVals = FloatArray(4)             // MODE OCT DIV GATE
+    var macSlot = 0                         // page MACRO (14)
+    var macDst = 0
+    var macSub = 0
+    val macVals = FloatArray(16)
+    val macUsed = BooleanArray(16)
+    fun macroDstName(d: Int): String = when {
+        d < 26 -> targetName(d)
+        d < ZtekAudio.ZT_SEQ_DST0 + 9 -> "SEQ" + (d - ZtekAudio.ZT_SEQ_DST0)
+        d < ZtekAudio.ZT_NDST_ALL -> "MAC" + (d - ZtekAudio.ZT_NDST + 1)
+        d < ZtekAudio.ZT_MDST_PATCH -> "AUX" + (d - ZtekAudio.ZT_MDST_AUX0)
+        d < ZtekAudio.ZT_MDST_POWT -> "PT" + (d - ZtekAudio.ZT_MDST_PATCH)
+        else -> "POWT"
+    }
     var sub = 0
     val srcVals = FloatArray(16)
     var lfoSync = false
@@ -535,7 +548,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
 
         // ---- pack SEQ+ (PR #3): pages 6..10 + MIX/PATCH (PR #1 agglomérés): 6..12 ----
-        if (st.page >= 6 && st.page <= 13) {
+        if (st.page >= 6 && st.page <= 14) {
             val pn = st.pageNames2[st.page] ?: "?"
             text(c, 6f, 105f, pn, FLUO_TURQ, 10f)
             when (st.page) {
@@ -592,6 +605,19 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                     text(c, 178f, 105f, ZtekAudio.ARP_DIVS[d], INK, 9f)
                     text(c, 212f, 105f, "G${(st.arpVals[3] * 100).toInt()}", INK, 9f)
                     text(c, 6f, 92f, "held: ${ZtekAudio.arpHeld()}", DIM, 8f)
+                }
+                14 -> {
+                    text(c, 44f, 105f, "SLT", DIM, 8f)
+                    text(c, 68f, 105f, "${st.macSlot + 1}${if (st.macUsed[st.macSlot]) "*" else " "}", FLUO_PINK, 9f)
+                    text(c, 100f, 105f, "DST", DIM, 8f)
+                    text(c, 126f, 105f, st.macroDstName(st.macDst), INK, 9f)
+                    text(c, 190f, 105f, "V${(st.macVals[st.macSlot] * 100).toInt()}", INK, 9f)
+                    for (i in 0 until 16) {
+                        val x0 = 6f + i * 14.5f
+                        frame.color = if (i == st.macSlot) FLUO_YEL else if (st.macUsed[i]) FLUO_TURQ else DIM
+                        c.drawRect(x0, 116f, x0 + 11f, 128f, frame)
+                    }
+                    text(c, 6f, 140f, "tap touche blanche = applique", DIM, 8f)
                 }
             }
         }

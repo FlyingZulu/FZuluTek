@@ -315,6 +315,52 @@ ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeArpHeld(JNIEnv *,
     return ztek_arp_held(zte(NULL, h));
 }
 
+/* page MACRO (16 slots assignables) */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMacroSet(JNIEnv *, jclass, jlong h, jint slot, jint dst, jint sub, jfloat val)
+{
+    ztek_macro_set(zte(NULL, h), slot, dst, sub, val);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMacroApply(JNIEnv *, jclass, jlong h, jint slot)
+{
+    ztek_macro_apply(zte(NULL, h), slot);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMacroLevel(JNIEnv *, jclass, jlong h, jint slot, jfloat v)
+{
+    ztek_macro_level(zte(NULL, h), slot, v);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMacroErase(JNIEnv *, jclass, jlong h, jint slot)
+{
+    ztek_macro_erase(zte(NULL, h), slot);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMacroUsed(JNIEnv *, jclass, jlong h, jint slot)
+{
+    return ztek_macro_used(zte(NULL, h), slot);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMacroDst(JNIEnv *, jclass, jlong h, jint slot)
+{
+    return ztek_macro_dst(zte(NULL, h), slot);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMacroSub(JNIEnv *, jclass, jlong h, jint slot)
+{
+    return ztek_macro_sub(zte(NULL, h), slot);
+}
+
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeMacroVal(JNIEnv *, jclass, jlong h, jint slot)
+{
+    return ztek_macro_val(zte(NULL, h), slot);
+}
+
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativePunchTypeGet(JNIEnv *, jclass, jlong h)
+{
+    return ztek_punch_type_get(zte(NULL, h));
+}
+
 /* modulation: 16 sources x 4 knobs (pages LFO/ENV) */
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeModKnob(JNIEnv *, jclass, jlong h, jint src, jint k, jfloat v)
 {

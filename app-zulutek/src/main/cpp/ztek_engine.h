@@ -143,6 +143,28 @@ int  ztek_arp_held(const ztek_t *z);                     /* nb de notes tenues (
 #define ZT_NDST (AT_NPARAMS + FX_NPARAMS + 9)   /* 0..7 voice, 8.. FX, 26..34 seq (steps scale tempo root + k5..k9) */
 #define ZT_SEQ_DST0 (AT_NPARAMS + FX_NPARAMS)   /* 26: first seq destination */
 
+/* ---- page MACRO (16 slots assignables, SPEC Notion « SPEC MACRO zuluTek ») --------------
+ * Un macro = conteneur : cible (dst) + sous-cible + niveau 0..1. Cibles :
+ *   0..ZT_NDST-1          = mêmes destinations que la matrice ASSIGN (voix 0..7, FX 8..25, seq 26..34)
+ *   ZT_NDST..ZT_NDST_ALL-1 = les 16 mix des macros eux-mêmes (la matrice peut piloter un macro)
+ *   ZT_MDST_AUX0 + s      = aux du slot loop s -> PoW! (v >= 0.5 = on)
+ *   ZT_MDST_PATCH + c     = connexion c (row*3+col) de la baie de patch (v >= 0.5 = on)
+ *   ZT_MDST_POWT          = type PoW! actif (v -> 0..PN_NTYPES-1, utilisé au prochain POW) */
+#define ZT_NMACRO 16
+#define ZT_NDST_ALL (ZT_NDST + ZT_NMACRO)       /* 51 destinations au total */
+#define ZT_MDST_AUX0  100
+#define ZT_MDST_PATCH 120
+#define ZT_MDST_POWT  140
+void ztek_macro_set(ztek_t *z, int slot, int dst, int sub, float val);  /* contenu du slot */
+void ztek_macro_apply(ztek_t *z, int slot);       /* applique : cible <- val */
+void ztek_macro_level(ztek_t *z, int slot, float v);  /* niveau seul, réappliqué */
+void ztek_macro_erase(ztek_t *z, int slot);
+int  ztek_macro_used(const ztek_t *z, int slot);
+int  ztek_macro_dst(const ztek_t *z, int slot);
+int  ztek_macro_sub(const ztek_t *z, int slot);
+float ztek_macro_val(const ztek_t *z, int slot);
+int  ztek_punch_type_get(const ztek_t *z);         /* type PoW! courant (macro POWT) */
+
 void ztek_mod_knob(ztek_t *z, int src, int k, float v); /* src 0..15, k 0..3 */
 float ztek_mod_knob_get(const ztek_t *z, int src, int k);
 void ztek_lfo_opt(ztek_t *z, int which, int on);        /* 0 = LFO SYNC (clock divisions), 1 = LFO TRIG (retrig on note) */
@@ -181,9 +203,13 @@ typedef struct {
     int lab_src[4][2];
     int lfo_sync, lfo_trig;
     int env_loop[2];
-    int asg_src[ZT_NDST];
-    float asg_depth[ZT_NDST];
+    int asg_src[ZT_NDST_ALL];
+    float asg_depth[ZT_NDST_ALL];
     float seqk[5];
+    uint8_t mac_used[ZT_NMACRO];
+    int16_t mac_dst[ZT_NMACRO];
+    int16_t mac_sub[ZT_NMACRO];
+    float mac_val[ZT_NMACRO];
 } ztek_preset_t;
 
 void ztek_preset_save(ztek_t *z, int part, int slot);

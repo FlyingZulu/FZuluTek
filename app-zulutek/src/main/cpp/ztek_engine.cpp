@@ -131,9 +131,10 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     float ef_lvl;                   /* envelope follower state */
     float blk_peak;                 /* peak of the last synth block (EF source) */
     float tool_state[6];            /* SLEW/CMP history etc. */
-    int   asg_src[ZT_NDST];         /* 255 = off */
-    float asg_depth[ZT_NDST];
-    float dst_base[ZT_NDST];        /* base value of each destination (set by the UI setters) */
+    int   asg_src[ZT_NDST_ALL];     /* 255 = off; dst ZT_NDST..ZT_NDST_ALL-1 = mix des macros */
+    float asg_depth[ZT_NDST_ALL];
+    float dst_base[ZT_NDST_ALL];    /* base value of each destination (set by the UI setters) */
+    struct { int dst, sub, used; float val; } macro[ZT_NMACRO];   /* page MACRO (16 slots assignables) */
     float fx_base[FX_NPARAMS];
 
     /* ---- sequencer advanced ------------------------------------------------------- */
@@ -212,6 +213,7 @@ void ztek_stop(ztek_t *z)
 static void ztek_note_on_int(ztek_t *z, int note, int vel, int accent, int slide, int record);
 static void ztek_arp_note_in(ztek_t *z, int note, int vel);
 static void ztek_arp_note_out(ztek_t *z, int note);
+static void ztek_macro_apply_int(ztek_t *z, int slot);
 
 static void cb_note_on(void *ctx, int slot, int note, int vel)
 {
@@ -326,11 +328,12 @@ ztek_t *ztek_create(float sr)
     z->ef_lvl = 0.0f;
     z->blk_peak = 0.0f;
     for (int t = 0; t < 6; t++) z->tool_state[t] = 0.0f;
-    for (int d = 0; d < ZT_NDST; d++) {
+    for (int d = 0; d < ZT_NDST_ALL; d++) {
         z->asg_src[d] = 255;
         z->asg_depth[d] = 0.0f;
         z->dst_base[d] = 0.5f;
     }
+    for (int m = 0; m < ZT_NMACRO; m++) { z->macro[m].dst = 0; z->macro[m].sub = 0; z->macro[m].used = 0; z->macro[m].val = 0.0f; }
     for (int p = 0; p < FX_NPARAMS; p++) z->fx_base[p] = 0.5f;
     /* voice destinations mirror z->param (set above) */
     for (int p = 0; p < AT_NPARAMS; p++) z->dst_base[p] = z->param[p];
@@ -357,7 +360,7 @@ ztek_t *ztek_create(float sr)
     z->xy_on = 0; z->xy_hold = 0; z->xy_target[0] = 1; z->xy_target[1] = 2;   /* X->CUTOFF Y->RESO */
     z->siren_on = 0; z->siren_lvl = 0.3f; z->siren_t = 0.5f; z->siren_fb = 0.0f;
     z->siren_ph = 0.0f; z->siren_f = 600.0f; z->siren_out = 0.0f; z->siren_sw = 0.0f;
-    z->punch_on = 0; z->punch_type = 0; z->punch_a = z->punch_b = z->punch_mix = 0.0f;
+    z->punch_on = 0; z->punch_type = 8; z->punch_a = z->punch_b = z->punch_mix = 0.0f;   /* POW! défaut = ECHO */
     z->undo_n = 0; z->redo_n = 0;
     z->patch[ZTEK_PSRC_VOIX] = 1u << ZTEK_PDST_FX;    /* voix -> FX par défaut */
     z->patch[ZTEK_PSRC_SIREN] = 1u << ZTEK_PDST_FX;
@@ -1131,10 +1134,47 @@ static void ztek_tool_block(ztek_t *z, float dt)
     }
 }
 
-/* the ASSIGN matrix: v = base + (src - 0.5) * 2 * depth, applied to voice/FX/seq params */
+/* applique une valeur 0..1 à la destination d (voix / FX / seq / mix de macro) */
+static void ztek_dst_set(ztek_t *z, int d, float v)
+{
+    if (d >= ZT_NDST) {                        /* destination = mix d'un macro : on le met à jour et on l'applique */
+        int m = d - ZT_NDST;
+        if (m < 0 || m >= ZT_NMACRO) return;
+        z->macro[m].val = v;
+        ztek_macro_apply_int(z, m);
+        return;
+    }
+    if (d < AT_NPARAMS) {
+        at_set(&z->voice, d, v);
+        bass_set(&z->bass, d, v);
+    } else if (d < ZT_SEQ_DST0) {
+        fx_set(d - AT_NPARAMS, v);
+    } else {
+        int k = d - ZT_SEQ_DST0;    /* 0 steps, 1 scale, 2 tempo, 3 root, 4..8 seqk[0..4] */
+        if (k == 0) {
+            int st = 1 + (int)(v * 63.0f);
+            if (st != z->ap.steps) {
+                z->ap.steps = st;
+                acid_sanitize(&z->pat, z->scale);
+                acid_render(&z->pat, &z->grid);
+            }
+        } else if (k == 1) {
+            int sc = (int)(v * 7.99f);
+            if (sc != z->scale) ztek_set_scale(z, sc);
+        } else if (k == 2) {
+            ztek_set_bpm(z, v * 300.0f);
+        } else if (k == 3) {
+            ztek_set_root(z, 24 + (int)(v * 48.99f));
+        } else {
+            z->seqk[k - 4] = v;
+        }
+    }
+}
+
+/* the ASSIGN matrix: v = base + (src - 0.5) * 2 * depth, applied to voice/FX/seq/macro-mix */
 static void ztek_matrix_block(ztek_t *z)
 {
-    for (int d = 0; d < ZT_NDST; d++) {
+    for (int d = 0; d < ZT_NDST_ALL; d++) {
         int s = z->asg_src[d];
         if (s < 0 || s >= ZT_NSRC) continue;
         float depth = z->asg_depth[d];
@@ -1142,33 +1182,104 @@ static void ztek_matrix_block(ztek_t *z)
         float v = z->dst_base[d] + (z->src_val[s] - 0.5f) * 2.0f * depth;
         if (v < 0.f) v = 0.f;
         if (v > 1.f) v = 1.f;
-        if (d < AT_NPARAMS) {
-            at_set(&z->voice, d, v);
-            bass_set(&z->bass, d, v);
-        } else if (d < ZT_SEQ_DST0) {
-            fx_set(d - AT_NPARAMS, v);
-        } else {
-            int k = d - ZT_SEQ_DST0;    /* 0 steps, 1 scale, 2 tempo, 3 root, 4..8 seqk[0..4] */
-            if (k == 0) {
-                int st = 1 + (int)(v * 63.0f);
-                if (st != z->ap.steps) {
-                    z->ap.steps = st;
-                    acid_sanitize(&z->pat, z->scale);
-                    acid_render(&z->pat, &z->grid);
-                }
-            } else if (k == 1) {
-                int sc = (int)(v * 7.99f);
-                if (sc != z->scale) ztek_set_scale(z, sc);
-            } else if (k == 2) {
-                ztek_set_bpm(z, v * 300.0f);
-            } else if (k == 3) {
-                ztek_set_root(z, 24 + (int)(v * 48.99f));
-            } else {
-                z->seqk[k - 4] = v;
-            }
-        }
+        ztek_dst_set(z, d, v);
     }
 }
+
+/* ---- page MACRO (16 slots assignables) ---------------------------------------------
+ * Chaque slot = { dst, sub, val, used }. apply = la cible reçoit la valeur. */
+static void ztek_macro_apply_int(ztek_t *z, int slot)
+{
+    int dst, sub;
+    float v;
+    if (slot < 0 || slot >= ZT_NMACRO) return;
+    if (!z->macro[slot].used) return;
+    dst = z->macro[slot].dst;
+    sub = z->macro[slot].sub;
+    v = z->macro[slot].val;
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    if (dst < ZT_NDST) {                       /* voix / FX / seq : même chemin que la matrice */
+        if (dst < AT_NPARAMS) ztek_set_param(z, dst, v);
+        else if (dst < ZT_SEQ_DST0) ztek_fx_set(z, dst - AT_NPARAMS, v);
+        else ztek_dst_set(z, dst, v);
+        z->dst_base[dst] = v;
+    } else if (dst >= ZT_MDST_AUX0 && dst < ZT_MDST_AUX0 + 16) {
+        ml_set_sp(&z->loop, dst - ZT_MDST_AUX0, ML_SP_FX, v >= 0.5f ? 1.0f : 0.0f);   /* aux -> PoW! */
+    } else if (dst >= ZT_MDST_PATCH && dst < ZT_MDST_PATCH + 12) {
+        int c = dst - ZT_MDST_PATCH;           /* connexion baie row*3+col (compat respectée) */
+        ztek_patch_set(z, c / 3, c % 3, v >= 0.5f ? 1 : 0);
+    } else if (dst == ZT_MDST_POWT) {
+        int t = (int)(v * (PN_NTYPES - 1) + 0.5f);
+        if (t < 0) t = 0;
+        if (t >= PN_NTYPES) t = PN_NTYPES - 1;
+        z->punch_type = t;                     /* utilisé au prochain appui POW! */
+    }
+    (void)sub;
+}
+
+void ztek_macro_set(ztek_t *z, int slot, int dst, int sub, float val)
+{
+    if (slot < 0 || slot >= ZT_NMACRO) return;
+    if (val < 0.0f) val = 0.0f;
+    if (val > 1.0f) val = 1.0f;
+    z->macro[slot].dst = dst;
+    z->macro[slot].sub = sub;
+    z->macro[slot].val = val;
+    z->macro[slot].used = 1;
+    z->dst_base[ZT_NDST + slot] = val;
+}
+
+void ztek_macro_apply(ztek_t *z, int slot)
+{
+    ztek_macro_apply_int(z, slot);
+}
+
+void ztek_macro_level(ztek_t *z, int slot, float v)
+{
+    if (slot < 0 || slot >= ZT_NMACRO) return;
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    z->macro[slot].val = v;
+    z->dst_base[ZT_NDST + slot] = v;
+    ztek_macro_apply_int(z, slot);
+}
+
+void ztek_macro_erase(ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= ZT_NMACRO) return;
+    z->macro[slot].used = 0;
+    z->macro[slot].dst = 0;
+    z->macro[slot].sub = 0;
+    z->macro[slot].val = 0.0f;
+    z->dst_base[ZT_NDST + slot] = 0.0f;
+}
+
+int ztek_macro_used(const ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= ZT_NMACRO) return 0;
+    return z->macro[slot].used;
+}
+
+int ztek_macro_dst(const ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= ZT_NMACRO) return 0;
+    return z->macro[slot].dst;
+}
+
+int ztek_macro_sub(const ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= ZT_NMACRO) return 0;
+    return z->macro[slot].sub;
+}
+
+float ztek_macro_val(const ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= ZT_NMACRO) return 0.0f;
+    return z->macro[slot].val;
+}
+
+int ztek_punch_type_get(const ztek_t *z) { return z->punch_type; }
 
 /* one 32-sample block of modulation: sources, then the matrix */
 static void ztek_mod_block(ztek_t *z, float dt)
@@ -1225,7 +1336,7 @@ float ztek_src_val(const ztek_t *z, int src)
 
 void ztek_assign(ztek_t *z, int dst, int src, float depth)
 {
-    if (dst < 0 || dst >= ZT_NDST) return;
+    if (dst < 0 || dst >= ZT_NDST_ALL) return;
     z->asg_src[dst] = src;
     if (depth < 0.0f) depth = 0.0f;
     if (depth > 1.0f) depth = 1.0f;
@@ -1234,13 +1345,13 @@ void ztek_assign(ztek_t *z, int dst, int src, float depth)
 
 int ztek_assign_src(const ztek_t *z, int dst)
 {
-    if (dst < 0 || dst >= ZT_NDST) return 255;
+    if (dst < 0 || dst >= ZT_NDST_ALL) return 255;
     return z->asg_src[dst];
 }
 
 float ztek_assign_depth(const ztek_t *z, int dst)
 {
-    if (dst < 0 || dst >= ZT_NDST) return 0.0f;
+    if (dst < 0 || dst >= ZT_NDST_ALL) return 0.0f;
     return z->asg_depth[dst];
 }
 
@@ -1260,7 +1371,7 @@ const char *ztek_preset_name(int i)
 
 static void ztek_preset_reset(ztek_t *z)
 {
-    for (int d = 0; d < ZT_NDST; d++) { z->asg_src[d] = 255; z->asg_depth[d] = 0.0f; }
+    for (int d = 0; d < ZT_NDST_ALL; d++) { z->asg_src[d] = 255; z->asg_depth[d] = 0.0f; }
     for (int k = 0; k < 5; k++) { z->seqk[k] = 0.0f; z->dst_base[ZT_SEQ_DST0 + 4 + k] = 0.0f; }
     z->lfo_sync = 0;
     z->lfo_trig = 0;
@@ -1381,6 +1492,12 @@ void ztek_preset_save(ztek_t *z, int part, int slot)
     memcpy(p->asg_src, z->asg_src, sizeof(p->asg_src));
     memcpy(p->asg_depth, z->asg_depth, sizeof(p->asg_depth));
     memcpy(p->seqk, z->seqk, sizeof(p->seqk));
+    for (int m = 0; m < ZT_NMACRO; m++) {
+        p->mac_used[m] = (uint8_t)z->macro[m].used;
+        p->mac_dst[m] = (int16_t)z->macro[m].dst;
+        p->mac_sub[m] = (int16_t)z->macro[m].sub;
+        p->mac_val[m] = z->macro[m].val;
+    }
 }
 
 void ztek_preset_load(ztek_t *z, int part, int slot)
@@ -1402,7 +1519,14 @@ void ztek_preset_load(ztek_t *z, int part, int slot)
     z->lfo_sync = p->lfo_sync;
     z->lfo_trig = p->lfo_trig;
     memcpy(z->env_loop, p->env_loop, sizeof(z->env_loop));
-    for (int d = 0; d < ZT_NDST; d++) ztek_assign(z, d, p->asg_src[d], p->asg_depth[d]);
+    for (int d = 0; d < ZT_NDST_ALL; d++) ztek_assign(z, d, p->asg_src[d], p->asg_depth[d]);
+    for (int m = 0; m < ZT_NMACRO; m++) {
+        z->macro[m].used = p->mac_used[m] ? 1 : 0;
+        z->macro[m].dst = p->mac_dst[m];
+        z->macro[m].sub = p->mac_sub[m];
+        z->macro[m].val = p->mac_val[m];
+        z->dst_base[ZT_NDST + m] = p->mac_val[m];
+    }
     for (int k = 0; k < 5; k++) ztek_seq_knob(z, 5 + k, p->seqk[k]);
 }
 

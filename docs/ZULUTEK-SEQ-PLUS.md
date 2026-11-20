@@ -185,3 +185,23 @@ Nouveau module `ztek_arp_*` dans `ztek_engine.{h,cpp}` (APK ; à porter sur FM-1
   arp off = reset, clamps knobs → **tous OK**. `g++ -fsyntax-only` moteur+JNI → OK.
 - FM-1 : le bouton ARP existe physiquement ; à câbler dans le patch (arp sur la voix courante,
   SAVE+K1..K4 = bend déjà pris — utiliser ARP seul + K1..K4 pour MODE/OCT/DIV/GATE).
+
+## 11. Page MACRO (14) — 16 slots assignables (SPEC Notion « SPEC MACRO zuluTek »)
+
+Un macro = **conteneur** : cible (dst) + sous-cible + niveau 0..1 (`ztek_macro_*` dans le moteur) :
+
+- **Cibles** : 0..7 voix, 8..25 FX, 26..34 seq (mêmes ids que la matrice ASSIGN) ; **35..50 = les 16 mix
+  des macros** (la matrice ASSIGN page 9 peut piloter un macro, ex. LFO1 -> MACRO 3) ; **100+slot =
+  aux du slot loop -> PoW!** (départs auxiliaires du mixeur, page 11) ; **120+c = connexion de la baie
+  de patch** (page 12, compat VCV respectée) ; **140 = type PoW! actif** (utilisé au prochain POW!).
+- **UI APK** : double-tap **GLO** = page 14 (SEL=slot, PRE=cible, ALG=sous, K1=niveau) ; **REC** =
+  enregistre le slot, **PLAY** = applique, **ERS** = efface ; **touche blanche = applique la macro du
+  slot** directement. DLY cycle …13→14→0.
+- Les macros sont embarquées dans les **presets par partie** (page 10) — save/load testé.
+- POW! utilise maintenant le type courant du moteur (`ztek_punch_type_get`), donc un macro POWT
+  change le type joué par le bouton POW (défaut ECHO).
+- **Tests hôte** (19 checks) : apply param voix/FX, aux->PoW!, baie (compat SIREN->POW! bloquée),
+  POWT sans déclencher le son, erase/no-op, matrice->mix de macro (LFO pilote et réapplique),
+  level resync dst_base, preset save/load des macros → **tous OK**. `g++ -fsyntax-only` OK.
+- FM-1 : à porter dans le patch 0007 (REC+SEQ = page MACRO, touches blanches = slots, K1 = niveau,
+  matrice peut viser les mix des macros).

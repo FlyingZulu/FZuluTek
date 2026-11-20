@@ -250,6 +250,22 @@ object ZtekAudio {
     fun arpKnob(k: Int, v: Float) { if (handle != 0L) nativeArpKnob(handle, k, v) }
     fun arpKnobGet(k: Int): Float = if (handle != 0L) nativeArpKnobGet(handle, k) else 0f
     fun arpHeld(): Int = if (handle != 0L) nativeArpHeld(handle) else 0
+    /* page MACRO (16 slots assignables) : dst 0..50 = voix/FX/seq/mix-macro, 100+slot = aux->PoW!,
+       120+c = baie de patch, 140 = type PoW! */
+    const val ZT_NMACRO = 16
+    const val ZT_NDST_ALL = 51
+    const val ZT_MDST_AUX0 = 100
+    const val ZT_MDST_PATCH = 120
+    const val ZT_MDST_POWT = 140
+    fun macroSet(slot: Int, dst: Int, sub: Int, val: Float) { if (handle != 0L) nativeMacroSet(handle, slot, dst, sub, val) }
+    fun macroApply(slot: Int) { if (handle != 0L) nativeMacroApply(handle, slot) }
+    fun macroLevel(slot: Int, v: Float) { if (handle != 0L) nativeMacroLevel(handle, slot, v) }
+    fun macroErase(slot: Int) { if (handle != 0L) nativeMacroErase(handle, slot) }
+    fun macroUsed(slot: Int): Int = if (handle != 0L) nativeMacroUsed(handle, slot) else 0
+    fun macroDst(slot: Int): Int = if (handle != 0L) nativeMacroDst(handle, slot) else 0
+    fun macroSub(slot: Int): Int = if (handle != 0L) nativeMacroSub(handle, slot) else 0
+    fun macroVal(slot: Int): Float = if (handle != 0L) nativeMacroVal(handle, slot) else 0f
+    fun punchTypeGet(): Int = if (handle != 0L) nativePunchTypeGet(handle) else 8
     fun modKnob(src: Int, k: Int, v: Float) { if (handle != 0L) nativeModKnob(handle, src, k, v) }
     fun modKnobGet(src: Int, k: Int): Float = if (handle != 0L) nativeModKnobGet(handle, src, k) else 0f
     fun lfoOpt(which: Int, on: Int) { if (handle != 0L) nativeLfoOpt(handle, which, on) }
@@ -301,6 +317,15 @@ object ZtekAudio {
     private external fun nativeArpKnob(handle: Long, k: Int, v: Float)
     private external fun nativeArpKnobGet(handle: Long, k: Int): Float
     private external fun nativeArpHeld(handle: Long): Int
+    private external fun nativeMacroSet(handle: Long, slot: Int, dst: Int, sub: Int, val: Float)
+    private external fun nativeMacroApply(handle: Long, slot: Int)
+    private external fun nativeMacroLevel(handle: Long, slot: Int, v: Float)
+    private external fun nativeMacroErase(handle: Long, slot: Int)
+    private external fun nativeMacroUsed(handle: Long, slot: Int): Int
+    private external fun nativeMacroDst(handle: Long, slot: Int): Int
+    private external fun nativeMacroSub(handle: Long, slot: Int): Int
+    private external fun nativeMacroVal(handle: Long, slot: Int): Float
+    private external fun nativePunchTypeGet(handle: Long): Int
     private external fun nativeModKnob(handle: Long, src: Int, k: Int, v: Float)
     private external fun nativeModKnobGet(handle: Long, src: Int, k: Int): Float
     private external fun nativeLfoOpt(handle: Long, which: Int, on: Int)
