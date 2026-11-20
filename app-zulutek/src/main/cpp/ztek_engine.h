@@ -180,6 +180,9 @@ float ztek_assign_depth(const ztek_t *z, int dst);
 #define ZT_NPRESETS 8
 void ztek_preset(ztek_t *z, int i);              /* 0..ZT_NPRESETS-1, wraps */
 const char *ztek_preset_name(int i);
+const char *ztek_preset_name_part(int part, int i);   /* factory name per part (0 bass, 1 lead, 2 drums) */
+void ztek_preset_factory(ztek_t *z, int part, int i);  /* factory pre-patched preset of a part: generic
+                                                        * preset + part engine/sound + 4 macro slots filled */
 
 /* preset bank per part: part 0 = BASSE, 1 = LEAD, 2 = DRUMS; 16 slots each. The bank is
  * FREE: the first ZT_NPRESETS slots hold the factory pre-patched presets, but any slot can

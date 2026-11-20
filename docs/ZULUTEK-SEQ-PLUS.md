@@ -102,14 +102,22 @@ Deux niveaux de presets :
   ACID 303, FILTRE WOBBLE (LFO1→CUTOFF), PITCH DRIFT (LFO2 DRUNK→TUNING), GATE 303
   (ENV1→ENVMOD/DECAY), SLIDE CITY (PING-PONG + LFO3→TEMPO), LABO CHAOS (LABO1→RESO),
   TM MAX (Turing Machine ouverte), MARÉE (LABO4 MARÉE→REV MIX, ENV2→DLY TIME).
+- **Presets usine PAR PARTIE** (`ztek_preset_factory(part, i)` + `ztek_preset_name_part(part, i)`) :
+  chaque partie a ses **propres 8 presets usine pré-patchés**, construits sur les 8 génériques
+  + moteur/son de la partie + **4 slots macro remplis** (les conteneurs « patch » prêts à appliquer) :
+  **BASSE** = moteurs PLUK/FM/SUB/8BIT (AT_ENGINE 1..4), root −12, filtre sombre, macros
+  CUTOFF / RESO / DECAY / type PoW! ECHO ; **LEAD** = ATEK303 bright, 128 bpm, macros
+  CUTOFF 0.9 / ENVMOD 0.8 / DLY TIME ; **DRUMS** = SEQ+ (TM LOCK 0.7, PING-PONG, RAND), loop gain
+  0.9, macros loop0→PoW! (aux), type PoW! ECHO, baie VOIX→FX. `ztek_bank_load(part, slot)` charge
+  le preset usine **de la partie** quand le slot n'a pas de save user ; `bankName` affiche son nom.
 - **Presets par partie, banc LIBRE** : page **PRESETS** (double-tap ERS, page 10) — **3 parties × 16 slots**
   (0 = BASSE, 1 = LEAD, 2 = DRUMS) ; SEL = slot, PRE = partie, K1 = LOAD, K2 = SAVE,
   K3 = effacer. Le banc est libre : les 8 premiers slots contiennent les presets usine,
   mais **n'importe quel slot peut être écrasé par un save user** (pas de séparation fixe
   8+8). `ztek_bank_load(part, slot)` charge le save user s'il existe, sinon le preset
-  usine si le slot est dans la plage usine. Un preset = snapshot POD complet de l'état
+  usine **de la partie** si le slot est dans la plage usine. Un preset = snapshot POD complet de l'état
   modulable (knobs des 16 sources, labos, LFO SYNC/TRIG, ENV loop, matrice ASSIGN, seqk,
-  params voix/FX, tempo, root, scale, engine). Persistance : blob binaire
+  params voix/FX, tempo, root, scale, engine, **macros 16 slots**). Persistance : blob binaire
   `ztek_preset_export/import` → **SharedPreferences (Base64) côté APK**, **flash côté
   FM-1** (à porter dans le patch).
 - **Molette PRESET en live** (comme sur le FM-1) : sur la page MAIN, l'encodeur **PST**
