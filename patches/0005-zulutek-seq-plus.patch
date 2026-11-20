@@ -1,0 +1,875 @@
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 2c8c77a..8c1bdd5 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -58,6 +58,7 @@
+ #include "atek_voice.h"
+ #include "acid_pattern.h"
+ #include "fx.h"
++#include "ztek_seqplus.h"   /* patch 0005: pack SEQ+ (modulation 8/8, ASSIGN, TM, LUDIQUE, presets par partie) */
+ 
+ /* the Animatek palette, as on the VCV Rack modules (UZZ-VCV-RACK src/ui/CommonWidgets.hpp, AcidEditor.hpp):
+  * the screens are slate, the values in the displays' blue, the selection in the logo's blue */
+@@ -153,8 +154,8 @@ static int8_t cur_preset = -1;                 /* the one loaded (or saved) last
+ 
+ /* the OPTIONS menu (OCT- + HOME): the unit's own choices, apart from the settings so no preset carries them (OBJ_OPTIONS,
+  * saved as the menu closes). Each an index into its choices */
+-#define OPT_MAGIC 0x4F505432u                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
+-enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_FINE, OP_N = OP_FINE + AT_NOPTS };
++#define OPT_MAGIC 0x4F505433u                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
++enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_FINE, OP_N = OP_FINE + AT_NOPTS };   /* patch 0005: OP_LUDIQUE */
+ #define CLK_OFS_MAX 40                         /* OPTIONS > CLK OFFSET: -40 .. +40 ms, stored + 40 */
+ typedef struct {
+     uint32_t magic;
+@@ -170,13 +171,14 @@ static void options_defaults(void)
+     opt.v[OP_MIDI_OUT] = 0;                    /* channel 1 */
+     opt.v[OP_SEQ_OUT] = 1;                     /* the sequencer's notes out */
+     opt.v[OP_CLOCK_OUT] = 0;
+-    opt.v[OP_CLK_OFS] = CLK_OFS_MAX - 16;      /* -16 ms: a Digitakt on the TRS jack, by ear in fm1-dock (14/11) */
++    opt.v[OP_CLK_OFS] = CLK_OFS_MAX - 16;
++    opt.v[OP_LUDIQUE] = 1;                   /* patch 0005: educational pops ON by default */      /* -16 ms: a Digitakt on the TRS jack, by ear in fm1-dock (14/11) */
+     for (i = 0; i < AT_NOPTS; i++)
+         opt.v[OP_FINE + i] = AT_OPT_DEFAULT[i];
+ }
+ static int opt_count(int i)                    /* how many choices item i has */
+ {
+-    static const uint8_t N[OP_FINE] = {0, 17, 16, 2, 2, 2 * CLK_OFS_MAX + 1};
++    static const uint8_t N[OP_FINE] = {0, 17, 16, 2, 2, 2 * CLK_OFS_MAX + 1, 2};   /* patch 0005: + LUDIQUE on/off */
+     return i == OP_COLOR ? NTHEMES : i < OP_FINE ? N[i] : AT_OPT_N[i - OP_FINE];
+ }
+ static void options_load(void)
+@@ -472,7 +474,10 @@ static int seq_len(void) { return set.steps < 1 ? 1 : set.steps > ACID_MAX_STEPS
+ static void seq_next_step(void)
+ {
+     int len = seq_len();
+-    sq.step = (uint8_t)((sq.step + 1) % len);
++    int zsp_wrapped = 0;
++    sq.step = (uint8_t)zsp_advance(len, sq.step, &zsp_wrapped);   /* patch 0005: NORM/REV/PING-PONG */
++    if (zsp_wrapped)
++        zsp_wrap();                                               /* patch 0005: RAND + Turing Machine */
+     sq.step_time = 0.0f;
+     sq.out_ticks = 0;
+     if (sq.step % 16 == 0 && pend_gen) {       /* a bar ended: the new pattern from here */
+@@ -777,8 +782,10 @@ static void app_render_events(void)
+ {
+     while (q_r != q_w) {
+         uint32_t e = q[q_r % QN], kind = e & 0xFFu, a = (e >> 8) & 0xFFu, b = e >> 16;
+-        if (kind == EV_NOTE_ON)
++        if (kind == EV_NOTE_ON) {
+             held_on((int)a, b);
++            zsp_note_retrig();                    /* patch 0005: LFO TRIG */
++        }
+         else if (kind == EV_NOTE_OFF)
+             held_off((int)a);
+         else if (kind == EV_PARAM)
+@@ -839,7 +846,18 @@ static void app_render_voice(float *out, uint32_t n)
+     for (off = 0; off < n; off += CHUNK) {     /* the sequencer at 0.7 ms, the voice between */
+         uint32_t c = n - off < CHUNK ? n - off : CHUNK;
+         seq_chunk(c);
++        zsp_mod_chunk(c, (float)c / SR);          /* patch 0005: modulation per CHUNK */
+         at_render(&voice, out + off, c);
++        {   /* the synth bus peak, for the EF tool */
++            float pk = 0.0f;
++            uint32_t i;
++            for (i = 0; i < c; i++) {
++                float a = out[off + i];
++                if (a < 0.0f) a = -a;
++                if (a > pk) pk = a;
++            }
++            zsp_set_peak(pk);
++        }
+         sq.now += c;
+     }
+ }
+@@ -1034,7 +1052,7 @@ static void store_load(void)
+         }
+     }
+     for (i = 0; i < NPRESETS; i++)              /* a preset from another layout is not loaded */
+-        if (presets[i].used && (presets[i].used != 1u || !settings_ok(&presets[i].s)))
++        if (presets[i].used && (presets[i].used & 1u) != 1u || !settings_ok(&presets[i].s)))
+             presets[i].used = 0;
+     if (!ok) {
+         settings_defaults();
+@@ -1055,9 +1073,11 @@ static void store_load(void)
+ 
+ void app_init(void)
+ {
++    zsp_flash_load();                     /* patch 0005: SEQ+ state from OBJ_ZSEQ */
+     int i;
+     at_init(&voice, SR);
+     options_load();
++    zsp_set_ludique(opt.v[OP_LUDIQUE]);   /* patch 0005: LUDIQUE option -> SEQ+ flash */
+     for (i = 0; i < AT_NOPTS; i++)
+         at_option(&voice, i, opt.v[OP_FINE + i]);
+     store_load();
+@@ -1076,8 +1096,8 @@ void app_init(void)
+ /* --------------------------------------------------------------------- UI --- */
+ /* a knob of a page: a voice parameter (0..), or a sequencer control */
+ enum { K_NONE = -1, K_SQ = 100, K_STEPS = 200, K_SCALE, K_TEMPO, K_ROOT, K_FX = 300 };
+-#define NPAGES 8
+-static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB"};
++#define NPAGES 11                          /* patch 0005: + LFO(8) ENV(9) ASSIGN(10) */
++static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB", "LFO", "ENV", "ASSIGN"};   /* patch 0005 */
+ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "DECAY"},
+                                             {"ACCENT", "TUNE", "WAVE", "GATE"},
+                                             {"DENSITY", "RANGE", "ACCENTS", "SLIDES"},
+@@ -1085,7 +1105,10 @@ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "
+                                             {"TIME", "FEEDBACK", "TONE", "MIX"},
+                                             {"TYPE", "RATE", "DEPTH", "MIX"},
+                                             {"TYPE", "DRIVE", "TONE", "LEVEL"},
+-                                            {"DECAY", "DAMP", "PRE-DELAY", "MIX"}};
++                                            {"DECAY", "DAMP", "PRE-DELAY", "MIX"},
++                                            {"RATE", "WAVE", "DEPTH", "SHAPE"},   /* patch 0005: page LFO */
++                                            {"A", "D", "S", "R"},                 /* patch 0005: page ENV */
++                                            {"DST", "SRC", "LUD", "DEPTH"}};      /* patch 0005: page ASSIGN */
+ static const int PAGE_KNOB[NPAGES][4] = {{AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT_DECAY},
+                                     {AT_ACCENT, AT_TUNING, AT_WAVE, K_SQ + SQ_GATE},
+                                     {K_SQ + SQ_DENSITY, K_SQ + SQ_RANGE, K_SQ + SQ_ACCENT, K_SQ + SQ_SLIDE},
+@@ -1093,7 +1116,10 @@ static const int PAGE_KNOB[NPAGES][4] = {{AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT
+                                     {K_FX + FX_DLY_TIME, K_FX + FX_DLY_FEEDBACK, K_FX + FX_DLY_TONE, K_FX + FX_DLY_MIX},
+                                     {K_FX + FX_MOD_TYPE, K_FX + FX_MOD_RATE, K_FX + FX_MOD_DEPTH, K_FX + FX_MOD_MIX},
+                                     {K_FX + FX_DRIVE_TYPE, K_FX + FX_DRIVE, K_FX + FX_TONE, K_FX + FX_LEVEL},
+-                                    {K_FX + FX_REV_DECAY, K_FX + FX_REV_DAMP, K_FX + FX_REV_PRE, K_FX + FX_REV_MIX}};
++                                    {K_FX + FX_REV_DECAY, K_FX + FX_REV_DAMP, K_FX + FX_REV_PRE, K_FX + FX_REV_MIX},
++                                    {K_NONE, K_NONE, K_NONE, K_NONE},   /* patch 0005: page LFO, via zsp_page_turn */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE},   /* patch 0005: page ENV */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE}};  /* patch 0005: page ASSIGN */
+ 
+ static struct {
+     char msg[2][24];
+@@ -1114,8 +1140,28 @@ static struct {
+     uint8_t loaded_seen;
+     uint8_t oct_hold, oct_used;                /* OCT- held, and used in a combination meanwhile (+ HOME, + K4) */
+     uint8_t opts, opt_cur, opt_dirty;          /* the OPTIONS menu: up, its item, changed (saved as it closes) */
++    uint8_t seqadv;                            /* patch 0005: SEQ+ sub-mode (double-tap SEQ) */
++    uint32_t last_seq_tap, last_env_tap, last_lfo_tap, last_arp_tap;
+ } ui;
+ 
++/* ---- ztek_seqplus accessors (patch 0005) ---- */
++float *zsp_at_params(void) { return set.param; }
++float *zsp_fx_params(void) { return set.fx; }
++acid_pattern_t *zsp_pattern(void) { return &set.pattern; }
++acid_grid_t *zsp_grid(void) { return &sq.grid; }
++float zsp_seqk0(int k) { return set.seqk[k]; }
++void zsp_at_set(int k, float v) { set.param[k] = v; at_set(&voice, k, v); }
++void zsp_fx_set(int k, float v) { set.fx[k] = v; fx_set(k, v); }
++int  zsp_seq_len(void) { return seq_len(); }
++void zsp_set_tempo(int bpm) { set.tempo = (uint16_t)(bpm < 30 ? 30 : bpm > 300 ? 300 : bpm); set_dirty = 1; }
++int  zsp_tempo(void) { return set.tempo; }
++void zsp_set_root(int r) { set.root = (uint8_t)(r % 12); set_dirty = 1; }
++void zsp_set_scale(int s) { set.scale = (uint8_t)s; set_dirty = 1; }
++int  zsp_scale(void) { return set.scale; }
++void zsp_regrow(void) { seq_generate(0); }
++int  app_preset_used_raw(int slot) { return presets[slot].used; }
++void app_preset_set_used_raw(int slot, int raw) { presets[slot].used = (unsigned)raw; set_dirty = 1; }
++
+ static void text_cat(char *d, const char *s)
+ {
+     while (*d)
+@@ -1439,7 +1485,7 @@ static void edit_move(int32_t d)
+ }
+ /* ------------------------------------------------------------ OPTIONS --- */
+ static const char *const OPT_LABEL[OP_N] = {"COLOR", "MIDI IN CH", "MIDI OUT CH", "SEQ NOTES OUT", "CLOCK OUT",
+-    "CLK OFFSET", "PULSE WIDTH", "SQUARE DROOP", "SAW RESET", "SAW DROOP", "FILTER DRIVE", "SLIDE TIME", "AUTO LEGATO",
++    "CLK OFFSET", "LUDIQUE",   /* patch 0005 */ "PULSE WIDTH", "SQUARE DROOP", "SAW RESET", "SAW DROOP", "FILTER DRIVE", "SLIDE TIME", "AUTO LEGATO",
+     "OTA SATURATION", "OUT SATURATION", "ANALOG DRIFT", "UNIT"};
+ static const char *const OPT_SECTION[OP_N] = {"DISPLAY", "MIDI", 0, 0, 0, 0, "FINE TUNING", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+ static void opt_value_text(int i, char *t)
+@@ -1486,6 +1532,8 @@ static void opt_close(void)
+     ui.opts = 0;
+     if (ui.opt_dirty && !backup_hold) {
+         ui.opt_dirty = 0;
++        zsp_set_ludique(opt.v[OP_LUDIQUE]);   /* patch 0005: sync LUDIQUE into the SEQ+ flash */
++        zsp_flash_save();
+         if (plat_store_save(OBJ_OPTIONS, &opt, sizeof opt) == 0)
+             app_say("OPTIONS", "SAVED");
+         else
+@@ -1617,7 +1665,15 @@ static void input(void)
+             set_dirty = 1;
+             app_say("LOCK", set.locked ? "ON: MUTATE" : "OFF: NEW SEED");
+         } else if (k == B_SEQ) {
+-            post(EV_GENERATE, 0, 0);
++            uint32_t now = plat_ms();             /* patch 0005: double-tap SEQ = SEQ+ sub-mode */
++            if (now - ui.last_seq_tap < 350u) {
++                ui.last_seq_tap = 0;
++                ui.seqadv = (uint8_t)!ui.seqadv;
++                app_say("SEQ+", ui.seqadv ? "TM LEN MUT PLAY RAND" : "NORMAL");
++            } else {
++                ui.last_seq_tap = now;
++                post(EV_GENERATE, 0, 0);
++            }
+             set_dirty = 1;
+         } else if (k == B_EDIT) {              /* the sequence's three: the editor -> SEQ -> PATT -> the editor */
+             if (ui.edit) {
+@@ -1638,8 +1694,18 @@ static void input(void)
+             post(EV_EDIT, ui.cursor, k == B_ENV ? ED_ACC : ED_SLIDE);
+             set_dirty = 1;
+         } else if (k == B_ENV || k == B_LFO || k == B_ARP) {
+-            post(EV_MUTATE, k == B_ENV ? ACID_MUT_TIME : k == B_LFO ? ACID_MUT_PITCH : ACID_MUT_ARTICULATION,
+-                 (uint32_t)view_base());       /* the page on view */
++            uint32_t now = plat_ms();             /* patch 0005: double-tap ENV/LFO/ARP = pages LFO/ENV/ASSIGN */
++            uint32_t *lt = k == B_ENV ? &ui.last_env_tap : k == B_LFO ? &ui.last_lfo_tap : &ui.last_arp_tap;
++            if (now - *lt < 350u) {
++                *lt = 0;
++                set.page = (uint8_t)(k == B_ENV ? 8u : k == B_LFO ? 9u : 10u);
++                ui.edit = ui.list = 0;
++                ui.redraw = 1;
++            } else {
++                *lt = now;
++                post(EV_MUTATE, k == B_ENV ? ACID_MUT_TIME : k == B_LFO ? ACID_MUT_PITCH : ACID_MUT_ARTICULATION,
++                     (uint32_t)view_base());   /* the page on view */
++            }
+             set_dirty = 1;
+         } else if (k == B_GLO || (k == B_HOME && ui.oct_hold)) {   /* GLOBAL (or OCT- + HOME): OPTIONS */
+             ui.oct_used = 1;
+@@ -1712,6 +1778,12 @@ static void input(void)
+             t[0] = 0;
+             text_cat(t, AT_OSC_NAME[at_osc_index(set.param[AT_WAVE])]);
+             app_say("WAVE", t);
++        } else if (set.page >= 8u) {              /* patch 0005: pages LFO(8) ENV(9) ASSIGN(10) */
++            zsp_page_turn(set.page, k, e);
++            ui.redraw = 1;
++        } else if (set.page == 3u && ui.seqadv) { /* patch 0005: SEQ+ page (double-tap SEQ) */
++            zsp_seqk_turn(k == EN_SELECT ? ZSP_RAND : k - EN_K1, e);
++            ui.redraw = 1;
+         } else if (k == EN_SELECT) {
+             set.page = (uint8_t)((set.page + (e > 0 ? 1u : NPAGES - 1u)) % NPAGES);
+             set_dirty = 1;
+diff --git a/atek303/app/app.h b/atek303/app/app.h
+index 0c536fe..a7aa222 100644
+--- a/atek303/app/app.h
++++ b/atek303/app/app.h
+@@ -13,10 +13,10 @@
+ void app_splash(void);
+ 
+ /* the store: the app's settings, the panel calibration (the platform's), and their flash offsets */
+-enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_PRESETS_A, OBJ_PRESETS_B, OBJ_PRESETS_C, OBJ_PRESETS_D, OBJ_OPTIONS, OBJ_NOBJ };   /* presets: 8 in each */
++enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_PRESETS_A, OBJ_PRESETS_B, OBJ_PRESETS_C, OBJ_PRESETS_D, OBJ_OPTIONS, OBJ_ZSEQ, OBJ_NOBJ };   /* presets: 8 in each; OBJ_ZSEQ = pack SEQ+ (patch 0005) */
+ /* in the main store (0x97000..0xE0000); OBJ_OPTIONS (the OPTIONS menu: colour, MIDI, fine tuning) is the unit's own,
+  * apart from the settings so that no preset carries it, and not in the backup */
+-#define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xD8000u, 0xDA000u, 0xD4000u, 0xD6000u, 0xDE000u}
++#define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xD8000u, 0xDA000u, 0xD4000u, 0xD6000u, 0xDE000u, 0xDF000u}
+ /* backup and restore over USB (fm1.toml backup = true; tools/fm1_backup.py --magic AT64): the settings and the presets.
+  * A backup is also how Javier's presets become the factory ones (tools/factory_from_backup.py) */
+ #define APP_BACKUP_OBJS {OBJ_SETTINGS, OBJ_PRESETS_A, OBJ_PRESETS_B, OBJ_PRESETS_C, OBJ_PRESETS_D}
+diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+index b46690c..fa7debd 100644
+--- a/atek303/app/fm1.toml
++++ b/atek303/app/fm1.toml
+@@ -10,7 +10,7 @@ usb_audio_out = false
+ backup = true                  # copia y restauración de los presets por USB (tools/fm1_backup.py --magic AT64)
+ words = "words.tsv"
+ include = ["dsp"]
+-o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c"]   # el motor, el generador y los efectos, a -O2
++o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "ztek_seqplus.c"]   # el motor, el generador y los efectos, a -O2
+ # el sitio
+ title = "ATEK303"              # el nombre que ve la gente (si no, firmware.json saldría como «Animatek»)
+ tagline = "The ATEK303 acid voice on the M-VAVE FM-1"
+diff --git a/atek303/app/ztek_seqplus.c b/atek303/app/ztek_seqplus.c
+new file mode 100644
+index 0000000..20ae092
+--- /dev/null
++++ b/atek303/app/ztek_seqplus.c
+@@ -0,0 +1,517 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_seqplus.c — see ztek_seqplus.h. The modulation runs per CHUNK (32 samples), never per
++ * sample, so 4 LFOs + 4 labos + 2 ENVs + 6 tools + the matrix cost a handful of µs per chunk
++ * on the AC791N: negligible next to the voice and the FX which run per sample. */
++#include "ztek_seqplus.h"
++#include "app.h"                 /* OBJ_ZSEQ, plat_store_* */
++#include "dsp/fastmath.h"
++#include <string.h>
++
++#define ZSP_MAGIC 0x5A535031u          /* 'ZSP1' */
++
++typedef struct {
++    float mod_knob[ZSP_NSRC][4];
++    int   lab_type[4];
++    int   lab_src[4][2];
++    int   lfo_sync, lfo_trig;
++    int   env_loop[2];
++    int   asg_src[ZSP_NDST];
++    float asg_depth[ZSP_NDST];
++    float seqk5[ZSP_NSEQK];
++} zsp_modstate_t;
++
++typedef struct {
++    uint32_t magic;
++    uint8_t ludique;
++    zsp_modstate_t cur;
++    zsp_modstate_t by_part[3];
++} zsp_flash_t;
++
++static zsp_flash_t zf;
++static zsp_modstate_t *M = &zf.cur;     /* the live mod state */
++
++/* runtime (not persisted) */
++static float src_val[ZSP_NSRC];
++static float lfo_ph[4], lfo_sh[4], lfo_drunk[4];
++static float lab_out[4];
++static float lab_bird[4][2][16];
++static int   lab_birdpos[4][2];
++static uint32_t lab_rng[4];
++static int   lab_clk[4];
++static float lab_phase[4];
++static float env_ph[2], env_lvl[2];
++static int   env_loop[2], env_stage[2];
++static float ef_lvl, blk_peak, tool_state[6];
++static float dst_base[ZSP_NDST];
++static int   play_pos, play_dir;
++static uint32_t rng_ = 0x9e3779b9u;
++
++static uint32_t lcg(void) { rng_ = rng_ * 1103515245u + 12345u; return rng_; }
++static float rnd01(void) { return (float)(lcg() >> 8) / 16777216.0f; }
++
++/* ---- accessors to app.c's state --------------------------------------------------- */
++void  zsp_set_seqk(int k, float v) { if (k >= 0 && k < ZSP_NSEQK) M->seqk5[k] = v < 0 ? 0 : v > 1 ? 1 : v; }
++float zsp_seqk(int k) { return (k >= 0 && k < ZSP_NSEQK) ? M->seqk5[k] : 0.0f; }
++int   zsp_mutate_ops(void) { return 1 + (int)(M->seqk5[ZSP_MUT] * 7.0f); }
++int   zsp_ludique(void) { return zf.ludique; }
++void  zsp_set_ludique(int on) { zf.ludique = on ? 1 : 0; }
++
++/* ---- sequencer: play modes + Turing Machine at the wrap --------------------------- */
++int zsp_advance(int len, int cur, int *wrapped)
++{
++    int mode = M->seqk5[ZSP_PLAY] < 0.34f ? 0 : (M->seqk5[ZSP_PLAY] < 0.67f ? 1 : 2);
++    int next = cur, w = 0;
++    if (mode == 0) {
++        next = cur + 1;
++        if (next >= len) { next = 0; w = 1; }
++    } else if (mode == 1) {
++        next = cur - 1;
++        if (next < 0) { next = len - 1; w = 1; }
++    } else {
++        next = cur + play_dir;
++        if (next >= len) { next = len - 2; if (next < 0) next = 0; play_dir = -1; w = 1; }
++        else if (next < 0) { next = 1; if (next >= len) next = len - 1; play_dir = 1; w = 1; }
++    }
++    *wrapped = w;
++    return next;
++}
++
++void zsp_wrap(void)
++{
++    acid_pattern_t *pat = zsp_pattern();
++    int steps = pat->time_length;
++    if (steps < 1) steps = 1;
++    if (steps > ACID_MAX_STEPS) steps = ACID_MAX_STEPS;
++
++    /* RAND: full re-generation with a probability at each loop wrap */
++    if (M->seqk5[ZSP_RAND] > 0.0001f && rnd01() < M->seqk5[ZSP_RAND]) {
++        acid_params_t p;
++        acid_params_default(&p);
++        p.scale = zsp_scale();
++        acid_generate(pat, &p, lcg());
++        return;
++    }
++
++    /* Turing Machine: rotate the window [0, wl) right; the new head is kept when
++     * r < lock, mutated when lock <= r < lock+mut, re-rolled otherwise. lock=0 -> TM off. */
++    float lock = M->seqk5[ZSP_TMLOCK];
++    if (lock > 0.0001f) {
++        acid_grid_t *g = zsp_grid();
++        int wl = (int)(M->seqk5[ZSP_TMLEN] * 60.0f + 4.0f);
++        if (wl < 4) wl = 4;
++        if (wl > steps) wl = steps;
++        acid_grid_t t = *g;
++        int8_t tdeg = t.deg[wl-1]; int8_t toct = t.oct[wl-1];
++        uint8_t tg = t.gate[wl-1], ta = t.accent[wl-1], ts = t.slide[wl-1], tt = t.tie[wl-1];
++        int i;
++        for (i = wl - 1; i > 0; i--) {
++            t.deg[i] = t.deg[i-1]; t.oct[i] = t.oct[i-1];
++            t.gate[i] = t.gate[i-1]; t.accent[i] = t.accent[i-1];
++            t.slide[i] = t.slide[i-1]; t.tie[i] = t.tie[i-1];
++        }
++        float r = rnd01();
++        t.deg[0] = tdeg; t.oct[0] = toct; t.gate[0] = tg;
++        t.accent[0] = ta; t.slide[0] = ts; t.tie[0] = tt;
++        if (r >= lock) {
++            if (r < lock + M->seqk5[ZSP_MUT]) {
++                uint32_t m = lcg() & 3u;
++                if (m == 0) t.deg[0] += (lcg() & 1u) ? 1 : -1;
++                else if (m == 1) t.oct[0] += (lcg() & 1u) ? 1 : -1;
++                else if (m == 2) t.gate[0] = t.gate[0] ? 0 : 1;
++                else t.accent[0] = t.accent[0] ? 0 : 1;
++            } else {
++                t.gate[0] = (lcg() % 100u) < 70u ? 1 : 0;
++                t.deg[0] = (int8_t)((int)(lcg() % 12u) - 6);
++                t.oct[0] = (int8_t)((int)(lcg() % 3u) - 1);
++                t.accent[0] = (lcg() % 100u) < 30u ? 1 : 0;
++                t.slide[0] = 0; t.tie[0] = 0;
++            }
++        }
++        *g = t;
++        acid_import(pat, g, steps, pat->seed, pat->algorithm_version);
++        acid_render(pat, g);
++    }
++}
++
++/* ---- modulation, per CHUNK -------------------------------------------------------- */
++static float zsp_wave(int w, float ph)
++{
++    float p = ph - fm_floorf(ph);
++    switch (w) {
++    case 1:  return p < 0.5f ? p * 2.0f : 2.0f - p * 2.0f;
++    case 2:  return p < 0.5f ? 1.0f : 0.0f;
++    case 3:  return p;
++    default: return 0.5f + 0.5f * fm_sin_turns(p);
++    }
++}
++
++static void lfo_block(float dt)
++{
++    static const float DIVS[6] = { 16.f, 8.f, 4.f, 2.f, 1.f, 0.5f };
++    int i;
++    for (i = 0; i < 4; i++) {
++        float rate = M->mod_knob[i][0];
++        float hz = M->lfo_sync ? (zsp_tempo() / 60.0f) / DIVS[(int)(rate * 5.99f) > 5 ? 5 : (int)(rate * 5.99f)]
++                               : 0.02f + rate * rate * 40.0f;
++        float ph = lfo_ph[i] + hz * dt;
++        int w = (int)(M->mod_knob[i][1] * 5.99f);
++        if (w > 5) w = 5;
++        if (ph >= 1.0f) {
++            ph -= fm_floorf(ph);
++            if (w == 4) lfo_sh[i] = rnd01();
++        }
++        lfo_ph[i] = ph;
++        float v;
++        if (w == 4) v = lfo_sh[i];
++        else if (w == 5) {
++            lfo_drunk[i] += (rnd01() - 0.5f) * 0.25f;
++            lfo_drunk[i] = fm_clampf(lfo_drunk[i], 0.0f, 1.0f);
++            v = lfo_drunk[i];
++        } else {
++            v = zsp_wave(w, ph);
++            if (w == 2) {
++                float p = ph - fm_floorf(ph);
++                v = p < (0.2f + M->mod_knob[i][3] * 0.6f) ? 1.0f : 0.0f;
++            }
++        }
++        float amp = M->mod_knob[i][2] * 2.0f;
++        if (amp > 2.0f) amp = 2.0f;
++        src_val[i] = fm_clampf(0.5f + (v - 0.5f) * amp, 0.0f, 1.0f);
++    }
++}
++
++static void env_block(float dt)
++{
++    int e;
++    for (e = 0; e < 2; e++) {
++        float A = 0.005f + M->mod_knob[8 + e][0] * 0.5f;
++        float D = 0.005f + M->mod_knob[8 + e][1] * 0.5f;
++        float S = M->mod_knob[8 + e][2];
++        float R = 0.005f + M->mod_knob[8 + e][3] * 1.0f;
++        if (A < 1e-4f) A = 1e-4f;
++        if (D < 1e-4f) D = 1e-4f;
++        if (R < 1e-4f) R = 1e-4f;
++        int st = env_stage[e];
++        float lvl = env_lvl[e], ph = env_ph[e];
++        switch (st) {
++        case 0: lvl += dt / A; if (lvl >= 1.0f) { lvl = 1.0f; st = 1; } break;
++        case 1: lvl -= dt / D * (1.0f - S); if (lvl <= S) { lvl = S; st = 2; } break;
++        case 2: ph += dt / R; if (ph >= 1.0f) { ph = 0.0f; st = 3; } break;
++        default: lvl -= dt / R; if (lvl <= 0.0f) { lvl = 0.0f; if (env_loop[e]) st = 0; } break;
++        }
++        env_stage[e] = st; env_lvl[e] = lvl; env_ph[e] = ph;
++        src_val[8 + e] = lvl;
++    }
++}
++
++static void lab_block(void)
++{
++    int i;
++    for (i = 0; i < 4; i++) {
++        int type = M->lab_type[i];
++        int s1 = M->lab_src[i][0], s2 = M->lab_src[i][1];
++        float a = (s1 >= 0 && s1 < 4 + i) ? src_val[s1] : 0.5f;
++        float b = (s2 >= 0 && s2 < 4 + i) ? src_val[s2] : 0.5f;
++        float depth = M->mod_knob[4 + i][3];
++        lab_rng[i] = lab_rng[i] * 1103515245u + 12345u;
++        float jit = ((float)(lab_rng[i] >> 8) / 16777216.0f - 0.5f) * 2.0f;
++        int clk = lab_clk[i]++;
++        float out;
++        switch (type) {
++        case 1:  out = a + (b - 0.5f) * 0.5f + jit * 0.12f; break;
++        case 2:  out = a + (b - 0.5f) * 0.3f + jit * 0.04f; break;
++        case 3: {
++            out = a + jit * 0.45f + (b - 0.5f) * 0.2f;
++            float st = 0.5f - 0.5f * 0.42f;
++            out = fm_floorf(out / st + 0.5f) * st;
++            break;
++        }
++        case 4:  out = a + jit * 0.85f + (b - 0.5f) * 1.6f; break;
++        case 5: {
++            if ((clk & 7) == 0) {
++                lab_bird[i][0][lab_birdpos[i][0]] = a;
++                lab_birdpos[i][0] = (lab_birdpos[i][0] + 1) & 15;
++                lab_bird[i][1][lab_birdpos[i][1]] = b;
++                lab_birdpos[i][1] = (lab_birdpos[i][1] + 1) & 15;
++            }
++            float bird = lab_bird[i][1][(lab_birdpos[i][1] - 8 + 16) & 15];
++            out = a + (bird - 0.5f) * 0.9f + jit * 0.1f;
++            break;
++        }
++        case 6: {
++            out = a;
++            if ((clk % 8) == 0) out += jit * 0.5f;
++            if ((clk / 3) & 1) out += (b - 0.5f) * 0.3f;
++            break;
++        }
++        case 7: {
++            lab_phase[i] += 32.0f / (44100.0f * 9.0f);
++            if (lab_phase[i] >= 1.0f) lab_phase[i] -= 1.0f;
++            out = a + (fm_sin_turns(lab_phase[i]) * 0.5f + 0.5f) * 0.4f + (b - 0.5f) * 0.2f;
++            break;
++        }
++        default: out = a + (b - 0.5f); break;
++        }
++        float amp = 0.3f + depth * 1.7f;
++        lab_out[i] = fm_clampf(0.5f + (fm_clampf(out, 0.0f, 1.0f) - 0.5f) * amp, 0.0f, 1.0f);
++        src_val[4 + i] = lab_out[i];
++    }
++}
++
++static float tool_src(int tool)
++{
++    int s = (int)(M->mod_knob[tool][0] * 16.999f);
++    if (s >= ZSP_NSRC) return 0.0f;
++    if (s >= tool) s = 0;
++    return src_val[s];
++}
++
++static void tool_block(float dt)
++{
++    int t;
++    for (t = 0; t < 6; t++) {
++        int src = 10 + t;
++        float in = tool_src(src);
++        float p1 = M->mod_knob[src][1], p2 = M->mod_knob[src][2], depth = M->mod_knob[src][3];
++        float out = in;
++        switch (t) {
++        case 0: {
++            float k = blk_peak > ef_lvl ? (0.01f + p1 * 2.0f) : (0.001f + p2 * 0.5f);
++            ef_lvl += (blk_peak - ef_lvl) * k;
++            out = ef_lvl * (0.2f + p1 * 4.0f);
++            break;
++        }
++        case 1:
++            { float x = 1.0f + in * 9.0f; out = (x - 1.0f) / (1.0f + 0.5f * (x - 1.0f)); }  /* ln approx (Pade), no libm */
++            out = out * (0.2f + p1 * 2.0f) + p2;
++            break;
++        case 2: {
++            float st = tool_state[t];
++            float step = (0.0005f + (in > st ? p1 : p2) * (in > st ? p1 : p2) * 4.0f) * dt * 60.0f;
++            if (in > st) { st += step; if (st > in) st = in; }
++            else { st -= step; if (st < in) st = in; }
++            tool_state[t] = st;
++            out = st;
++            break;
++        }
++        case 3: {
++            float th = p1, hy = 0.02f + p2 * 0.2f, st = tool_state[t];
++            if (in > th + hy) st = 1.0f;
++            else if (in < th - hy) st = 0.0f;
++            tool_state[t] = st;
++            out = st;
++            break;
++        }
++        case 4: {
++            int steps = 2 + (int)(p1 * 30.0f);
++            out = fm_floorf(in * steps + 0.5f) / steps + p2 * 0.1f;
++            break;
++        }
++        default:
++            out = in * p1 + p2 * 0.5f;
++            break;
++        }
++        out = out * depth + in * (1.0f - depth);
++        src_val[src] = fm_clampf(out, 0.0f, 1.0f);
++    }
++}
++
++static void matrix_block(void)
++{
++    int d;
++    for (d = 0; d < ZSP_NDST; d++) {
++        int s = M->asg_src[d];
++        float depth = M->asg_depth[d];
++        float v;
++        if (s < 0 || s >= ZSP_NSRC || depth <= 0.0001f) continue;
++        v = fm_clampf(dst_base[d] + (src_val[s] - 0.5f) * 2.0f * depth, 0.0f, 1.0f);
++        if (d < AT_NPARAMS) zsp_at_set(d, v);
++        else if (d < ZSP_SEQ_DST0) zsp_fx_set(d - AT_NPARAMS, v);
++        else {
++            int k = d - ZSP_SEQ_DST0;
++            if (k == 0) { /* steps: sanitize+render via the grid */ }
++            else if (k == 1) zsp_set_scale((int)(v * 7.99f));
++            else if (k == 2) zsp_set_tempo((int)(v * 300.0f));
++            else if (k == 3) zsp_set_root(24 + (int)(v * 48.99f));
++            else M->seqk5[k - 4] = v;
++        }
++    }
++}
++
++void zsp_mod_chunk(uint32_t n, float dt)
++{
++    (void)n;
++    lfo_block(dt);
++    lab_block();
++    env_block(dt);
++    tool_block(dt);
++    matrix_block();
++}
++
++void zsp_mod_init(void)
++{
++    int s, k, d;
++    memset(&zf, 0, sizeof zf);
++    M = &zf.cur;
++    for (s = 0; s < ZSP_NSRC; s++) {
++        src_val[s] = 0.0f;
++        for (k = 0; k < 4; k++) M->mod_knob[s][k] = 0.5f;
++    }
++    M->mod_knob[0][0] = 0.35f;
++    for (d = 0; d < ZSP_NDST; d++) { M->asg_src[d] = 255; M->asg_depth[d] = 0.0f; dst_base[d] = 0.5f; }
++    for (d = 0; d < AT_NPARAMS; d++) dst_base[d] = zsp_at_params()[d];
++    for (d = 0; d < FX_NPARAMS; d++) dst_base[8 + d] = zsp_fx_params()[d];
++    for (k = 0; k < ZSP_NSEQK; k++) M->seqk5[k] = 0.0f;
++    zf.ludique = 1;
++    zf.magic = ZSP_MAGIC;
++}
++
++/* knob setters */
++void zsp_mod_knob(int src, int k, float v)
++{
++    if (src < 0 || src >= ZSP_NSRC || k < 0 || k > 3) return;
++    if (v < 0.0f) v = 0.0f;
++    if (v > 1.0f) v = 1.0f;
++    M->mod_knob[src][k] = v;
++    if (src >= 4 && src < 8) {
++        if (k == 0) M->lab_type[src - 4] = (int)(v * 7.99f);
++        else if (k == 1) M->lab_src[src - 4][0] = (int)(v * 16.999f) == 16 ? -1 : (int)(v * 15.99f);
++        else if (k == 2) M->lab_src[src - 4][1] = (int)(v * 16.999f) == 16 ? -1 : (int)(v * 15.99f);
++    }
++}
++float zsp_mod_knob_get(int src, int k)
++{
++    if (src < 0 || src >= ZSP_NSRC || k < 0 || k > 3) return 0.0f;
++    return M->mod_knob[src][k];
++}
++void zsp_lfo_opt(int which, int on)
++{
++    if (which == 0) M->lfo_sync = on ? 1 : 0;
++    else if (which == 1) M->lfo_trig = on ? 1 : 0;
++}
++void zsp_env_loop(int e, int on)
++{
++    if (e >= 0 && e < 2) { M->env_loop[e] = on ? 1 : 0; env_loop[e] = M->env_loop[e]; }
++}
++float zsp_src_val(int src) { return (src >= 0 && src < ZSP_NSRC) ? src_val[src] : 0.0f; }
++void zsp_assign(int dst, int src, float depth)
++{
++    if (dst < 0 || dst >= ZSP_NDST) return;
++    M->asg_src[dst] = src;
++    M->asg_depth[dst] = fm_clampf(depth, 0.0f, 1.0f);
++}
++int   zsp_assign_src(int dst) { return (dst >= 0 && dst < ZSP_NDST) ? M->asg_src[dst] : 255; }
++float zsp_assign_depth(int dst) { return (dst >= 0 && dst < ZSP_NDST) ? M->asg_depth[dst] : 0.0f; }
++
++/* knob routing for pages 8 (LFO), 9 (ENV), 10 (ASSIGN); enc = 0..6 (SEL PRE ALG K1..K4) */
++static float page_val[11][7];
++void zsp_page_turn(int page, int enc, int32_t det)
++{
++    float v;
++    int sub;
++    if (page < 8 || page > 10 || enc < 0 || enc > 6) return;
++    v = fm_clampf(page_val[page][enc] + (float)det * 0.02f, 0.0f, 1.0f);
++    page_val[page][enc] = v;
++    if (page == 8) {                       /* LFO: SEL=sub PRE=SYNC ALG=TRIG K1..K4=knobs */
++        if (enc == 1) zsp_lfo_opt(0, v > 0.5f);
++        else if (enc == 2) zsp_lfo_opt(1, v > 0.5f);
++        else if (enc >= 3) {
++            sub = (int)(page_val[8][0] * 7.99f);
++            if (sub >= 4 && (enc == 4 || enc == 5)) {
++                float mx = (sub - 1) / 16.999f;
++                if (v > mx) v = mx;         /* no feedback cycles (VCV-style typed patch) */
++            }
++            zsp_mod_knob(sub, enc - 3, v);
++        }
++    } else if (page == 9) {                /* ENV: SEL=sub PRE=loop K1..K4=knobs */
++        if (enc == 1) {
++            sub = (int)(page_val[9][0] * 7.99f);
++            if (sub < 2) zsp_env_loop(sub, v > 0.5f);
++        } else if (enc >= 3) {
++            sub = (int)(page_val[9][0] * 7.99f);
++            if (sub >= 2 && enc == 3) {
++                float mx = (7 + sub) / 16.999f;
++                if (v > mx) v = mx;
++            }
++            zsp_mod_knob(8 + sub, enc - 3, v);
++        }
++    } else if (page == 10) {               /* ASSIGN: SEL=dst PRE=src ALG=LUDIQUE K1=depth */
++        sub = (int)(page_val[10][0] * (ZSP_NDST - 0.001f));
++        if (enc == 1) zsp_assign(sub, (int)(v * 16.999f) == 16 ? 255 : (int)(v * 15.99f), M->asg_depth[sub]);
++        else if (enc == 2) zsp_set_ludique(v > 0.5f);
++        else if (enc == 3) zsp_assign(sub, M->asg_src[sub], v);
++    }
++}
++
++/* SEQ advanced page (double-tap SEQ): detents on the seqk knobs; enc SEL = RAND */
++void zsp_seqk_turn(int k, int32_t det)
++{
++    if (k < 0 || k >= ZSP_NSEQK) return;
++    zsp_set_seqk(k, fm_clampf(M->seqk5[k] + (float)det * 0.02f, 0.0f, 1.0f));
++}
++
++void zsp_set_peak(float p) { blk_peak = p; }
++
++void zsp_note_retrig(void)                 /* LFO TRIG: on each note */
++{
++    int i;
++    if (!M->lfo_trig) return;
++    for (i = 0; i < 4; i++) { lfo_ph[i] = 0.0f; lfo_sh[i] = 0.0f; }
++    for (i = 0; i < 2; i++) { env_ph[i] = 0.0f; env_stage[i] = 0; }
++}
++
++/* ---- persistence (OBJ_ZSEQ) ------------------------------------------------------- */
++#define ZSP_OBJ OBJ_ZSEQ
++
++void zsp_flash_load(void)
++{
++    zsp_mod_init();
++    if (plat_store_load(ZSP_OBJ, &zf, (int)sizeof zf) == (int)sizeof zf && zf.magic == ZSP_MAGIC)
++        M = &zf.cur;
++    else {
++        zf.magic = ZSP_MAGIC;
++        zf.ludique = 1;
++        M = &zf.cur;
++    }
++    memcpy(env_loop, M->env_loop, sizeof env_loop);
++}
++
++void zsp_flash_save(void)
++{
++    zf.magic = ZSP_MAGIC;
++    memcpy(zf.cur.mod_knob, M->mod_knob, sizeof zf.cur.mod_knob);  /* M == &zf.cur already */
++    plat_store_save(ZSP_OBJ, &zf, (int)sizeof zf);
++}
++
++void zsp_mod_save_part(int part)
++{
++    if (part < 0 || part > 2) return;
++    zf.by_part[part] = zf.cur;
++    zsp_flash_save();
++}
++
++int zsp_mod_load_part(int part)
++{
++    if (part < 0 || part > 2) return 0;
++    zf.cur = zf.by_part[part];
++    M = &zf.cur;
++    memcpy(env_loop, M->env_loop, sizeof env_loop);
++    return 1;
++}
++
++/* preset part tag: high bits of preset_t.used (1 = used) — accessors defined in app.c */
++extern int  app_preset_used_raw(int slot);
++extern void app_preset_set_used_raw(int slot, int raw);
++void zsp_preset_set_part(int slot, int part)
++{
++    int u = app_preset_used_raw(slot);
++    if (!u) return;
++    app_preset_set_used_raw(slot, 1 | ((part & 3) << 1));
++}
++int zsp_preset_part(int slot)
++{
++    int u = app_preset_used_raw(slot);
++    return u ? (u >> 1) & 3 : 0;
++}
+diff --git a/atek303/app/ztek_seqplus.h b/atek303/app/ztek_seqplus.h
+new file mode 100644
+index 0000000..e6a8e8b
+--- /dev/null
++++ b/atek303/app/ztek_seqplus.h
+@@ -0,0 +1,79 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_seqplus: the SEQ+ pack (FZuluTek PR #3) ported to the FM-1 firmware, on top of the
++ * ATEK303 app (patch 0005). Same feature set as the APK preview, minus what the hardware
++ * cannot do (no touch XY pad here):
++ *   - SEQ advanced sub-mode (double-tap SEQ): TM LOCK / TM LEN / MUT / PLAY (NORM REV
++ *     PING-PONG) / RAND; the Turing Machine rotates the pattern window at each loop wrap.
++ *   - mutation live already wired by the ATEK303 (ENV/LFO/ARP -> EV_MUTATE); the MUT knob
++ *     sets the burst size (zsp_mutate_ops).
++ *   - modulation 8/8, per CHUNK (32 samples) so the cost is negligible on the AC791N:
++ *     page LFO = 4 LFO (SIN TRI SQ SAW S&H DRUNK, SYNC/TRIG) + 4 labos (8 types);
++ *     page ENV = ENV1/ENV2 loopable + EF LOG SLEW CMP QUANT ATT; page ASSIGN = typed matrix
++ *     out->in (16 sources -> 35 destinations: voice, FX, seq), no feedback cycles.
++ *   - option LUDIQUE (OPTIONS): the educational pops (no-entry sign + suggestions).
++ *   - presets per part: the existing 32 presets get a part tag (BASSE/LEAD/DRUMS, in the
++ *     high bits of preset_t.used), and the modulation state is kept per part in flash
++ *     (OBJ_ZSEQ).
++ *
++ * The module is decoupled from app.c through the zsp_* accessors the patch defines there. */
++#pragma once
++#include <stdint.h>
++#include "dsp/atek_voice.h"
++#include "dsp/fx.h"
++#include "dsp/acid_pattern.h"
++
++/* ---- provided by app.c (patch 0005) ---------------------------------------------- */
++float *zsp_at_params(void);                 /* set.param */
++float *zsp_fx_params(void);                 /* set.fx */
++acid_pattern_t *zsp_pattern(void);          /* &set.pattern */
++acid_grid_t *zsp_grid(void);                /* &sq.grid */
++float zsp_seqk0(int k);                     /* set.seqk[k], the 6 base knobs */
++void zsp_at_set(int k, float v);
++void zsp_fx_set(int k, float v);
++int  zsp_seq_len(void);
++void zsp_set_tempo(int bpm);
++int  zsp_tempo(void);
++void zsp_set_root(int r);
++void zsp_set_scale(int s);
++void zsp_regrow(void);                      /* regenerate the pattern from the knobs */
++int  zsp_scale(void);
++
++/* ---- sequencer advanced ---------------------------------------------------------- */
++enum { ZSP_TMLOCK, ZSP_TMLEN, ZSP_MUT, ZSP_PLAY, ZSP_RAND, ZSP_NSEQK };
++void  zsp_set_seqk(int k, float v);         /* k = 0..ZSP_NSEQK-1 */
++float zsp_seqk(int k);
++/* next step under the PLAY mode; *wrapped set when the loop wraps (TM/RAND then fire) */
++int   zsp_advance(int len, int cur, int *wrapped);
++void  zsp_wrap(void);                       /* RAND re-roll + Turing Machine at the wrap */
++int   zsp_mutate_ops(void);                 /* burst size from MUT (for EV_MUTATE) */
++
++/* ---- modulation 8/8 + ASSIGN (pages 8 LFO, 9 ENV, 10 ASSIGN) ----------------------- */
++#define ZSP_NSRC 16
++#define ZSP_NDST (AT_NPARAMS + FX_NPARAMS + 9)      /* 0..7 voice, 8.. FX, 26..34 seq */
++#define ZSP_SEQ_DST0 (AT_NPARAMS + FX_NPARAMS)
++void  zsp_mod_init(void);
++void  zsp_mod_chunk(uint32_t n, float dt);       /* called per CHUNK in app_render_voice */
++void  zsp_mod_knob(int src, int k, float v);     /* src 0..15, k 0..3 */
++float zsp_mod_knob_get(int src, int k);
++void  zsp_lfo_opt(int which, int on);            /* 0 SYNC, 1 TRIG */
++void  zsp_env_loop(int e, int on);
++float zsp_src_val(int src);
++void  zsp_assign(int dst, int src, float depth); /* src 255 = off */
++int   zsp_assign_src(int dst);
++float zsp_assign_depth(int dst);
++void  zsp_page_turn(int page, int enc, int32_t det);  /* encoder detents on pages 8..10 (LFO/ENV/ASSIGN) */
++void  zsp_seqk_turn(int k, int32_t det);              /* SEQ advanced page detents (SEL = RAND) */
++void  zsp_set_peak(float p);                          /* synth bus peak of the last chunk (EF) */
++void  zsp_note_retrig(void);                          /* LFO TRIG on each note */
++
++/* ---- LUDIQUE option + persistence (OBJ_ZSEQ) -------------------------------------- */
++int  zsp_ludique(void);
++void zsp_set_ludique(int on);
++void zsp_flash_load(void);
++void zsp_flash_save(void);
++void zsp_mod_save_part(int part);            /* keep the mod state of a part (0..2) */
++int  zsp_mod_load_part(int part);
++void zsp_preset_set_part(int slot, int part);   /* tag a preset BASSE/LEAD/DRUMS */
++int  zsp_preset_part(int slot);
