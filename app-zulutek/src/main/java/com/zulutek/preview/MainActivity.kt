@@ -62,6 +62,9 @@ class MainActivity : Activity(), SurfaceListener {
                 st.smpLen = ZtekAudio.smpLen()
                 ZtekAudio.smpPeaks(st.smpPeaks)
             }
+            if (st.page == 1) {   // page LOOP : rafraîchit PITCH/POS/MODE/MUT/SRC/VOL
+                for (k in 0 until 6) st.loopParam[k] = ZtekAudio.loopGetSp(st.selSlot, k)
+            }
             val peers = ZuluLink.peersSnapshot()
             st.linkPeers = peers.count { !it.lost }
             st.linkName = peers.firstOrNull { !it.lost }?.name?.take(6)?.let { ":$it" } ?: ""
@@ -120,22 +123,55 @@ class MainActivity : Activity(), SurfaceListener {
             val bx = ev.x / s / LcdView.W
             val by = ev.y / s / LcdView.H
             when (ev.action) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> if (powHeld) {
-                    st.bendOn = true
+                MotionEvent.ACTION_DOWN -> {
+                    if (st.page == 4) {          // page XY : le LCD tactile devient le pad
+                        val now = System.currentTimeMillis()
+                        if (now - lastLcdTap < 350) {   // double-tap = HOLD/MOM
+                            st.xyHold = !st.xyHold
+                            ZtekAudio.xyHold(if (st.xyHold) 1 else 0)
+                            lastLcdTap = 0
+                        } else lastLcdTap = now
+                        st.xyOn = true
+                        st.xyX = bx.coerceIn(0f, 1f)
+                        st.xyY = by.coerceIn(0f, 1f)
+                        ZtekAudio.xySet(1, st.xyX, st.xyY)
+                        lcd.invalidate()
+                    } else if (powHeld) {
+                        st.bendOn = true
+                        st.bendX = bx.coerceIn(0f, 1f)
+                        st.bendY = by.coerceIn(0f, 1f)
+                        ZtekAudio.bend(1, st.bendX, st.bendY, st.bendMode)
+                        lcd.invalidate()
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> if (st.page == 4) {
+                    st.xyX = bx.coerceIn(0f, 1f)
+                    st.xyY = by.coerceIn(0f, 1f)
+                    ZtekAudio.xySet(1, st.xyX, st.xyY)
+                    lcd.invalidate()
+                } else if (powHeld) {
                     st.bendX = bx.coerceIn(0f, 1f)
                     st.bendY = by.coerceIn(0f, 1f)
                     ZtekAudio.bend(1, st.bendX, st.bendY, st.bendMode)
                     lcd.invalidate()
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (st.bendOn) {
-                    st.bendOn = false
-                    ZtekAudio.bend(0, 0f, 0f, 0)
-                    lcd.invalidate()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (st.page == 4 && st.xyOn) {
+                        st.xyOn = false
+                        ZtekAudio.xySet(0, st.xyX, st.xyY)
+                        lcd.invalidate()
+                    } else if (st.bendOn) {
+                        st.bendOn = false
+                        ZtekAudio.bend(0, 0f, 0f, 0)
+                        lcd.invalidate()
+                    }
                 }
             }
             true
         }
     }
+
+    private var lastLcdTap = 0L
 
     private var powHeld = false
 
@@ -195,12 +231,52 @@ class MainActivity : Activity(), SurfaceListener {
                 lcd.invalidate()
             }
             "POW" -> st.bendMode = (st.bendMode + 1) % 2   // GLITCH / LOW BAT
+            "DRV" -> { st.page = if (st.page == 2) 0 else 2; lcd.invalidate() }   // page SNAP
+            "MUT" -> { st.page = if (st.page == 3) 0 else 3; lcd.invalidate() }   // page KIT
+            "GEN" -> {                                                    // page XY
+                st.page = if (st.page == 4) 0 else 4
+                ZtekAudio.xyHold(if (st.xyHold) 1 else 0)
+                ZtekAudio.xySet(0, 0f, 0f)
+                lcd.invalidate()
+            }
+            "REC" -> if (st.page == 1) { st.page = 0; lcd.invalidate() } else ZtekAudio.redo()
+            "TAP" -> {                                                    // sirène on/off
+                st.sirenOn = !st.sirenOn
+                ZtekAudio.siren(if (st.sirenOn) 1 else 0, 0.3f, 0.5f, 0.0f)
+                lcd.invalidate()
+            }
         }
     }
 
     // ---- encoders ----
     override fun onEncoder(i: Int, v: Float) {
         st.pop(i)
+        if (st.page == 4) {                     // page XY : SEL=Xtarget PRE=Ytarget ALG=swap K1=X K2=Y
+            when (i) {
+                0 -> { xyT[0] = (v * 25.999f).toInt().coerceIn(0, 25); ZtekAudio.xyTarget(0, xyT[0]); st.xyTargetNames[0] = st.targetName(xyT[0]) }
+                1 -> { xyT[1] = (v * 25.999f).toInt().coerceIn(0, 25); ZtekAudio.xyTarget(1, xyT[1]); st.xyTargetNames[1] = st.targetName(xyT[1]) }
+                2 -> { val t = xyT[0]; xyT[0] = xyT[1]; xyT[1] = t
+                       ZtekAudio.xyTarget(0, xyT[0]); ZtekAudio.xyTarget(1, xyT[1])
+                       st.xyTargetNames[0] = st.targetName(xyT[0]); st.xyTargetNames[1] = st.targetName(xyT[1]) }
+                3 -> { st.xyX = v; if (st.xyOn) ZtekAudio.xySet(1, st.xyX, st.xyY) }
+                4 -> { st.xyY = v; if (st.xyOn) ZtekAudio.xySet(1, st.xyX, st.xyY) }
+            }
+            lcd.invalidate()
+            return
+        }
+        if (st.page == 1) {                     // page LOOP : SEL=slot K1..K4=PITCH/POS/MODE/MUT PRE=VOL ALG=SRC
+            when (i) {
+                0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
+                3 -> ZtekAudio.loopSetSp(st.selSlot, 0, v)   // PITCH (v*24-12 côté affichage)
+                4 -> ZtekAudio.loopSetSp(st.selSlot, 1, v)   // POS
+                5 -> ZtekAudio.loopSetSp(st.selSlot, 2, (v * 2.999f).toInt().toFloat())  // MODE
+                6 -> ZtekAudio.loopSetSp(st.selSlot, 3, v)   // MUT
+                1 -> ZtekAudio.loopSetSp(st.selSlot, 6, v)   // VOL
+                2 -> ZtekAudio.loopSetSp(st.selSlot, 4, (v * 6.999f).toInt().toFloat())  // SRC
+            }
+            lcd.invalidate()
+            return
+        }
         if (st.smpPage) {
             // page SMP : SEL = mode de stretch, K1..K4 = START/END/VOL/PITCH
             when (i) {
@@ -233,7 +309,74 @@ class MainActivity : Activity(), SurfaceListener {
     }
 
     // ---- 14 buttons ----
+    private var lastRecTap = 0L
+    private var lastDrvTap = 0L
+    private var lastSlotTap = -1
+    private var lastSlotTapTime = 0L
+    private var stLoopLen = 0
+    private val xyT = intArrayOf(1, 2)   // cibles X/Y de la page XY
+
     override fun onButton(i: Int, down: Boolean) {
+        val label = SurfaceView.BTN_LABELS[i]
+        if (!down) {
+            // seul POW a un comportement au relâché (punch off + bend off)
+            if (label == "POW" && st.page == 0 && !st.smpPage) {
+                powHeld = false
+                ZtekAudio.punch(0, 0, 0f, 0f, 0f)
+                ZtekAudio.punchTail(0.3f)
+                if (st.bendOn) { st.bendOn = false; ZtekAudio.bend(0, 0f, 0f, 0); lcd.invalidate() }
+            }
+            return
+        }
+        // pages SNAP / KIT / LOOP / XY : les boutons gardent des rôles de page
+        when (st.page) {
+            2, 3 -> { // SNAP / KIT : REC = undo, ERS = efface le slot sélectionné
+                if (label == "REC") { ZtekAudio.undo(); return }
+                if (label == "ERS") {
+                    if (st.page == 2) st.snapFilled[st.selSlot] = false else st.kitFilled[st.selSlot] = false
+                    lcd.invalidate(); return
+                }
+                if (label == "PLAY" && st.page == 2) { ZtekAudio.snapStore(st.selSlot); st.snapFilled[st.selSlot] = true; lcd.invalidate(); return }
+                return
+            }
+            1 -> { // LOOP
+                when (label) {
+                    "REC" -> {
+                        val s = st.selSlot
+                        if (ZtekAudio.loopSlotRec(s)) { ZtekAudio.loopRecStop(s); st.recArmed = false }
+                        else { ZtekAudio.loopRecStart(s, 1); st.recArmed = true }
+                    }
+                    "ERS" -> ZtekAudio.loopErase(st.selSlot)
+                    "DLY" -> { // cycle la longueur prédéfinie : auto, 1, 2, 4, 8 mesures
+                        val lens = intArrayOf(0, 64, 128, 256, 512)
+                        val next = (lens.indexOf(stLoopLen).let { if (it < 0) 0 else it } + 1) % lens.size
+                        stLoopLen = lens[next]
+                        ZtekAudio.loopSetLen(st.selSlot, stLoopLen)
+                    }
+                    "REV" -> { // cycle le mode de lecture : normal/reverse/ping-pong
+                        val m = (ZtekAudio.loopGetSp(st.selSlot, ZtekAudio.ML_SP_MODE).toInt() + 1) % 3
+                        ZtekAudio.loopSetSp(st.selSlot, ZtekAudio.ML_SP_MODE, m.toFloat())
+                    }
+                }
+                syncSlots(); lcd.invalidate(); return
+            }
+            4 -> { // XY : PLAY = hold/mom
+                if (label == "PLAY") {
+                    st.xyHold = !st.xyHold
+                    ZtekAudio.xyHold(if (st.xyHold) 1 else 0)
+                    lcd.invalidate()
+                }
+                return
+            }
+        }
+        // double-taps en page MAIN : REC = undo, DRV = page SNAP
+        if (st.page == 0) {
+            val now = System.currentTimeMillis()
+            if (label == "REC" && now - lastRecTap < 350) { ZtekAudio.undo(); lastRecTap = 0; return }
+            if (label == "DRV" && now - lastDrvTap < 350) { st.page = 2; lastDrvTap = 0; lcd.invalidate(); return }
+            if (label == "REC") lastRecTap = now
+            if (label == "DRV") lastDrvTap = now
+        }
         if (st.smpPage) {
             when (SurfaceView.BTN_LABELS[i]) {
                 "REC" -> if (down) {
@@ -301,10 +444,28 @@ class MainActivity : Activity(), SurfaceListener {
         surface.invalidate()
     }
 
-    // ---- white keys = looper slots (page SMP : PLAY) ----
+    // ---- white keys = looper slots (SNAP/KIT : load/store ; SMP : PLAY) ----
     override fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean) {
         if (st.smpPage && down && !longPress) { ZtekAudio.smpPlay(1); return }
         st.selSlot = slot
+        if (st.page == 2 || st.page == 3) {
+            val now = System.currentTimeMillis()
+            if (longPress) {
+                if (st.page == 2) { ZtekAudio.snapStore(slot); st.snapFilled[slot] = true }
+                else { ZtekAudio.kitStore(slot); st.kitFilled[slot] = true }
+            } else if (down) {
+                if (st.page == 3 && slot == lastSlotTap && now - lastSlotTapTime < 350) {
+                    // double-tap = copie vers le slot miroir (xor 8), comme les snaps ZU/LU
+                    ZtekAudio.kitStore(slot xor 8); st.kitFilled[slot xor 8] = st.kitFilled[slot]
+                    lastSlotTap = -1
+                } else {
+                    if (st.page == 2) ZtekAudio.snapLoad(slot) else ZtekAudio.kitLoad(slot)
+                    lastSlotTap = slot; lastSlotTapTime = now
+                }
+            }
+            lcd.invalidate()
+            return
+        }
         if (longPress) {
             if (ZtekAudio.loopSlotRec(slot)) { ZtekAudio.loopRecStop(slot); st.recArmed = false }
             else { ZtekAudio.loopRecStart(slot, 1); st.recArmed = true }

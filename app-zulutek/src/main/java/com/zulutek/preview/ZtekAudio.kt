@@ -113,6 +113,7 @@ object ZtekAudio {
     fun loopSetSp(slot: Int, idx: Int, v: Float) { if (handle != 0L) nativeLoopSetSp(handle, slot, idx, v) }
     fun loopSlotOn(slot: Int): Boolean = handle != 0L && nativeLoopSlotOn(handle, slot)
     fun loopSlotRec(slot: Int): Boolean = handle != 0L && nativeLoopSlotRec(handle, slot)
+    fun loopGetSp(slot: Int, idx: Int): Float = if (handle != 0L) nativeLoopGetSp(handle, slot, idx) else 0f
 
     fun acidGenerate(seed: Int) { if (handle != 0L) nativeAcidGenerate(handle, seed) }
     fun acidPlay(on: Int) { if (handle != 0L) nativeAcidPlay(handle, on) }
@@ -129,6 +130,22 @@ object ZtekAudio {
     fun bend(on: Int, x: Float, y: Float, mode: Int) {
         if (handle != 0L) nativeBend(handle, on, x, y, mode)
     }
+
+    /* SNAP (16) / KIT (16) / undo-redo */
+    fun snapStore(slot: Int) { if (handle != 0L) nativeSnapStore(handle, slot) }
+    fun snapLoad(slot: Int) { if (handle != 0L) nativeSnapLoad(handle, slot) }
+    fun undo() { if (handle != 0L) nativeUndo(handle) }
+    fun redo() { if (handle != 0L) nativeRedo(handle) }
+    fun kitStore(slot: Int) { if (handle != 0L) nativeKitStore(handle, slot) }
+    fun kitLoad(slot: Int) { if (handle != 0L) nativeKitLoad(handle, slot) }
+
+    /* page XY */
+    fun xySet(on: Int, x: Float, y: Float) { if (handle != 0L) nativeXySet(handle, on, x, y) }
+    fun xyTarget(axis: Int, t: Int) { if (handle != 0L) nativeXyTarget(handle, axis, t) }
+    fun xyHold(h: Int) { if (handle != 0L) nativeXyHold(handle, h) }
+
+    /* sirène */
+    fun siren(on: Int, lvl: Float, t: Float, fb: Float) { if (handle != 0L) nativeSiren(handle, on, lvl, t, fb) }
 
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
@@ -163,4 +180,15 @@ object ZtekAudio {
     private external fun nativeSmpLen(handle: Long): Int
     private external fun nativeSmpPeaks(handle: Long, out: FloatArray)
     private external fun nativeBend(handle: Long, on: Int, x: Float, y: Float, mode: Int)
+    private external fun nativeSnapStore(handle: Long, slot: Int)
+    private external fun nativeSnapLoad(handle: Long, slot: Int)
+    private external fun nativeUndo(handle: Long)
+    private external fun nativeRedo(handle: Long)
+    private external fun nativeKitStore(handle: Long, slot: Int)
+    private external fun nativeKitLoad(handle: Long, slot: Int)
+    private external fun nativeXySet(handle: Long, on: Int, x: Float, y: Float)
+    private external fun nativeXyTarget(handle: Long, axis: Int, target: Int)
+    private external fun nativeXyHold(handle: Long, hold: Int)
+    private external fun nativeSiren(handle: Long, on: Int, lvl: Float, t: Float, fb: Float)
+    private external fun nativeLoopGetSp(handle: Long, slot: Int, idx: Int): Float
 }

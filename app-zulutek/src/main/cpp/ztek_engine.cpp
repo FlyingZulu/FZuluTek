@@ -67,6 +67,37 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     float bend_trem_ph;             /* trémolo phase */
     uint32_t bend_rng;
 
+    /* copie des derniers fx_set (fx.c garde les siens en static) — pour SNAP/KIT */
+    float fxparam[FX_NPARAMS];
+
+    /* page XY (la modulation LFO/ENV/ASSIGN vit côté branche seq-plus, PR #3) */
+    int xy_on, xy_hold;
+    int xy_target[2];               /* 0..7 voix/AT_ENGINE, 8..25 FX */
+    float xy_saved[26];             /* valeurs à l'entrée de la page (MOM) */
+
+    /* sirène */
+    int siren_on;
+    float siren_lvl, siren_t, siren_fb;
+    float siren_ph, siren_f, siren_out, siren_sw;
+
+    /* PoW! (dernier état, pour les snapshots) */
+    int punch_on, punch_type;
+    float punch_a, punch_b, punch_mix;
+
+    /* SNAP (16) / KIT (16) / undo-redo (3 niveaux) */
+    struct ztek_state_t {
+        int engine;
+        float param[AT_NPARAMS];
+        float fx[FX_NPARAMS];
+        int punch_on, punch_type;
+        float pa, pb, pmix;
+        int xy_on, xy_hold;
+        int xy_target[2];
+        float bpm;
+        uint16_t slotmask;
+    } snap[16], kit[16], undo_st[3], redo_st[3];
+    int undo_n, redo_n;
+
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) override
     {
         if (stream == out.get()) {
@@ -210,6 +241,14 @@ ztek_t *ztek_create(float sr)
     z->smp_pos = 0.0; z->smp_delay = 0;
     z->bend_on = 0; z->bend_mode = 0; z->bend_x = 0.0f; z->bend_y = 0.0f;
     z->bend_hold = 0.0f; z->bend_trem_ph = 0.0f; z->bend_rng = 0xBEAD01u & 0x7fffffffu;
+    z->xy_on = 0; z->xy_hold = 0; z->xy_target[0] = 1; z->xy_target[1] = 2;   /* X->CUTOFF Y->RESO */
+    z->siren_on = 0; z->siren_lvl = 0.3f; z->siren_t = 0.5f; z->siren_fb = 0.0f;
+    z->siren_ph = 0.0f; z->siren_f = 600.0f; z->siren_out = 0.0f; z->siren_sw = 0.0f;
+    z->punch_on = 0; z->punch_type = 0; z->punch_a = z->punch_b = z->punch_mix = 0.0f;
+    z->undo_n = 0; z->redo_n = 0;
+    memset(z->fxparam, 0, sizeof z->fxparam);
+    memset(z->snap, 0, sizeof z->snap);
+    memset(z->kit, 0, sizeof z->kit);
     return z;
 }
 
@@ -288,11 +327,16 @@ void ztek_set_scale(ztek_t *z, int scale)
     z->ap.scale = scale;
 }
 
-void ztek_fx_set(ztek_t *z, int param, float v) { (void)z; fx_set(param, v); }
+void ztek_fx_set(ztek_t *z, int param, float v)
+{
+    if (param >= 0 && param < FX_NPARAMS) z->fxparam[param] = v;
+    fx_set(param, v);
+}
 
 void ztek_punch(ztek_t *z, int on, int type, float a, float b, float mix)
 {
-    (void)z;
+    z->punch_on = on; z->punch_type = type;
+    z->punch_a = a; z->punch_b = b; z->punch_mix = mix;
     fx_punch(on, type, a, b, mix);
 }
 
@@ -312,6 +356,11 @@ int ztek_loop_slot_on(const ztek_t *z, int slot)
 int ztek_loop_slot_rec(const ztek_t *z, int slot)
 {
     return slot >= 0 && slot < ML_NSLOTS ? z->loop.slot[slot].rec : 0;
+}
+
+float ztek_loop_get_sp(const ztek_t *z, int slot, int idx)
+{
+    return ml_get_sp((ml_t *)&z->loop, slot, idx);
 }
 
 void ztek_acid_generate(ztek_t *z, uint32_t seed)
@@ -403,6 +452,149 @@ void ztek_bend(ztek_t *z, int on, float x, float y, int mode)
     z->bend_mode = mode;
 }
 
+/* ---- SNAP / KIT / undo-redo -------------------------------------------------------- */
+
+static void ztek_capture(ztek_t *z, ztek_t::ztek_state_t *s)
+{
+    int i;
+    s->engine = z->engine;
+    memcpy(s->param, z->param, sizeof s->param);
+    memcpy(s->fx, z->fxparam, sizeof s->fx);
+    s->punch_on = z->punch_on; s->punch_type = z->punch_type;
+    s->pa = z->punch_a; s->pb = z->punch_b; s->pmix = z->punch_mix;
+    s->xy_on = z->xy_on; s->xy_hold = z->xy_hold;
+    s->xy_target[0] = z->xy_target[0]; s->xy_target[1] = z->xy_target[1];
+    s->bpm = z->bpm;
+    s->slotmask = 0;
+    for (i = 0; i < ML_NSLOTS; i++) if (z->loop.slot[i].on) s->slotmask |= (uint16_t)(1u << i);
+}
+
+static void ztek_apply(ztek_t *z, const ztek_t::ztek_state_t *s)
+{
+    int i;
+    ztek_set_engine(z, s->engine);
+    for (i = 0; i < AT_NPARAMS; i++) ztek_set_param(z, i, s->param[i]);
+    for (i = 0; i < FX_NPARAMS; i++) ztek_fx_set(z, i, s->fx[i]);
+    ztek_punch(z, s->punch_on, s->punch_type, s->pa, s->pb, s->pmix);
+    z->xy_hold = s->xy_hold;
+    z->xy_target[0] = s->xy_target[0]; z->xy_target[1] = s->xy_target[1];
+    ztek_set_bpm(z, s->bpm);
+    for (i = 0; i < ML_NSLOTS; i++) {
+        int want = (s->slotmask >> i) & 1u;
+        if (want != z->loop.slot[i].on) ml_toggle(&z->loop, i);
+    }
+}
+
+static void ztek_push_undo(ztek_t *z)
+{
+    if (z->undo_n >= 3) {
+        memmove(z->undo_st, z->undo_st + 1, 2 * sizeof(ztek_t::ztek_state_t));
+        z->undo_n = 2;
+    }
+    ztek_capture(z, &z->undo_st[z->undo_n++]);
+    z->redo_n = 0;
+}
+
+void ztek_snap_store(ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= 16) return;
+    ztek_push_undo(z);
+    ztek_capture(z, &z->snap[slot]);
+}
+
+void ztek_snap_load(ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= 16) return;
+    if (z->snap[slot].bpm <= 0.0f) return;      /* slot vide */
+    ztek_push_undo(z);
+    ztek_apply(z, &z->snap[slot]);
+}
+
+void ztek_undo(ztek_t *z)
+{
+    if (z->undo_n <= 0) return;
+    if (z->redo_n < 3) ztek_capture(z, &z->redo_st[z->redo_n++]);
+    ztek_apply(z, &z->undo_st[--z->undo_n]);
+}
+
+void ztek_redo(ztek_t *z)
+{
+    if (z->redo_n <= 0) return;
+    ztek_push_undo(z);
+    z->undo_n--;                                 /* push_undo a remis l'état courant : on l'échange */
+    ztek_apply(z, &z->redo_st[--z->redo_n]);
+}
+
+void ztek_kit_store(ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= 16) return;
+    ztek_capture(z, &z->kit[slot]);
+}
+
+void ztek_kit_load(ztek_t *z, int slot)
+{
+    if (slot < 0 || slot >= 16) return;
+    if (z->kit[slot].bpm <= 0.0f) return;
+    ztek_push_undo(z);
+    ztek_apply(z, &z->kit[slot]);
+}
+
+/* ---- page XY ------------------------------------------------------------------------ */
+
+static float ztek_target_value(ztek_t *z, int t)
+{
+    if (t <= 6) return z->param[t];
+    if (t == 7) return (float)z->engine / (float)(AT_NENGINES - 1);
+    if (t < 26) return z->fxparam[t - 8];
+    return 0.0f;
+}
+
+static void ztek_apply_target(ztek_t *z, int t, float v)
+{
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    if (t <= 6) ztek_set_param(z, t, v);
+    else if (t == 7) ztek_set_engine(z, at_engine_index(v));
+    else if (t < 26) ztek_fx_set(z, t - 8, v);
+}
+
+void ztek_xy_target(ztek_t *z, int axis, int target)
+{
+    if (axis < 0 || axis > 1) return;
+    if (target < 0) target = 0;
+    if (target > 25) target = 25;
+    z->xy_target[axis] = target;
+}
+
+void ztek_xy_hold(ztek_t *z, int holdMode) { z->xy_hold = holdMode ? 1 : 0; }
+
+void ztek_xy_set(ztek_t *z, int on, float x, float y)
+{
+    if (on && !z->xy_on) {
+        int t;
+        for (t = 0; t < 26; t++) z->xy_saved[t] = ztek_target_value(z, t);
+    }
+    if (!on && z->xy_on && !z->xy_hold) {
+        int t;
+        for (t = 0; t < 26; t++) ztek_apply_target(z, t, z->xy_saved[t]);
+    }
+    z->xy_on = on ? 1 : 0;
+    if (z->xy_on) {
+        ztek_apply_target(z, z->xy_target[0], x);
+        ztek_apply_target(z, z->xy_target[1], y);
+    }
+}
+
+/* ---- sirène ------------------------------------------------------------------------- */
+
+void ztek_siren(ztek_t *z, int on, float lvl, float t, float fb)
+{
+    z->siren_on = on ? 1 : 0;
+    z->siren_lvl = lvl < 0.0f ? 0.0f : lvl > 1.0f ? 1.0f : lvl;
+    z->siren_t = t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
+    z->siren_fb = fb;
+}
+
 void ztek_smp_peaks(const ztek_t *z, float *out, int nbuckets)
 {
     /* min/max par bucket pour la waveform du LCD */
@@ -478,6 +670,22 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
         /* 3. the synth bus: engine 0 is the ATEK303 voice, 1..4 the bass engines */
         if (z->engine == 0) at_render(&z->voice, z->mono, blk);
         else bass_render(&z->bass, z->mono, blk);
+
+        /* 3b. sirène : deux sinus désaccordés, balayage lent 300..1400 Hz (période = siren_t) */
+        if (z->siren_on) {
+            float fsr = 1.0f / z->sr;
+            float period = 0.5f + 7.5f * z->siren_t;          /* s */
+            z->siren_sw += (float)blk / (z->sr * period);
+            if (z->siren_sw >= 1.0f) z->siren_sw -= 1.0f;
+            z->siren_f = 300.0f + 1100.0f * (0.5f + 0.5f * fm_sin_turns(z->siren_sw));
+            for (uint32_t i = 0; i < blk; i++) {
+                z->siren_ph += z->siren_f * fsr;
+                if (z->siren_ph >= 1.0f) z->siren_ph -= 1.0f;
+                float s = fm_sin_turns(z->siren_ph) + 0.5f * fm_sin_turns(z->siren_ph * 2.003f + z->siren_fb);
+                z->siren_out = s * 0.5f * z->siren_lvl;
+                z->mono[i] += z->siren_out;
+            }
+        }
 
         /* 4. FX chain (mono in, stereo out) + the resample ring */
         fx_process(z->mono, outL + done, outR + done, blk);

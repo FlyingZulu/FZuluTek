@@ -66,6 +66,25 @@ class LcdState {
     // ZuluLink : pairs vus sur le réseau local
     var linkPeers = 0
     var linkName = ""
+
+    // pages : 0 MAIN, 1 LOOP (édition slot), 2 SNAP, 3 KIT, 4 XY
+    var page = 0
+    val snapFilled = BooleanArray(16)
+    val kitFilled = BooleanArray(16)
+    val loopParam = FloatArray(6)       // PITCH POS MODE MUT SRC VOL du slot édité
+    var sirenOn = false
+    var xyOn = false
+    var xyX = 0.5f
+    var xyY = 0.5f
+    var xyHold = false
+    var xyTargetNames = arrayOf("CUT", "RES")
+
+    val targetNames = arrayOf(
+        "TUN", "CUT", "RES", "ENV", "DEC", "ACC", "WAV", "ENG",
+        "DRVT", "DRV", "TONE", "LVL", "MODT", "RATE", "DEPT", "MIX",
+        "DLYT", "FB", "DLT", "DLM", "RVD", "RVP", "RVM", "CRSH", "HOLD")
+
+    fun targetName(t: Int) = targetNames.getOrElse(t) { "?" }
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -222,6 +241,71 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             text(c, 90f, 190f, "PITCH ${((st.encVals[6] - 0.5f) * 48).toInt()}st", INK, 10f)
             text(c, 8f, 210f, "REC: PRESET  PLAY: touche blanche / PLAY", DIM, 8f)
             text(c, 8f, 226f, "long-SEQ = fermer la page", DIM, 8f)
+            c.restore()
+            return
+        }
+
+        // ---- page LOOP : édition du slot sélectionné (K1 PITCH K2 POS K3 MODE K4 MUT, PRE VOL, ALG SRC) ----
+        if (st.page == 1) {
+            text(c, 6f, 15f, "LOOP ${st.selSlot + 1}", FLUO_TURQ, 12f)
+            if (st.slotRec[st.selSlot] && blink) { mono.color = REC_RED; c.drawCircle(226f, 11f, 5f, mono) }
+            val labels = arrayOf("PITCH", "POS", "MODE", "MUT", "SRC", "VOL")
+            for (i in 0 until 6) {
+                val y0 = 30f + i * 26f
+                text(c, 6f, y0 + 10f, labels[i], DIM, 9f)
+                box(c, 60f, y0, 234f, y0 + 16f, popColor(i, DIM))
+                val v = st.loopParam[i]
+                frame.color = FLUO_TURQ
+                c.drawLine(62f, y0 + 8f, 62f + 168f * v, y0 + 8f, frame)
+                text(c, 200f, y0 + 12f, if (i == 0) "${(v * 24 - 12).toInt()}st" else "${(v * 100).toInt()}", INK, 9f)
+            }
+            text(c, 6f, 232f, "REC=arm/stop ERS=erase DLY=len REV=mode long-REC=quitte", DIM, 8f)
+            c.restore()
+            return
+        }
+
+        // ---- pages SNAP / KIT : 16 slots en 2x8 (8 ZU / 8 LU pour SNAP) ----
+        if (st.page == 2 || st.page == 3) {
+            val isSnap = st.page == 2
+            text(c, 6f, 15f, if (isSnap) "SNAP" else "KIT", if (isSnap) FLUO_PINK else AMBER, 12f)
+            text(c, 80f, 15f, if (isSnap) "ZU|LU" else "kit global", DIM, 9f)
+            if (st.sirenOn) text(c, 200f, 15f, "SIREN", REC_RED, 9f)
+            val filled = if (isSnap) st.snapFilled else st.kitFilled
+            for (i in 0 until 16) {
+                val col = i % 8
+                val row = i / 8
+                val x0 = 6f + col * 29f
+                val y0 = 30f + row * 80f
+                val f = filled[i]
+                val sel = i == st.selSlot
+                box(c, x0, y0, x0 + 26f, y0 + 70f,
+                    if (f) (if (isSnap) FLUO_YEL else AMBER) else if (sel) FLUO_TURQ else DIM)
+                text(c, x0 + 8f, y0 + 40f, "${i + 1}", if (f || sel) INK else DIM, 10f)
+                if (isSnap) text(c, x0 + 6f, y0 + 12f, if (i < 8) "ZU" else "LU", DIM, 8f)
+            }
+            text(c, 6f, 200f, if (isSnap) "tap=charger  long=stocker  REC=undo  dbl-REC=redo"
+                              else "tap=charger  long=stocker  dbl-tap=miroir(xor8)",
+                DIM, 8f)
+            text(c, 6f, 214f, "long-DRV/MUT = quitter", DIM, 8f)
+            c.restore()
+            return
+        }
+
+        // ---- page XY (18) : pad sur le LCD (tactile côté APK), cibles X/Y ----
+        if (st.page == 4) {
+            text(c, 6f, 15f, "XY", FLUO_TURQ, 12f)
+            text(c, 40f, 15f, "X>${st.xyTargetNames[0]}  Y>${st.xyTargetNames[1]}", INK, 10f)
+            text(c, 200f, 15f, if (st.xyHold) "HOLD" else "MOM", if (st.xyHold) FLUO_YEL else DIM, 9f)
+            box(c, 6f, 24f, 234f, 200f, DIM)
+            for (i in 1 until 8) { frame.color = Color.argb(255, 40, 40, 40)
+                c.drawLine(6f + 228f * i / 8f, 24f, 6f + 228f * i / 8f, 200f, frame) }
+            for (i in 1 until 6) { c.drawLine(6f, 24f + 176f * i / 6f, 234f, 24f + 176f * i / 6f, frame) }
+            if (st.xyOn) {
+                mono.color = FLUO_YEL; mono.style = Paint.Style.FILL
+                c.drawCircle(6f + st.xyX * 228f, 24f + st.xyY * 176f, 7f, mono)
+            }
+            text(c, 6f, 216f, "SEL=Xtarget PRE=Ytarget ALG=swap  dbl-tap=hold/mom", DIM, 8f)
+            text(c, 6f, 230f, "long-GEN = quitter", DIM, 8f)
             c.restore()
             return
         }

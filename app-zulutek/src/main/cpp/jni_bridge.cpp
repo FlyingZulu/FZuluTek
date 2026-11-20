@@ -137,6 +137,11 @@ ZTEK_JNI jboolean JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopSlotRec(J
     return ztek_loop_slot_rec(zte(NULL, h), slot) ? JNI_TRUE : JNI_FALSE;
 }
 
+ZTEK_JNI jfloat JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopGetSp(JNIEnv *, jclass, jlong h, jint slot, jint idx)
+{
+    return ztek_loop_get_sp(zte(NULL, h), slot, idx);
+}
+
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeAcidGenerate(JNIEnv *, jclass, jlong h, jint seed)
 {
     ztek_acid_generate(zte(NULL, h), (uint32_t)seed);
@@ -187,4 +192,56 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeBend(JNIEnv *, jc
     jint on, jfloat x, jfloat y, jint mode)
 {
     ztek_bend(zte(NULL, h), on, x, y, mode);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSnapStore(JNIEnv *, jclass, jlong h, jint slot)
+{
+    ztek_snap_store(zte(NULL, h), slot);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSnapLoad(JNIEnv *, jclass, jlong h, jint slot)
+{
+    ztek_snap_load(zte(NULL, h), slot);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeUndo(JNIEnv *, jclass, jlong h)
+{
+    ztek_undo(zte(NULL, h));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeRedo(JNIEnv *, jclass, jlong h)
+{
+    ztek_redo(zte(NULL, h));
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeKitStore(JNIEnv *, jclass, jlong h, jint slot)
+{
+    ztek_kit_store(zte(NULL, h), slot);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeKitLoad(JNIEnv *, jclass, jlong h, jint slot)
+{
+    ztek_kit_load(zte(NULL, h), slot);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeXySet(JNIEnv *, jclass, jlong h,
+    jint on, jfloat x, jfloat y)
+{
+    ztek_xy_set(zte(NULL, h), on, x, y);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeXyTarget(JNIEnv *, jclass, jlong h, jint axis, jint target)
+{
+    ztek_xy_target(zte(NULL, h), axis, target);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeXyHold(JNIEnv *, jclass, jlong h, jint hold)
+{
+    ztek_xy_hold(zte(NULL, h), hold);
+}
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSiren(JNIEnv *, jclass, jlong h,
+    jint on, jfloat lvl, jfloat t, jfloat fb)
+{
+    ztek_siren(zte(NULL, h), on, lvl, t, fb);
 }
