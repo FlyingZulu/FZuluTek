@@ -258,7 +258,7 @@ class DrumsActivity : Activity() {
         val gmutVal = TextView(this).apply { setTextColor(Color.rgb(255, 120, 220)); textSize = 12f; text = "MUT 0" }
         sliderRow("MUT", gmutVal, 255, 0) { p ->
             gmutVal.text = "MUT $p"
-            DrumsAudio.setGmut(p)
+            DrumsAudio.setGmut(p.toInt())
         }
         val glitchVal = TextView(this).apply { setTextColor(Color.rgb(255, 120, 220)); textSize = 12f; text = "GLITCH 0%" }
         sliderRow("GLITCH", glitchVal, 100, 0) { p ->
