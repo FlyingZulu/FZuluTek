@@ -91,3 +91,77 @@ dans leur `build.gradle`. Précédent : fix NEON de DaisySP (`vmaxnm/vminnm.f32`
 → scalaire) pour compiler en armv7 sans FPU NEON (PR #18 de FZuluFx). Sous 5.1,
 Oboe retombe sur **OpenSL ES** (AAudio n'existe qu'à partir d'API 26) : latence
 plus haute, acceptable pour du contrôle/preset, moins pour du synthé live.
+
+## VANQYO — la tablette console : surface de contrôle agrandie du FM-1
+
+Rôle (Bible Zulu) : **tablette Vanqio = CONSOLE** — elle pilote les modules : le yuga
+en ZuluLink (Wi-Fi) et le **FM-1 en USB**. Modèle exact inconnu ; port **micro-USB**
+→ génération 2019 probable (type MatrixPad Z4 : Android 9, 2 Go RAM / 32 Go, Wi-Fi
+2,4 GHz, USB 2.0 avec OTG). Checklist sur l'appareil : modèle (Paramètres → À propos),
+ABI (`adb shell getprop ro.product.cpu.abi` : `arm64-v8a` → APK actuelle OK,
+`armeabi-v7a` → build 32 bits, le même que pour le yuga), test OTG (adaptateur
+micro-USB → USB-A + clé USB), routage UAC.
+
+### Connexion au FM-1 : un seul câble (micro-USB OTG)
+
+- **USB-MIDI** : SysEx companion `0x60/61/62` (capacité / fichiers / params) +
+  commandes ZTF `F0 7D 'Z' 'T' …` (ping, param, page, notes, play, load) — contrôle,
+  push/pull de fichiers (ZSMP/ZLUP/ZMAC/ZTP1), miroir d'état.
+- **UAC audio** dans les deux sens si le routage le permet (`usb_audio_in` actif côté
+  FM-1 ; `usb_audio_out` + hook `app_usb_in`, patch 0010). Monitoring sinon en jack
+  sur le FM-1 ; fallback export WAV. USB 2.0 (480 Mb/s) suffit largement (MIDI + UAC1
+  ≈ 1,4 Mb/s) ; le FM-1 a sa propre batterie, la puissance 5 V limitée du port ne
+  bloque pas.
+- **Wi-Fi** : ZuluLink vers le yuga (UDP 53333/53334, même réseau, 2,4 GHz OK).
+
+### Ce que la tablette affiche en synchro
+
+La tablette n'est pas une simple télécommande : c'est une **surface tactile agrandie**
+du FM-1, synchronisée en live (watch `0x62` + notifications `PQ_CHANGED`, déjà en v2
+côté APK) :
+
+- un **miroir fidèle du LCD du FM-1** (240×240) dans une zone de l'écran tablette ;
+- les **modules en grand, tout tactile** : pad **XY**, **boîte à rythme** (page DRUM),
+  **synthés** (voix/moteurs), **baie de patch** (page PATCH — vue étendue v3 plein
+  écran), **table de mixage** (page MIX : tranches, LDR/SOLO/PAN) ;
+- presets **ZTP1** éditables sur tablette puis poussés vers le FM-1 ; push/pull
+  samples / loops / macros (page LINK 17).
+
+### Duplication côté FM-1
+
+Sur le LCD 240×240 du FM-1, réserver **une partie de l'écran** à un résumé de ce qui
+est affiché en grand sur la tablette (module courant + gros contrôle actif), pour
+garder la lisibilité des deux côtés. À prévoir dans un patch firmware (zone/bandeau
+dédié de l'écran).
+
+### Layout façon ZuluFX / ZuluX
+
+Même principe que l'UI ZuluFx/ZuluX : **partie gauche = toutes les infos du module
+affiché** (état, valeurs, raccourcis), **partie droite = petits contrôles à
+tirettes** (sliders verticaux, comme la baie d'effets). Un **layout par module**
+(l'UI s'adapte à ce qui est affiché) : XY = grand pad plein écran ; DRUMS = grille
+8 pads ; SYNTH = clavier 2 octaves + params ; PATCH = baie de câbles tactile ;
+MIX = tranches avec tirettes.
+
+### Blocs déjà en place (à brancher)
+
+- APK (`app-zulutek`, PR #13 mergée) : page LINK 17 — v1 push/pull fichiers, v2
+  miroir live `0x62` + télécommande (page/tempo/notes/transport), v3 vue étendue
+  (EDIT = baie plein écran) + presets ZTP1. Fichiers : `ZtfTransport.kt`,
+  `Fm1Usb.kt`, `Fm1UsbAudio.kt`, `SampleLibrary.kt`, `ZtfCodec.kt`.
+- Firmware : patch 0010 (PR #12) — companion `0x60/61/62`, commandes ZTF, hook
+  `app_usb_in`. ⚠️ patches 0001–0010 jamais buildés (toolchain JieLi) ni testés
+  (fm1-emu) → à faire **avant tout flash**.
+
+### Ordre de travail proposé
+
+1. Identifier la tablette (modèle, version Android, `ro.product.cpu.abi`) et tester
+   l'OTG.
+2. Si `armeabi-v7a` : build 32 bits de `app-zulutek` (`minSdk` 21/24, `abiFilters
+   'armeabi-v7a', 'arm64-v8a'`) — même build que pour le yuga (voir section ci-dessus).
+3. Sideload sur la Vanqio : `app-zulutek` + `app-linktest` (clé `zulu.p12` fixe).
+4. fm1-emu + build JieLi des patches 0001–0010 avant de flasher le FM-1.
+5. Brancher le miroir UI (v2) sur la page LINK, puis les vues agrandies par module
+   avec le layout gauche infos / droite tirettes.
+6. Côté FM-1 : zone de duplication sur le LCD (patch) une fois l'UI tablette
+   stabilisée.
