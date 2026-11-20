@@ -724,7 +724,7 @@ class MainActivity : Activity(), SurfaceListener {
                 }
                 lcd.invalidate()
             }
-            "REC" -> when (st.page) { 1, in 6..18 -> { st.page = 0; lcd.invalidate() } else -> ZtekAudio.redo() }
+            "REC" -> when (st.page) { 1, in 6..18 -> { st.page = 0; lcd.invalidate() } else -> { /* long-REC ne fait plus redo : undo/redo = HOME+REC / HOME+GLO uniquement */ } }
             "HOME" -> {   // long-HOME : page LINK (17) liaison ZTF avec le FM-1
                 st.page = if (st.page == 17) 0 else 17
                 if (st.page == 17) { setEncLabels(encLink); linkScan() }
@@ -1404,8 +1404,8 @@ class MainActivity : Activity(), SurfaceListener {
                 }
                 return
             }
-            2, 3 -> { // SNAP / KIT : REC = undo, ERS = efface le slot sélectionné
-                if (label == "REC") { ZtekAudio.undo(); return }
+            2, 3 -> { // SNAP / KIT : REC+touche = store (géré dans onWhiteKey) ; undo/redo = HOME+REC / HOME+GLO uniquement
+                if (label == "REC") return
                 if (label == "PLAY" && st.page == 2) { ZtekAudio.snapStore(st.selSlot); st.snapFilled[st.selSlot] = true; lcd.invalidate(); return }
                 return
             }
@@ -1487,10 +1487,9 @@ class MainActivity : Activity(), SurfaceListener {
                 lcd.invalidate(); return
             }
         }
-        // double-taps en page MAIN : REC = undo, DRV = page SNAP
+        // double-taps en page MAIN (dbl-REC ne fait plus undo : undo/redo = HOME+REC / HOME+GLO uniquement)
         if (st.page == 0) {
             val now = System.currentTimeMillis()
-            if (label == "REC" && now - lastRecTap < 350) { ZtekAudio.undo(); lastRecTap = 0; return }
             if (label == "PLAY" && now - lastPlayTap < 350) {   // REC+PLAY (dbl-tap PLAY) = capture SNAP + flash
                 ZtekAudio.snapStore(st.selSlot)
                 st.snapFilled[st.selSlot] = true

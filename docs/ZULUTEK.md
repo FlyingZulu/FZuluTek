@@ -27,8 +27,8 @@ notes/clavier ──► voix (AT_ENGINE: 0 ATEK303 · 1 PLUK · 2 FM · 3 SUB ·
 
 - **Séquenceur acid** (acid_pattern) : PLAY lance, SEQ génère un nouveau seed, page PATT
   (DENSITY/RANGE/ACCENTS/SLIDES) regénère depuis le seed, page SEQ (STEPS/SCALE/TEMPO/ROOT).
-- **Undo/redo** : REC double tap = undo (3 niveaux), REC appui long 1.2 s = redo, puis chaque
-  tap remonte d'un niveau (fenêtre 3 s).
+- **Undo/redo** : **HOME+REC** = undo, **HOME+GLO** = redo (à chaque tap ; 3 niveaux moteur).
+  Cette manip **remplace** l'ancienne (dbl-tap REC / long-REC supprimés — décision Flying Zulu 2026-11-20 ~23:30Z).
 - **PoW!** (REC+FX) : les 16 touches blanches = 16 slots punch-in momentanés (15 types :
   REPEAT, 1/16 REP, 1/8 DOWN/UP/SHRINK, BUILD, STRETCH, ECHO, REVERSE, STOP, SCRATCH, LPF,
   CRUSH, GATE — ZuluFx + rolls Amenity). REC+touche = page PUNCH (K1 type, K2/K3 réglages —
@@ -53,7 +53,7 @@ notes/clavier ──► voix (AT_ENGINE: 0 ATEK303 · 1 PLUK · 2 FM · 3 SUB ·
 | gros buffers | section `.pool` (SRAM) | tas (heap), `FX_HOST` |
 | surface | vraie (app.c en C) | clone tactile Kotlin/C++ autour du même DSP |
 | persistance | flash (OBJ_OPTIONS OPT6, presets 480×8) | en mémoire (preview) |
-| **navigation boutons** (divergence documentée, note équipe B ~22:20Z) | boutons physiques = enum fixe `B_*` (14, plat.h) : **GLO = OPTIONS**, **dbl-tap GLO = DRUM(11)**, **dbl-tap ENV/LFO/ARP = pages 8/9/10**, **REC+PLAY = LOOP(12)**, **REC+SEQ = MACRO(13)**, **REC+EDIT = FINE(14)**, **REC seul relâché = UNDO**, **HOME = cycle pages son 0..3 / back**, **DLY = cycle 0..14**, SAVE = presets/bend | tactile : **REC+*** = entrées de pages du mode d'emploi (REC+EDIT=LOOP, REC+SEL=SNAP, REC+SAVE=KIT, REC+ARP=XY, REC+SEQ=MACRO, REC+LFO=LFO, REC+ENV=ENV, REC+OCT±=ASSIGN/PRESETS), **HOME court = cycle parties**, **HOME+REC / HOME+GLO = undo/redo globaux**, long-HOME = LINK(17). Pas de labels string côté FM-1 → la classe de bug « bras `when(label)` morts » (PR #18 APK) **n'existe pas côté firmware** (audit 2026-11-20 ~23:00Z : dispatch 100 % par enum `B_*`, `PAGE_NAME[NPAGES=15]` complet, toutes les pages 0..14 atteignables) |
+| **navigation boutons** (divergence documentée, note équipe B ~22:20Z) | boutons physiques = enum fixe `B_*` (14, plat.h) : **GLO = OPTIONS**, **dbl-tap GLO = DRUM(11)**, **dbl-tap ENV/LFO/ARP = pages 8/9/10**, **REC+PLAY = LOOP(12)**, **REC+SEQ = MACRO(13)**, **REC+EDIT = FINE(14)**, **REC seul relâché = UNDO**, **HOME = cycle pages son 0..3 / back**, **DLY = cycle 0..14**, SAVE = presets/bend | tactile : **REC+*** = entrées de pages du mode d'emploi (REC+EDIT=LOOP, REC+SEL=SNAP, REC+SAVE=KIT, REC+ARP=XY, REC+SEQ=MACRO, REC+LFO=LFO, REC+ENV=ENV, REC+OCT±=ASSIGN/PRESETS), **HOME court = cycle parties**, **HOME+REC / HOME+GLO = undo/redo globaux (seule manip — dbl-REC/long-REC supprimés)**, long-HOME = LINK(17). Pas de labels string côté FM-1 → la classe de bug « bras `when(label)` morts » (PR #18 APK) **n'existe pas côté firmware** (audit 2026-11-20 ~23:00Z : dispatch 100 % par enum `B_*`, `PAGE_NAME[NPAGES=15]` complet, toutes les pages 0..14 atteignables) |
 | pages | NPAGES=15 (0..14) + OPTIONS ; pas de SNAP/KIT/XY/SMP (APK-only) | 0..18 + KIT/SNAP/XY/SMP/LINK(17)/FINE(18) |
 
 ## Développement
@@ -228,7 +228,7 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
   long-HOME = LINK (17), PRE = FINE (18). **REC+PLAY** = capture SNAP (flash 120 ms + icône caméra + lock clavier
   1,5 s + choix du pad + rétrécissement 0,8 s ; REC+PLAY+OCT± choisit le contenu), **REC+GLO** = procédure REC loop.
   En page SNAP/KIT : REC+touche = stocker, tap = charger, dbl-tap = copie miroir (xor 8) ; page SNAP : K1 = ZU/LU, K4 = FLY.
-- Undo/redo globaux : **HOME+REC** = undo, **HOME+GLO** = redo (à chaque tap) ; dbl-REC = undo, long-REC = redo (mode d'emploi).
+- Undo/redo globaux : **HOME+REC** = undo, **HOME+GLO** = redo (à chaque tap) — **seule manip** undo/redo (dbl-REC / long-REC supprimés, remplacés par HOME+REC / HOME+GLO).
 
 ## OPTIONS (page 16 APK, tap simple GLO — comme `B_GLO`→OPTIONS sur FM-1 app.c:1644 ; OBJ_OPTIONS OPT6 côté FM-1)
 
