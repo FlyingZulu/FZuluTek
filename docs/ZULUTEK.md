@@ -220,9 +220,13 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
   LCD throttlé (~1 s) + animations figées côté APK. Build éco firmware (defines, `patches/README.md`) :
   `-DFX_RV_Q` (lignes plaque en 16 bits, −73 Ko), `DLY_N`/2 (BBD 300 ms max, −51 Ko), `PN_N`/2, `ML_RS_MAX`/2
   → ≈ **−220 Ko** de pool sur l'AC791N (~430 Ko RAM). Persistance : SharedPreferences APK / OBJ_OPTIONS FM-1.
-- **OPTIONS > CHOKE LDR = ON/OFF** — mode choke des séquenceurs : ON = **LEADER** (hybride, seul le leader
-  coupe), OFF = **NORMAL** (Koala, choke mutuel). Manip par touches noires MONO (9e) / POLY (10e), voir
-  `docs/ZULUTEK-LOOP.md`.
+- **LDR par tranche** (page MIX 11, Shift+OPx) — remplace l'ancien OPTIONS > CHOKE LDR : ON = **LEADER** (hybride),
+  OFF = **NORMAL** (Koala). Choke des séquenceurs (MONO/POLY, noires 9e/10e) inchangé, voir `docs/ZULUTEK-LOOP.md`.
+- **OPTIONS > LABELS = FM1/ZULU** (**APK only**, cosmétique — rien à voir avec le hardware FM-1 dont les
+  sérigraphies sont fixes) : K2 en page OPTIONS 16. ZULU affiche les anciens labels custom Zulu
+  (PLAY/REC/SEQ/GEN/TAP/SCL/R-/R+/ERS/DRV/DLY/REV/POW/MUT) sur les 14 boutons de la surface ; le dispatch
+  reste par **index** (labels FM-1), donc aucun changement de comportement. Persistance : SharedPreferences
+  (`labels_zulu`). Non porté côté FM-1.
 
 ## Table de mixage principale (page MIX, 4 tranches)
 
