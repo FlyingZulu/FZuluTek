@@ -18,6 +18,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.SweepGradient
 import android.graphics.Typeface
 import android.view.View
 
@@ -55,6 +56,12 @@ class LcdState {
     val smpModeNames = arrayOf("OFF", "BEAT", "CLEAN", "OLD")
     var smpLen = 0
     val smpPeaks = FloatArray(240)   // min/max par bucket (120 buckets x 2)
+
+    // circuit bend (POW maintenu + toucher le LCD dans l'APK ; REC+écran sur la bible)
+    var bendOn = false
+    var bendX = 0f
+    var bendY = 0f
+    var bendMode = 0                 // 0 GLITCH 1 LOW BAT
 }
 
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
@@ -213,6 +220,24 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             text(c, 8f, 226f, "long-SEQ = fermer la page", DIM, 8f)
             c.restore()
             return
+        }
+
+        // ---- circuit bend : bandes glitch RGB + roue au point du doigt ----
+        if (st.bendOn) {
+            for (k in 0 until 3) {
+                frame.color = RAINBOW[(k * 2 + 1) % RAINBOW.size]
+                frame.alpha = 70
+                val yy = (st.bendY * H + k * 37f) % H
+                c.drawRect(0f, yy, W.toFloat(), yy + 3f, frame)
+                frame.alpha = 255
+            }
+            val bx = st.bendX * W
+            val by = st.bendY * H
+            val sweep = SweepGradient(bx, by, intArrayOf(
+                FLUO_PINK, FLUO_YEL, FLUO_TURQ, REC_RED, FLUO_PINK), null)
+            val wp = Paint().apply { shader = sweep; style = Paint.Style.STROKE; strokeWidth = 3f }
+            c.drawCircle(bx, by, 26f, wp)
+            text(c, bx - 12f, by + 3f, if (st.bendMode == 0) "GLT" else "LB", INK, 9f)
         }
 
         // ---- top bar ----

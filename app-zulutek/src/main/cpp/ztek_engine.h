@@ -68,6 +68,10 @@ void ztek_smp_set(ztek_t *z, int which, float v);
 int  ztek_smp_len(const ztek_t *z);                    /* recorded frames */
 void ztek_smp_peaks(const ztek_t *z, float *out, int nbuckets);   /* min/max per bucket for the LCD */
 
+/* circuit bend, post-master (docs/ZULUTEK.md "Lot D") : on + position du doigt x/y (densité/niveau),
+ * mode 0 GLITCH (sample-hold + bit-crush + trémolo) 1 LOW BAT (décimation + soft-clip) */
+void ztek_bend(ztek_t *z, int on, float x, float y, int mode);
+
 #ifdef __cplusplus
 }
 #endif

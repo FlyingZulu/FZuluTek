@@ -125,6 +125,11 @@ object ZtekAudio {
     fun smpLen(): Int = if (handle != 0L) nativeSmpLen(handle) else 0
     fun smpPeaks(out: FloatArray) { if (handle != 0L) nativeSmpPeaks(handle, out) }
 
+    /* circuit bend post-master : mode 0 GLITCH 1 LOW BAT */
+    fun bend(on: Int, x: Float, y: Float, mode: Int) {
+        if (handle != 0L) nativeBend(handle, on, x, y, mode)
+    }
+
     private external fun nativeCreate(sampleRate: Int): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeStart(handle: Long): Boolean
@@ -157,4 +162,5 @@ object ZtekAudio {
     private external fun nativeSmpSet(handle: Long, which: Int, v: Float)
     private external fun nativeSmpLen(handle: Long): Int
     private external fun nativeSmpPeaks(handle: Long, out: FloatArray)
+    private external fun nativeBend(handle: Long, on: Int, x: Float, y: Float, mode: Int)
 }

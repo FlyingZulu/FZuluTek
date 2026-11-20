@@ -102,7 +102,33 @@ class MainActivity : Activity(), SurfaceListener {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(layout)
         handler.postDelayed(tick, 250)
+
+        /* dans l'APK le LCD est tactile : POW maintenu + toucher = circuit bend
+         * (bible : REC maintenu + toucher l'écran ; REC sert déjà au looper ici) */
+        lcd.setOnTouchListener { _, ev ->
+            val s = lcd.width.toFloat() / LcdView.W
+            if (s <= 0f) return@setOnTouchListener false
+            val bx = ev.x / s / LcdView.W
+            val by = ev.y / s / LcdView.H
+            when (ev.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> if (powHeld) {
+                    st.bendOn = true
+                    st.bendX = bx.coerceIn(0f, 1f)
+                    st.bendY = by.coerceIn(0f, 1f)
+                    ZtekAudio.bend(1, st.bendX, st.bendY, st.bendMode)
+                    lcd.invalidate()
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (st.bendOn) {
+                    st.bendOn = false
+                    ZtekAudio.bend(0, 0f, 0f, 0)
+                    lcd.invalidate()
+                }
+            }
+            true
+        }
     }
+
+    private var powHeld = false
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
@@ -126,6 +152,7 @@ class MainActivity : Activity(), SurfaceListener {
                 }
                 lcd.invalidate()
             }
+            "POW" -> st.bendMode = (st.bendMode + 1) % 2   // GLITCH / LOW BAT
         }
     }
 
@@ -217,8 +244,12 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.fxSet(ZtekAudio.FX_REV_MIX, st.rev)
             }
             "POW" -> {
+                powHeld = down
                 if (down) ZtekAudio.punch(1, 8, 0.5f, 0.5f, 0.8f)
-                else { ZtekAudio.punch(0, 0, 0f, 0f, 0f); ZtekAudio.punchTail(0.3f) }
+                else {
+                    ZtekAudio.punch(0, 0, 0f, 0f, 0f); ZtekAudio.punchTail(0.3f)
+                    if (st.bendOn) { st.bendOn = false; ZtekAudio.bend(0, 0f, 0f, 0); lcd.invalidate() }
+                }
             }
             "MUT" -> if (down) { ZtekAudio.allNotesOff(); st.curNote = -1 }
         }

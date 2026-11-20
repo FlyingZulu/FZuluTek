@@ -182,3 +182,9 @@ ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeSmpPeaks(JNIEnv *
         env->ReleaseFloatArrayElements(out, el, 0);
     }
 }
+
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeBend(JNIEnv *, jclass, jlong h,
+    jint on, jfloat x, jfloat y, jint mode)
+{
+    ztek_bend(zte(NULL, h), on, x, y, mode);
+}

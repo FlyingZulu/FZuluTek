@@ -60,6 +60,13 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
     double smp_pos;                 /* play position, in frames within [start,end) */
     int32_t smp_delay;              /* BEAT: samples until the next beat */
 
+    /* circuit bend (post-master) */
+    int bend_on, bend_mode;
+    float bend_x, bend_y;
+    float bend_hold;                /* sample-hold state */
+    float bend_trem_ph;             /* trémolo phase */
+    uint32_t bend_rng;
+
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) override
     {
         if (stream == out.get()) {
@@ -201,6 +208,8 @@ ztek_t *ztek_create(float sr)
     z->smp_start = 0.0f; z->smp_end = 1.0f; z->smp_vol = 0.8f; z->smp_pitch = 0.5f;
     z->smp_mode = 2;                 /* CLEAN par défaut */
     z->smp_pos = 0.0; z->smp_delay = 0;
+    z->bend_on = 0; z->bend_mode = 0; z->bend_x = 0.0f; z->bend_y = 0.0f;
+    z->bend_hold = 0.0f; z->bend_trem_ph = 0.0f; z->bend_rng = 0xBEAD01u & 0x7fffffffu;
     return z;
 }
 
@@ -386,6 +395,14 @@ void ztek_smp_set(ztek_t *z, int which, float v)
 
 int ztek_smp_len(const ztek_t *z) { return (int)z->smp_len; }
 
+void ztek_bend(ztek_t *z, int on, float x, float y, int mode)
+{
+    z->bend_on = on ? 1 : 0;
+    z->bend_x = x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x;
+    z->bend_y = y < 0.0f ? 0.0f : y > 1.0f ? 1.0f : y;
+    z->bend_mode = mode;
+}
+
 void ztek_smp_peaks(const ztek_t *z, float *out, int nbuckets)
 {
     /* min/max par bucket pour la waveform du LCD */
@@ -495,14 +512,38 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
         done += blk;
     }
 
-    /* 5. master */
+    /* 5. master + circuit bend (post-master, docs/ZULUTEK.md Lot D) */
     {
         uint32_t i;
         for (i = 0; i < n; i++) {
             float l = outL[i] * z->master;
             float r = outR[i] * z->master;
-            outL[i] = fm_tanhf(l * 1.2f) * 0.85f;
-            outR[i] = fm_tanhf(r * 1.2f) * 0.85f;
+            l = fm_tanhf(l * 1.2f) * 0.85f;
+            r = fm_tanhf(r * 1.2f) * 0.85f;
+            if (z->bend_on) {
+                z->bend_rng = z->bend_rng * 1103515245u + 12345u;
+                if (z->bend_mode == 0) {
+                    /* GLITCH : sample-hold aléatoire + bit-crush + trémolo (X = densité, Y = niveau) */
+                    if ((float)(z->bend_rng >> 16) / 32768.0f >= z->bend_x * 0.5f)
+                        z->bend_hold = l;          /* on met à jour l'échantillon retenu */
+                    l = z->bend_hold;              /* sinon on rejoue le précédent (hold) */
+                    float bits = 8.0f - z->bend_x * 6.0f;
+                    if (bits < 1.0f) bits = 1.0f;
+                    float lv = fm_exp2f(bits - 1.0f);
+                    l = fm_floorf(l * lv + 0.5f) / lv;
+                    z->bend_trem_ph += (0.02f + 0.2f * z->bend_x) * FM_TWO_PI / z->sr * 60.0f;
+                    if (z->bend_trem_ph > FM_TWO_PI) z->bend_trem_ph -= FM_TWO_PI;
+                    l *= 1.0f - z->bend_y * 0.8f * (0.5f + 0.5f * fm_sinf(z->bend_trem_ph));
+                    r = l;
+                } else {
+                    /* LOW BAT : décimation + soft-clip dur */
+                    z->bend_hold = l;
+                    l = fm_tanhf(z->bend_hold * (1.5f + 3.0f * z->bend_y));
+                    r = l;
+                }
+            }
+            outL[i] = l;
+            outR[i] = r;
         }
     }
 }
