@@ -273,6 +273,14 @@ class LcdState {
     var psPart = 0
     var curPart = 1                               // partie jouée (HOME court) : 0 BASSE, 1 LEAD, 2 DRUMS, 3 LOOP
     val partNames = arrayOf("BASSE", "LEAD", "DRUMS", "LOOP")
+    var snapArm = false                           // capture SNAP armée (REC+PLAY) : attend le pad
+    var snapArmUntil = 0L
+    var keysLockUntil = 0L                        // clavier inactif 1,5 s pendant la capture
+    var camUntil = 0L                             // icône caméra visible
+    var camShrinkAt = 0L                          // rétrécissement vers le fond (0,8 s) à partir de là
+    var snapSide = 0                              // page SNAP : 0 = ZU (8 gauches), 1 = LU (8 droites) — K1
+    var loopRecArm = -1                           // proc REC+GLO : -2 = fenêtre PAD?, >=0 = slot armé, -1 = rien
+    var loopRecWinUntil = 0L                      // fin de la fenêtre PAD? (2 s) ou du slot armé (1,2 s)
     var psSlot = 0
     var psUsed = false
     var psName = ""
@@ -387,6 +395,20 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             c.restore()
             return
         }
+
+        // icône caméra (capture SNAP REC+PLAY / proc REC+GLO) : plein cadre, puis rétrécit vers le fond en 0,8 s
+        if (now < st.camUntil) {
+            val t = if (st.camShrinkAt > 0 && now > st.camShrinkAt) ((now - st.camShrinkAt) / 800f).coerceIn(0f, 1f) else 0f
+            val s = 1f - 0.85f * t
+            val cx = 120f + 100f * t
+            val cy = 110f + 100f * t
+            frame.color = INK
+            c.drawRect(cx - 20f * s, cy - 12f * s, cx + 20f * s, cy + 12f * s, frame)
+            c.drawCircle(cx, cy, 7f * s, frame)
+            c.drawRect(cx - 6f * s, cy - 17f * s, cx + 6f * s, cy - 12f * s, frame)
+        }
+        // logo REC rouge clignotant en haut à droite (procédure REC armée)
+        if (st.loopRecArm >= 0 && blink) { mono.color = REC_RED; c.drawCircle(226f, 11f, 5f, mono) }
 
         // ---- veille auto : décor PCB + Nyan Cat, puis écran éteint + lampe torche ----
         if (st.veillePhase > 0) {
@@ -523,7 +545,8 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         if (st.page == 2 || st.page == 3) {
             val isSnap = st.page == 2
             text(c, 6f, 15f, if (isSnap) "SNAP" else "KIT", if (isSnap) FLUO_PINK else AMBER, 12f)
-            text(c, 80f, 15f, if (isSnap) "ZU|LU" else "kit global", DIM, 9f)
+            text(c, 80f, 15f, if (isSnap) (if (st.snapSide == 0) "ZU" else "LU") else "kit global", DIM, 9f)
+            if (st.snapArm) text(c, 130f, 15f, "CHOISIR PAD", FLUO_YEL, 9f)
             if (st.sirenOn) text(c, 200f, 15f, "SIREN", REC_RED, 9f)
             val filled = if (isSnap) st.snapFilled else st.kitFilled
             for (i in 0 until 16) {
