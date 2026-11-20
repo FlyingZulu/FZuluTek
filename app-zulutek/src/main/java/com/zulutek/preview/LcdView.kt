@@ -271,6 +271,8 @@ class LcdState {
     var hintMsg = ""
     var ludiqueOn = true
     var psPart = 0
+    var curPart = 1                               // partie jouée (HOME court) : 0 BASSE, 1 LEAD, 2 DRUMS, 3 LOOP
+    val partNames = arrayOf("BASSE", "LEAD", "DRUMS", "LOOP")
     var psSlot = 0
     var psUsed = false
     var psName = ""
