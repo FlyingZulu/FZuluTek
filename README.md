@@ -7,9 +7,20 @@ Firmware ATEK303 personnalisé (dérivé GPL-3.0 d'Animatek — crédits : Anima
 code publié en GPL-3.0 + crédits Animatek, nouvelle clé de signature générée (l'actuelle
 reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
 
-## État des branches (maj 2026-11-20 ~02:05Z) — 4 PR draft ouvertes
+## État des branches (maj 2026-11-20 ~06:30Z) — 9 PR draft ouvertes
 
-- **PR #3** `vibe/zulutek-seq-plus-c9ef18` (`8af3450`) — **branche principale APK** : moteur complet
+- **PR #8** `vibe/fm1-patch-looper-macro-c9ef18` (`0748389`) — **firmware FM-1** : patch
+  `patches/0008-zulutek-looper-macro.patch` : page **LOOP 12** (REC maintenu+PLAY : MIDI looper UI,
+  16 blanches = slots, resample ring µ-law 32 kHz `ML_RS_MAX 4096`, mixé post-FX) + page
+  **MACRO 13** (REC maintenu+SEQ : 16 slots, mêmes cibles que ASSIGN + loop_gain) + **bus drum
+  dans la matrice ASSIGN** (dst 35..42) + **presets pré-patchés par partie** (save/load de l'état
+  de modulation selon le tag BASSE/LEAD/DRUMS, flash ZSP2). apply-check OK sur 0001-0007, tests
+  host OK, syntax-check app.c sans erreur nouvelle. ⚠️ pas encore buildé en toolchain JieLi.
+- **PR #9** `vibe/zulutek-presets-parts-c9ef18` (`526aad7`, base PR #3) — **APK** : presets usine
+  pré-patchés **par partie** (BASSE/LEAD/DRUMS : `ztek_preset_factory`, 8 presets/partie avec
+  **4 slots macro remplis** chacun, noms propres, `bank_load`/`bankName` suivent la partie).
+  Test host OK.
+- **PR #3** `vibe/zulutek-seq-plus-c9ef18` (`192c635`) — **branche principale APK** : moteur complet
   (PR #1) + pack « SEQ+ » + modulation 8/8 (voir `docs/ZULUTEK-SEQ-PLUS.md`) : double-tap SEQ =
   sous-mode avancé (Turing Machine LOCK/LEN, MUT, PLAY NORM/REV/PING-PONG, RAND), mutation live
   ENV/LFO, pages 6..10 = SEQ+/LFO/ENV/ASSIGN/PRESETS (ENV = ENV1/ENV2 bouclables + 6 tools,
