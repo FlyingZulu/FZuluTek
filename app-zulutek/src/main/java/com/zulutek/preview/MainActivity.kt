@@ -46,6 +46,7 @@ class MainActivity : Activity(), SurfaceListener {
     private var lfoDown = false
     private var lastSeqTap = 0L
     private var presetIdx = 0
+    private var lastEncPreset = -1       // last index selected with the PRESET knob on MAIN
 
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
@@ -143,7 +144,7 @@ class MainActivity : Activity(), SurfaceListener {
             11 -> arrayOf("SUB", "LOOP", "", "K1", "K2", "K3", "K4")
             12 -> arrayOf("DST", "SRC", "LUD", "DPT", "", "", "")
             13 -> arrayOf("SLT", "PRT", "", "LD", "SV", "CLR", "")
-            else -> arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")
+            else -> arrayOf("SEL", "PST", "ALG", "K1", "K2", "K3", "K4")
         }
         lcd.invalidate()
         surface.invalidate()
@@ -252,12 +253,24 @@ class MainActivity : Activity(), SurfaceListener {
             }
             else -> when (i) {                    // MAIN page
                 0 -> st.selSlot = (v * 15.999f).toInt().coerceIn(0, 15)
-                1 -> {
-                    val t = (v * 4.999f).toInt().coerceIn(0, 4)
-                    if (t != st.driveType) {
-                        st.driveType = t
-                        ZtekAudio.fxSet(ZtekAudio.FX_DRIVE_TYPE, t.toFloat())
-                        ZtekAudio.fxSet(ZtekAudio.FX_DRIVE, 0.6f)
+                1 -> {                            // PRESET knob: scroll presets live while playing
+                    val idx = (v * 15.999f).toInt().coerceIn(0, ZtekAudio.ZT_NPRESETS + ZtekAudio.ZT_PSLOTS - 1)
+                    if (idx != lastEncPreset) {
+                        lastEncPreset = idx
+                        if (idx < ZtekAudio.ZT_NPRESETS) {      // factory preset
+                            presetIdx = idx
+                            ZtekAudio.preset(idx)
+                            st.presetName = ZtekAudio.presetName(idx)
+                        } else {                                // user preset of the current part
+                            val slot = idx - ZtekAudio.ZT_NPRESETS
+                            if (ZtekAudio.presetUsed(st.psPart, slot)) {
+                                st.psSlot = slot
+                                ZtekAudio.presetLoad(st.psPart, slot)
+                                st.presetName = ZtekAudio.presetSlotName(st.psPart, slot)
+                            } else {
+                                forbidden("SLT ${slot + 1} vide (${ZtekAudio.PART_NAMES[st.psPart]}) — SAVE d'abord")
+                            }
+                        }
                     }
                 }
                 2 -> ZtekAudio.setParam(ZtekAudio.AT_WAVE, v)
@@ -324,11 +337,10 @@ class MainActivity : Activity(), SurfaceListener {
                 st.engine = (st.engine + 1) % 5
                 ZtekAudio.setEngine(st.engine)
             }
-            "GLO" -> if (down) {
+            "GLO" -> if (down) {                       // GLO = type de drive (le knob PRESET sert aux presets)
                 st.driveType = (st.driveType + 1) % 5
                 ZtekAudio.fxSet(ZtekAudio.FX_DRIVE_TYPE, st.driveType.toFloat())
                 ZtekAudio.fxSet(ZtekAudio.FX_DRIVE, 0.6f)
-                st.encVals[1] = st.driveType / 4f
             }
             "ARP" -> {
                 if (down) ZtekAudio.punch(1, 8, 0.5f, 0.5f, 0.8f)

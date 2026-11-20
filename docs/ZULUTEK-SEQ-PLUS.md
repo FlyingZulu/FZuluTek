@@ -108,6 +108,10 @@ Deux niveaux de presets :
   sources, labos, LFO SYNC/TRIG, ENV loop, matrice ASSIGN, seqk, params voix/FX, tempo,
   root, scale, engine). Persistance : blob binaire `ztek_preset_export/import`
   → **SharedPreferences (Base64) côté APK**, **flash côté FM-1** (à porter dans le patch).
+- **Molette PRESET en live** (comme sur le FM-1) : sur la page MAIN, l'encodeur **PST**
+  fait défiler les presets **pendant qu'on joue** — 8 presets usine puis les 8 slots user
+  de la partie courante (partie choisie sur la page PRESETS) ; slot vide → sens interdit
+  + suggestion « SAVE d'abord » (si LUDIQUE on).
 
 ## 7. À faire ensuite
 
