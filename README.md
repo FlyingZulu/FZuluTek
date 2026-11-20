@@ -23,7 +23,7 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
   - **PR #10** `vibe/ztf-link-design-c9ef18` — doc de conception liaison APK↔FM-1 « ZTF » (`docs/FM1-APK-LINK.md`, modes A/B, pont audio hybride)
   - **PR #11** `vibe/fm1-patch-choke-eco-c9ef18` (autre session) — patch firmware **0009-choke-eco**
   - **PR #12** `vibe/fm1-patch-link-c9ef18` — patch firmware **0010-link** : liaison ZTF côté FM-1 (companion 0x60/61/62, fichiers ZSMP/ZLUP/ZMAC, SysEx `F0 7D 'Z' 'T' …`, `usb_audio_out` + hook `app_usb_in`) — CI verte run 44754438124
-  - **branche `vibe/ztf-link-apk-c9ef18`** — **APK côté ZTF v1** : `ZtfCodec.kt`/`ZtfTransport.kt`/`Fm1Usb.kt`/`SampleLibrary.kt`/`Fm1UsbAudio.kt` + page LINK 17 (push/pull ZSMP/ZLUP/ZMAC, import WAV, pont audio UAC) + tests `tools/test_ztf_codec.py` — voir `docs/ZTF-LINK-APK.md`
+  - **PR #13** `vibe/ztf-link-apk-c9ef18` (`bdedfdd`, CI verte run 44773909627) — **APK côté ZTF v1+v2** : `ZtfCodec.kt`/`ZtfTransport.kt`/`Fm1Usb.kt`/`SampleLibrary.kt`/`Fm1UsbAudio.kt` + page LINK 17 (push/pull ZSMP/ZLUP/ZMAC, import WAV Koala, pont audio UAC) + **v2 mode A** (miroir live params 0x62, télécommande PAGE/TEMPO/CUTOFF/LOOP-GAIN, clavier = notes sur le FM-1) + tests `tools/test_ztf_codec.py` — voir `docs/ZTF-LINK-APK.md`
 - ⚠️ la série de patches firmware **0001-0010 n'a jamais été buildée avec la toolchain JieLi** ni testée dans fm1-emu (`docs/FM1-EMULATEUR.md`) — à faire **avant tout flash**. Ordre des patches : 0001-0008 → 0009-choke (#11) → 0010-link (#12).
 
 <details><summary>Détail des PR mergées (archive)</summary>
