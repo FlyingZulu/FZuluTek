@@ -162,6 +162,14 @@ int  ztek_arp_held(const ztek_t *z);                     /* nb de notes tenues (
 #define ZT_MDST_AUX0  100
 #define ZT_MDST_PATCH 120
 #define ZT_MDST_POWT  140
+/* ---- page FINE (APK 18 / firmware patch 0012) : réglages fins de la voix ---------------
+ * opt 0..AT_NOPTS-1 = AT_OPT_* (via at_option), AT_NOPTS = modèle de filtre f_model
+ * (0 ORG, 1 NEW), AT_NOPTS+1 = morph f_morph 0..255 (LP->HP). Persisté dans les presets
+ * (champ opt[] du POD, ajouté en fin de struct) et dans SNAP/KIT/undo. */
+#define ZTEK_NOPT (AT_NOPTS + 2)
+void ztek_set_option(ztek_t *z, int opt, int v);   /* v = index de choix (morph: 0..255) */
+int  ztek_get_option(const ztek_t *z, int opt);
+
 void ztek_macro_set(ztek_t *z, int slot, int dst, int sub, float val);  /* contenu du slot */
 void ztek_macro_apply(ztek_t *z, int slot);       /* applique : cible <- val */
 void ztek_macro_level(ztek_t *z, int slot, float v);  /* niveau seul, réappliqué */
@@ -231,6 +239,7 @@ typedef struct {
     float master_par[ZTEK_MIXM_N];
     int   siren_wave;
     float siren_mix;
+    uint8_t opt[ZTEK_NOPT];        /* page FINE : réglages fins (ajouté en fin de POD, patch APK 0012) */
 } ztek_preset_t;
 
 void ztek_preset_save(ztek_t *z, int part, int slot);
