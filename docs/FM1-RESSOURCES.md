@@ -10,6 +10,17 @@ Recherche faite pour rapprocher l'UI de l'APK du look FM-1 et trouver des skins 
 - **Reddit r/MVaveFM1** — hub communautaire (40+ firmwares classés).
 - Notre base : **github.com/animatek/FM1-Animatek** (ATEK303, sur fm1-base MPL-2.0).
 
+## Représentations de la face avant du FM-1 (références visuelles pour l'UI de l'APK)
+
+Le FM-1 est un **objet horizontal** (boîtier de table paysage) : panneau gauche = contrôles master, **écran TFT 240×240 au centre**, panneau droit = 4 encodeurs de paramètres KNOB1–K4 + boutons de fonction, **clavier 27 touches silicone en bas sur toute la largeur**, 8 molettes au total (7 encodeurs + MASTER), 14 boutons avec LED.
+
+- **manuals.plus / device.report (manuel FM-1)** : schéma du panneau — « left panel with master controls, center TFT display, right panel with parameter knobs and function buttons », 27-key silicone keyboard, photos.
+- **Ars Technica, octobre 2026** (« From impulse purchase to pocket studio: the M-Vave FM-1 ») : photo du produit en main + photos du panneau.
+- **joakimeriksson/fm1-emu** : le panneau de l'émulateur navigateur/native est **dessiné d'après une photo de l'appareil** (knobrs qui tournent, touches/boutons qui s'enfoncent, LED et écran pilotés par le firmware) ; sur téléphone l'émulateur passe en paysage « pour un synth plus grand ».
+- **rackears.io (M-VAVE FM-1)** : « The panel is drawn from a photo of the device, with turning knobs, keys and buttons that sink when pressed » (plugin VST3/AU/CLAP FM-1).
+- **thefirmwarehub.com** : chaque firmware a une image carrée, recommandée comme **capture de l'écran 240×240 en PNG** ; bouton « Play in browser » vers fm1-emu.
+- Conséquence pour l'APK : **paysage** (`sensorLandscape`), écran en haut, panneau (encodeurs + boutons) et clavier en bas — cf. branche `vibe/zulutek-apk-landscape-1f7cfe`.
+
 Note : le LCD du FM-1 est 240×240 non tactile — d'où SAVE+K1/K4 pour le circuit bend côté hardware.
 La charte zuluTek (fond noir, encre blanche monospace, accents fluo rose/jaune/turquoise, REC rouge, warnings ambrés)
 est calquée sur la famille sombre du stock FM-1 ; l'aperçu APK rend déjà ce LCD 240×240 à l'échelle.
