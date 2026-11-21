@@ -1,5 +1,5 @@
 diff --git a/atek303/app/app.c b/atek303/app/app.c
-index 3a287a5..723a14d 100644
+index 70f7c58..7782dce 100644
 --- a/atek303/app/app.c
 +++ b/atek303/app/app.c
 @@ -65,6 +65,7 @@
@@ -261,10 +261,10 @@ index c65bdce..4d8fea3 100644
  title = "ATEK303"              # el nombre que ve la gente (si no, firmware.json saldría como «Animatek»)
  tagline = "The ATEK303 acid voice on the M-VAVE FM-1"
 diff --git a/atek303/app/ztek_link.c b/atek303/app/ztek_link.c
-index dfef73f..6959a9a 100644
+index b47c7ec..b552aef 100644
 --- a/atek303/app/ztek_link.c
 +++ b/atek303/app/ztek_link.c
-@@ -225,10 +225,12 @@ int zlk_file_busy(void) { return 0; }            /* les fichiers ZTF sont sûrs
+@@ -227,10 +227,12 @@ int zlk_file_busy(void) { return 0; }            /* les fichiers ZTF sont sûrs
  /* ---- paramètres companion (APP_PARAMS) ---------------------------------------------- */
  
  enum { P_CUTOFF, P_RESO, P_ENVMOD, P_DECAY, P_WAVE, P_ENGINE, P_TEMPO, P_PAGE,
@@ -280,7 +280,7 @@ index dfef73f..6959a9a 100644
  
  int zlk_param(int i, plat_param_t *p)
  {
-@@ -237,16 +239,18 @@ int zlk_param(int i, plat_param_t *p)
+@@ -239,16 +241,18 @@ int zlk_param(int i, plat_param_t *p)
      memset(p, 0, sizeof *p);
      p->id = (uint16_t)i;
      p->type = PLAT_PT_NUMBER;
@@ -301,7 +301,7 @@ index dfef73f..6959a9a 100644
  
  static float zlk_param_f(int i)   /* valeur 0..1 (ou bpm/page en brut via get) */
  {
-@@ -262,6 +266,8 @@ static float zlk_param_f(int i)   /* valeur 0..1 (ou bpm/page en brut via get) *
+@@ -264,6 +268,8 @@ static float zlk_param_f(int i)   /* valeur 0..1 (ou bpm/page en brut via get) *
      case P_DLYTIME: return fx[FX_DLY_TIME];
      case P_REVMIX: return fx[FX_REV_MIX];
      case P_SWING: return zlk_swing();
@@ -310,7 +310,7 @@ index dfef73f..6959a9a 100644
      default: return 0.5f;
      }
  }
-@@ -270,6 +276,7 @@ int32_t zlk_param_get(int i)
+@@ -272,6 +278,7 @@ int32_t zlk_param_get(int i)
  {
      if (i == P_TEMPO) return zlk_tempo();
      if (i == P_PAGE) return zlk_page();
@@ -318,7 +318,7 @@ index dfef73f..6959a9a 100644
      if (i < 0 || i >= P_N) return 0;
      return (int32_t)(zlk_param_f(i) * 1000.0f + 0.5f);
  }
-@@ -294,6 +301,10 @@ int32_t zlk_param_set(int i, int32_t v)
+@@ -296,6 +303,10 @@ int32_t zlk_param_set(int i, int32_t v)
      case P_DLYTIME: zlk_fx_set(FX_DLY_TIME, f); break;
      case P_REVMIX: zlk_fx_set(FX_REV_MIX, f); break;
      case P_SWING: zlk_swing_set(f); break;
