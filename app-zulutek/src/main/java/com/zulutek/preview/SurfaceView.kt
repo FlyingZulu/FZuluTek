@@ -8,9 +8,9 @@
  *  - paysage : colonne gauche knobs (MASTER SELECT PRESETS ALGORITHM + OCT- / OCT+),
  *    LCD carre auto au centre sur bezel noir serre, colonne droite KNOB1..4 + 2 rangees de
  *    six candies, clavier 27 pills pleine largeur en bas (zone pouce).
- *  - portrait : LCD en haut, OCT- / OCT+, rangee knobs MASTER..ALGO, rangee KNOB1..4,
- *    2 rangees de six candies, clavier 27 pills pleine largeur en bas.
- * Le LCD reste un carre automatique : la priorite va aux controles. Dispatch et zones
+ * Pas de vue verticale (Flying Zulu, 21/11/2026) : l'app se verrouille en paysage comme le
+ * FM-1 et tout l'ecran va au jeu tactile. Le LCD reste un carre automatique : la priorite va
+ * aux controles. Dispatch et zones
  * logiques inchanges (SurfaceListener, BTN_OF, BLACK_NOTES). */
 package com.zulutek.preview
 
