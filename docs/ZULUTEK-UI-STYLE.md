@@ -7,6 +7,18 @@ et côté firmware (patch `animatek/FM1-Animatek`). Le compagnon tablette **Zulu
 (`FlyingZulu/FZulu-Control`, dépôt privé) applique **la même charte à l'identique strict** — un seul design pour tout
 l'écosystème Zulu, comme iOS sur iPhone et iPad (section « Zulu Kontrol » plus bas).
 
+**Rendu fidèle à l'écran FM-1 (règle « simulateur matériel », demande 2026-11-21)** : l'APK
+`app-zulutek` ne se contente pas d'appliquer les mêmes règles que le FM-1 — il **rend l'UI
+comme le ferait un simulateur matériel** (façon fm1-emu) : tout est dessiné dans le
+**framebuffer natif 240×240** de l'écran **ST7789** (1 unité de dessin = 1 pixel matériel),
+ chaque pixel est **quantifié en RGB565** (5R/6V/5B, le format réel du panneau : banding
+fin sur les accents fluo, exactement comme sur le matériel), puis l'image est agrandie **au
+plus proche voisin** (aucun lissage), avec une **trame discrète des interstices entre
+pixelsphysiques** (visible uniquement quand un pixel logique fait ≥3 px à l'écran). Les
+14 retours anticipés (captures, pages) passent par le même pipeline. **RÈGLE POUR TOUT
+PROJET FUTUR ZULU** : toute app qui simule un écran Zulu rend ses pixels exactement comme
+le panneau simulé (résolution native, format couleur réel, nearest).
+
 ## Palette (constantes dans `LcdView.companion`)
 
 | Usage | Couleur |
