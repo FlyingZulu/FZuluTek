@@ -145,7 +145,7 @@ new file mode 100644
 index 0000000..d4bbb2e
 --- /dev/null
 +++ b/atek303/app/ztek_link.c
-@@ -0,0 +1,300 @@
+@@ -0,0 +1,302 @@
 +/* SPDX-License-Identifier: GPL-3.0-or-later
 + * Copyright (C) 2026 FlyingZulu
 + *

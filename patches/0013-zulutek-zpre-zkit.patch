@@ -1,5 +1,5 @@
 diff --git a/atek303/app/app.c b/atek303/app/app.c
-index 6c2c483..04f7a9a 100644
+index 867d62e..026ae8f 100644
 --- a/atek303/app/app.c
 +++ b/atek303/app/app.c
 @@ -1290,6 +1290,63 @@ void app_file_changed(uint32_t obj)              /* un objet store réécrit par
@@ -174,7 +174,7 @@ index c159c8c..0150723 100644
  void  zdr_act_rand(void);                /* SEQ : RAND du pad sel */
  void  zdr_act_clear(void);               /* ARP : clear du pad sel */
 diff --git a/atek303/app/ztek_link.c b/atek303/app/ztek_link.c
-index d4bbb2e..dfef73f 100644
+index df9b51b..b47c7ec 100644
 --- a/atek303/app/ztek_link.c
 +++ b/atek303/app/ztek_link.c
 @@ -5,14 +5,20 @@
@@ -189,17 +189,17 @@ index d4bbb2e..dfef73f 100644
  #include "dsp/fx.h"
 +#include "dsp/drum_engine.h"
 +
-+extern int app_preset_used_raw(int slot);   /* app.c (même pattern que ztek_seqplus.c) */
++extern int app_preset_used_raw(int slot);   /* app.c */
  
  #define ZLK_NSMP 8
  #define ZLK_NLUP 8
 -#define ZLK_NFILE (ZLK_NSMP + ZLK_NLUP + 1)          /* + ZMAC */
-+#define ZLK_NFLASH (ZLK_NSMP + ZLK_NLUP + 1)         /* + ZMAC : fichiers en flash (copies A/B) */
-+#define ZLK_NFILE (ZLK_NFLASH + ZLK_NPRE + ZLK_NKIT) /* patch 0013: + ZPRE00..31 + ZKIT00..02 virtuels */
++#define ZLK_NFLASH (ZLK_NSMP + ZLK_NLUP + 1)
++#define ZLK_NFILE (ZLK_NFLASH + ZLK_NPRE + ZLK_NKIT)
  
- /* copies A/B dans la zone data (0x97000..0xD3FFF libre sous la zone app 0xD4000..) :
-  * samples 0xB0000.., loops 0xC0000.., ZMAC 0xD0000.. ; n = 0x1000 (1 secteur A + 1 secteur B) */
-@@ -51,9 +57,39 @@ static const char *const ZLK_NAMES[ZLK_NFILE] = {
+ /* copies A/B dans la zone data PLAT_DATA (0x97000..0xE0000, plat.h), cantonnées sous les
+  * objets store APP_STORE_MAP (qui commencent à 0xD4000) : fichiers ZTF dans 0xB0000..0xD3FFF
+@@ -53,9 +59,39 @@ static const char *const ZLK_NAMES[ZLK_NFILE] = {
  static int cur_file = -1;
  static uint32_t cur_size;
  
@@ -239,7 +239,7 @@ index d4bbb2e..dfef73f 100644
  }
  
  /* applique un fichier commité (relit depuis la flash et applique au moteur) ; 0 ok */
-@@ -89,6 +125,14 @@ int zlk_file(int i, plat_file_info_t *f)
+@@ -91,6 +127,14 @@ int zlk_file(int i, plat_file_info_t *f)
      int sz;
      if (!f) return -1;
      if (i < 0 || i >= ZLK_NFILE) return -1;
@@ -254,7 +254,7 @@ index d4bbb2e..dfef73f 100644
      sz = plat_file_size(&zlk_files[i]);
      f->name = ZLK_NAMES[i];
      f->kind = i < ZLK_NSMP ? PLAT_FK_SAMPLE : (i < ZLK_NSMP + ZLK_NLUP ? PLAT_FK_BANK : PLAT_FK_SETTINGS);
-@@ -100,13 +144,32 @@ int zlk_file(int i, plat_file_info_t *f)
+@@ -102,13 +146,32 @@ int zlk_file(int i, plat_file_info_t *f)
  
  int zlk_file_read(int i, uint32_t off, void *dst, uint32_t n)
  {
@@ -289,7 +289,7 @@ index d4bbb2e..dfef73f 100644
      cur_file = i;
      cur_size = size;
      return plat_file_begin(&zlk_files[i], size);
-@@ -116,6 +179,12 @@ int zlk_file_write(int i, uint32_t off, const void *src, uint32_t n)
+@@ -118,6 +181,12 @@ int zlk_file_write(int i, uint32_t off, const void *src, uint32_t n)
  {
      if (i != cur_file || i < 0 || i >= ZLK_NFILE) return -1;
      if (off + n > cur_size) return -1;
@@ -302,7 +302,7 @@ index d4bbb2e..dfef73f 100644
      return plat_file_write(&zlk_files[i], off, src, n);
  }
  
-@@ -123,6 +192,16 @@ int zlk_file_commit(int i, uint32_t size, uint32_t crc)
+@@ -125,6 +194,16 @@ int zlk_file_commit(int i, uint32_t size, uint32_t crc)
  {
      int rc;
      if (i != cur_file || i < 0 || i >= ZLK_NFILE) return -1;
@@ -319,7 +319,7 @@ index d4bbb2e..dfef73f 100644
      rc = plat_file_commit(&zlk_files[i], size, crc);
      if (rc == 0)
          zlk_apply(i);                            /* commit ok -> on applique au moteur */
-@@ -133,6 +212,11 @@ int zlk_file_commit(int i, uint32_t size, uint32_t crc)
+@@ -135,6 +214,11 @@ int zlk_file_commit(int i, uint32_t size, uint32_t crc)
  int zlk_file_delete(int i)
  {
      if (i < 0 || i >= ZLK_NFILE) return -1;
