@@ -74,6 +74,7 @@ typedef struct {
     int8_t   lead[7];        /* leader explicite par groupe (touche POLY), -1 = auto (1er assigné) */
     uint8_t  leader;         /* 1 = mode hybride (leader), 0 = choke mutuel classique */
     uint8_t  eco;            /* MODE ECO : resample en µ-law + paliers lo-fi, ring 32 kHz, capacité /2 */
+    uint8_t  oneshot;        /* one-shot (liaison APK/FM-1) : un slot qui wrap s'arrête (notes relevées) au lieu de boucler */
     /* resample (reloop): record the monitored slots' output into an audio ring */
     uint16_t monmask;        /* bit i = slot i is monitored during a resample rec */
     int rs_rec, rs_dst;      /* resampling now, into slot rs_dst */
@@ -108,6 +109,8 @@ void ml_set_leader_slot(ml_t *m, int slot, int on);  /* POLY : on=1 désigne lea
 void ml_clear_leader(ml_t *m, int grp);              /* POLY sans pad : mode leader désactivé pour le groupe */
 void ml_set_eco(ml_t *m, int on);                    /* MODE ECO : bitrate du ring resample au plus bas */
 int  ml_get_eco(const ml_t *m);
+void ml_set_oneshot(ml_t *m, int on);                 /* one-shot : fin au wrap, notes/coupes relevées */
+int  ml_get_oneshot(const ml_t *m);
 void ml_set_len(ml_t *m, int slot, int len64);  /* 0 = auto at rec stop, else 1..2048 */
 void ml_resize(ml_t *m, int slot, int newlen);  /* shrink: truncate; extend: clone the original loop */
 void ml_set_sp(ml_t *m, int slot, int idx, float v);   /* ML_SP_* */
