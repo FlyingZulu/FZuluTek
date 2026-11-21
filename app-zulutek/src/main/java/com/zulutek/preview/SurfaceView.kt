@@ -1,23 +1,32 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
  *
- * SurfaceView: the APK's clone of the FM-1 control surface — 7 encoders (SELECT/PRESET/ALGO/
- * K1..K4), 14 buttons, 27 keys F3..G5 (16 white keys = the looper/PoW! slots, 11 black keys =
- * playable notes). Same charte as the LCD (black, white mono ink, fluo accents). Touch zones
- * are reported through SurfaceListener; the FM-1 LCD itself is not touch, so the LcdView
- * stays display-only. */
+ * SurfaceView: the APK's clone of the FM-1 front panel, reproduced after the canonical
+ * panel art of the FM-1 emulator (github.com/joakimeriksson/fm1-emu, crates/fm1-live/src/
+ * panel.rs, drawn after Felucca's controls diagram) and its "black-green" theme, the
+ * machine's own (mint candy caps and pills). Logical canvas 1280x820, scaled to fit:
+ * MASTER/SELECT/PRESETS/ALGORITHM left with OCT-/OCT+ under them, the LCD bezel centre
+ * (the LcdView sits above), KNOB1..4 then two rows of six candy buttons right (FX SCL ENV
+ * LFO EDIT GLO / HOME SAVE ARP SEQ PLAY REC, PLAY+REC outlined), and the 27 pill keys
+ * F3..G5 across the bottom (16 whites = looper slots, 11 blacks = playable notes).
+ * Dispatch indices stay the ones of SurfaceListener (Sel PRE ALG K1..K4, APK button order);
+ * the panel's matrix ids are mapped in BTN_OF. */
 package com.zulutek.preview
 
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
 
 interface SurfaceListener {
@@ -39,24 +48,65 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         /* labels custom Zulu (ancienne surface), affichés si OPTIONS > LABELS = ZULU ; le dispatch reste par index */
         val ZULU_LABELS = arrayOf("PLAY", "REC", "SEQ", "GEN", "TAP", "SCL", "R-",
                                   "R+", "ERS", "DRV", "DLY", "REV", "POW", "MUT")
+        /* the machine's silk, in the panel's matrix order: OCT- 0, OCT+ 1, FX 2, SCL 3,
+         * ENV 4, LFO 5, EDIT 6, GLO 7, HOME 8, SAVE 9, ARP 10, SEQ 11, PLAY 12, REC 13 */
+        val SILK = arrayOf("OCT-", "OCT+", "FX", "SCL", "ENV", "LFO", "EDIT", "GLO",
+                           "HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC")
+        val M2I = intArrayOf(12, 13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)  // matrix id -> listener index
+        val I2M = intArrayOf(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 1)  // listener index -> matrix id
         // 27 keys F3..G5: white keys (16) carry slot indices, black keys (11) MIDI notes
         val BLACK_NOTES = intArrayOf(54, 56, 58, 61, 63, 66, 68, 70, 73, 75, 78)
         val WHITE_NOTES = intArrayOf(53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79)
+
+        /* the panel's logical canvas (panel.rs: W, H) */
+        const val PW = 1280f
+        const val PH = 820f
+
+        /* theme "black-green": the machine's own (panel.rs THEMES) */
+        const val ROOM      = 0xFF18191b
+        const val BODY_TOP  = 0xFF3A3A3D
+        const val BODY_BOT  = 0xFF2E2E30
+        const val TRAY      = 0xFF75C0B7
+        const val SILK_INK  = 0xFFA0D8D0
+        const val BRAND_INK = 0xFFA0D8D0
+        const val BTN_TOP   = 0xFF65C6B8
+        const val BTN_BOT   = 0xFF52B0A0
+        const val BTN_INK   = 0xFF1E3830
+        const val KEY_TOP   = 0xFF65C6B8
+        const val KEY_BOT   = 0xFF52B0A0
+        const val AMBER_LED = 0xFFF2A33A
+        const val GREEN_LED = 0xFF62D36E
+        const val SKIRT     = 0xFF3A3D43
+        const val SKIRT_HI  = 0xFF6D7178
+        const val POINTER   = 0xFFEEEAE2
+
+        /* geometry, verbatim from panel.rs */
+        val ENCS = arrayOf(          // (cx, cy, r) label handled separately
+            Triple(250f, 135f, 44f), Triple(110f, 295f, 44f), Triple(250f, 295f, 44f),
+            Triple(935f, 120f, 36f), Triple(1027f, 120f, 36f), Triple(1119f, 120f, 36f), Triple(1211f, 120f, 36f))
+        val ENC_SILK = arrayOf("SELECT", "PRESETS", "ALGORITHM", "KNOB1", "KNOB2", "KNOB3", "KNOB4")
+        val POT = Triple(110f, 135f, 44f)
+        // matrix-order buttons: id, x, y, w, h (panel.rs buttons())
+        val BTNS = arrayOf(
+            intArrayOf(0, 62, 398, 112, 44), intArrayOf(1, 186, 398, 112, 44),
+            intArrayOf(2, 906, 232, 50, 64), intArrayOf(3, 964, 232, 50, 64),
+            intArrayOf(4, 1022, 232, 50, 64), intArrayOf(5, 1080, 232, 50, 64),
+            intArrayOf(6, 1138, 232, 50, 64), intArrayOf(7, 1196, 232, 50, 64),
+            intArrayOf(8, 906, 308, 50, 64), intArrayOf(9, 964, 308, 50, 64),
+            intArrayOf(10, 1022, 308, 50, 64), intArrayOf(11, 1080, 308, 50, 64),
+            intArrayOf(12, 1138, 308, 50, 64), intArrayOf(13, 1196, 308, 50, 64))
     }
 
-    // layout selon st.viewCompact (OPTIONS > VUE = CLAV/AUTO) : clavier -30 %, contrôles agrandis (APK only)
-    private fun encH() = if (st.viewCompact) 96f else 72f
-    private fun encCy() = encH() / 2f
-    private fun encR() = if (st.viewCompact) 34f else 24f
-    private fun btnY0() = encH() + 4f
-    private fun btnRowH() = if (st.viewCompact) 36f else 30f
-    private fun btnH() = btnRowH() - 6f
-    private fun keyTop() = btnY0() + 2 * btnRowH() + 14f      // 150 plein, 186 compact
-    private fun keyBot() = 270f
-    private fun blackH() = (keyBot() - keyTop()) * 0.75f       // 90 plein, 63 compact
+    // key geometry (panel.rs keys()): a black pill sits over the gap after white key after
+    private val KW = 62f; private val KGAP = 11f; private val KX0 = 61f
+    private val blacksAfter = intArrayOf(0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14)
+    private fun whiteKeyX(i: Int) = KX0 + i * (KW + KGAP)
+    private fun blackKeyX(bi: Int) = KX0 + (blacksAfter[bi] + 1) * (KW + KGAP) - KGAP / 2f - KW / 2f
 
-    private val mono = Paint().apply { typeface = Typeface.MONOSPACE; isAntiAlias = false; style = Paint.Style.FILL }
-    private val frame = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 1f }
+    private val mono = Paint().apply { typeface = Typeface.MONOSPACE; isAntiAlias = true }
+    private val fill = Paint().apply { isAntiAlias = true; style = Paint.Style.FILL }
+    private val frame = Paint().apply { isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = 1f }
+    private val rr = RectF()
     private val handler = Handler(Looper.getMainLooper())
 
     // touch state
@@ -78,138 +128,168 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         }
     }
 
-    private fun encX(i: Int) = width * (i + 0.5f) / 7f
-    private fun whiteW() = width / 16f
+    /* scale: the 1280x820 panel fits the view, centered (panel.rs panel_width/height) */
+    private fun sc() = if (height > 0 && width > 0) min(width / PW, height / PH) else 1f
+    private fun ox() = (width - PW * sc()) / 2f
+    private fun oy() = (height - PH * sc()) / 2f
+    private fun toX(px: Float) = (px - ox()) / sc()
+    private fun toY(py: Float) = (py - oy()) / sc()
 
+    /* panel hit-test, ported from panel.rs hit() */
     private fun zoneAt(x: Float, y: Float): Pair<Int, Int> {
-        return when {
-            y < encH() -> 1 to ((x / width * 7f).toInt().coerceIn(0, 6))
-            y < btnY0() + 2 * btnRowH() -> 2 to ((((y - btnY0()) / btnRowH()).toInt() * 7 + (x / width * 7f).toInt()).coerceIn(0, 13))
-            y < keyTop() + blackH() -> {
-                val w = whiteW()
-                for (bi in BLACK_NOTES.indices) {
-                    val e = blackEntry(bi)
-                    if (x >= e.first && x <= e.first + w * 0.6f) return 4 to bi
-                }
-                3 to ((x / w).toInt().coerceIn(0, 15))
-            }
-            else -> 3 to ((x / whiteW()).toInt().coerceIn(0, 15))
+        for (i in ENCS.indices) {
+            val (cx, cy, r) = ENCS[i]
+            val dx = x - cx; val dy = y - cy
+            if (dx * dx + dy * dy <= (r + 6f) * (r + 6f)) return 1 to i
         }
+        for (b in BTNS) {
+            if (x >= b[1] && x < b[1] + b[3] && y >= b[2] && y < b[2] + b[4])
+                return 2 to M2I[b[0]]
+        }
+        for (bi in BLACK_NOTES.indices.reversed()) {     // blacks first: they sit above the whites
+            val x0 = blackKeyX(bi)
+            if (x >= x0 && x < x0 + KW && y >= 574f && y < 574f + 94f) return 4 to bi
+        }
+        for (i in 0 until 16) {
+            val x0 = whiteKeyX(i)
+            if (x >= x0 && x < x0 + KW && y >= 680f && y < 680f + 106f) return 3 to i
+        }
+        return 0 to -1
     }
 
-    // keyLayout: 27 entries in chromatic order (x0, isBlack), F3..G5
-    private val keyLayout = ArrayList<Pair<Float, Boolean>>()
-    private fun buildLayout() {
-        keyLayout.clear()
-        val w = whiteW()
-        var x = 0f
-        for (midi in 53..79) {
-            val black = (midi % 12) == 1 || (midi % 12) == 3 || (midi % 12) == 6 ||
-                        (midi % 12) == 8 || (midi % 12) == 10
-            if (black) keyLayout.add(x - w * 0.3f to true)      // sits on the boundary, drawn on top
-            else { keyLayout.add(x to false); x += w }
-        }
+    /* ---- drawing helpers in panel coordinates ---- */
+    private fun rrect(c: Canvas, x: Float, y: Float, w: Float, h: Float, r: Float,
+                      top: Int, bot: Int) {
+        fill.shader = LinearGradient(0f, y, 0f, y + h, top, bot, Shader.TileMode.CLAMP)
+        rr.set(x, y, x + w, y + h)
+        c.drawRoundRect(rr, r, r, fill)
+        fill.shader = null
     }
-
-    /* the bi-th black key entry of keyLayout */
-    private fun blackEntry(bi: Int): Pair<Float, Boolean> {
-        var n = 0
-        for (e in keyLayout) {
-            if (e.second) {
-                if (n == bi) return e
-                n++
-            }
-        }
-        return 0f to true
+    private fun rrect(c: Canvas, x: Float, y: Float, w: Float, h: Float, r: Float, col: Int) =
+        rrect(c, x, y, w, h, r, col, col)
+    private fun label(c: Canvas, cx: Float, cy: Float, s: String, col: Int, size: Float) {
+        mono.textSize = size; mono.color = col
+        c.drawText(s, cx - mono.measureText(s) / 2f, cy, mono)
     }
-
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        buildLayout()
+    private fun knob(c: Canvas, cx: Float, cy: Float, r: Float, angle: Float, glow: Float) {
+        fill.color = 0xFF26272A.toInt(); c.drawCircle(cx + 2f, cy + 4f, r + 2f, fill)      // shadow
+        if (glow > 0f) {
+            frame.strokeWidth = 5f
+            frame.color = Color.argb((255 * glow).toInt(), Color.red(AMBER_LED), Color.green(AMBER_LED), Color.blue(AMBER_LED))
+            c.drawCircle(cx, cy, r + 4f, frame)
+        }
+        fill.shader = LinearGradient(cx, cy - r, cx, cy + r, SKIRT_HI, SKIRT, Shader.TileMode.CLAMP)
+        c.drawCircle(cx, cy, r, fill); fill.shader = null                                  // knurled skirt
+        fill.shader = LinearGradient(cx - r, cy - r, cx + r * 0.4f, cy + r * 0.4f, SKIRT_HI, SKIRT, Shader.TileMode.CLAMP)
+        c.drawCircle(cx, cy, r * 0.72f, fill); fill.shader = null                           // cap
+        val a = Math.toRadians(angle.toDouble())
+        c.drawLine(cx + (r * 0.12f * sin(a)).toFloat(), cy - (r * 0.12f * cos(a)).toFloat(),
+                   cx + (r * 0.62f * sin(a)).toFloat(), cy - (r * 0.62f * cos(a)).toFloat(),
+                   Paint().apply { color = POINTER; strokeWidth = 3f; isAntiAlias = true })
     }
 
     override fun onDraw(c: Canvas) {
         super.onDraw(c)
-        if (keyLayout.isEmpty()) buildLayout()
-        c.drawColor(LcdView.BG)
+        c.drawColor(ROOM)
+        val s = sc()
+        c.save()
+        c.translate(ox(), oy())
+        c.scale(s, s)
 
-        // ---- encoders ----
-        for (i in 0 until 7) {
-            val cx = encX(i)
-            val cy = encCy()
-            frame.color = if (st.popUntil[i] > System.currentTimeMillis()) LcdView.FLUO_TURQ else LcdView.DIM
-            c.drawCircle(cx, cy, encR(), frame)
-            val v = st.encVals[i]
-            frame.color = LcdView.FLUO_TURQ
-            val a = -2.356f + v * 4.712f
-            c.drawLine(cx, cy, cx + encR() * 0.75f * cos(a), cy + encR() * 0.75f * sin(a), frame)
-            mono.color = LcdView.DIM; mono.textSize = 9f
-            c.drawText(st.encLabels[i], cx - 9f, encH() - 6f, mono)
+        // body, bezel, trays, brand (panel.rs base)
+        rrect(c, 14f, 14f, PW - 28f, PH - 28f, 30f, BODY_TOP, BODY_BOT)
+        rrect(c, 352f, 24f, 516f, 516f, 22f, 0xFF0E0E10.toInt(), 0xFF0B0B0C.toInt())       // LCD bezel (the LcdView sits above)
+        rrect(c, 370f, 42f, 480f, 480f, 8f, 0xFF181818.toInt(), 0xFF141414.toInt())
+        rrect(c, 50f, 388f, 260f, 64f, 14f, TRAY)                                           // OCT tray
+        rrect(c, 896f, 222f, 360f, 160f, 16f, TRAY)                                         // button tray
+        rrect(c, 34f, 562f, 1212f, 236f, 26f, 0xFF2F2F33.toInt(), 0xFF27272A.toInt())       // keyboard tray
+        label(c, POT.first, POT.second - POT.third - 14f, "MASTER", SILK_INK, 16f)
+        for (i in ENCS.indices)
+            label(c, ENCS[i].first, ENCS[i].second - ENCS[i].third - 8f, ENC_SILK[i], SILK_INK, 16f)
+        rrect(c, 1134f, 302f, 112f, 72f, 10f, 0xFF3C6B43.toInt())                           // PLAY/REC outlined
+        rrect(c, 1136f, 304f, 108f, 68f, 9f, TRAY)
+        label(c, 640f, 552f, "FM-1  FELUCCA", BRAND_INK, 9f)
+
+        // LED states (charte): the cap tints amber when active, green for PLAY
+        val now = System.currentTimeMillis()
+        val blink = (now / 260) % 2 == 0L
+        fun ledFor(i: Int): Float = when {
+            i == 10 && st.playing -> 1f
+            i == 11 && (st.recArmed || st.loopRecArm >= 0) && blink -> 1f
+            i == 9 && st.seqOn -> 1f
+            i == 5 && st.sirenMode -> 1f
+            else -> 0f
         }
-
-        // ---- 14 buttons, 2 rows of 7 ----
-        val bw = width / 7f
-        for (i in 0 until 14) {
-            val row = i / 7
-            val col = i % 7
-            val x0 = col * bw + 3f
-            val y0 = btnY0() + row * btnRowH()
-            val active = (i == 10 && st.playing) || (i == 11 && st.recArmed) || (i == 9 && st.seqOn) ||
-                         (st.slotRec.getOrElse(st.selSlot) { false } && i == 11) ||
-                         (i == 5 && st.sirenMode && (System.currentTimeMillis() / 260) % 2 == 0L) ||
-                         ((i == 5 || i == 11) && st.loopRecArm >= 0 && (System.currentTimeMillis() / 260) % 2 == 0L)
-            // rappel lock clavier MIDI (charte) : HOME clignote une fois (260 ms) toutes les 20 s sans jouer
-            val nowMs = System.currentTimeMillis()
-            val homeNudge = i == 6 && st.lastKeyUse > 0 &&
-                           nowMs - st.lastKeyUse > 20000 && (nowMs % 20000) < 260
-            frame.color = when {
-                active -> LcdView.REC_RED
-                homeNudge -> LcdView.FLUO_TURQ
-                else -> LcdView.DIM
-            }
-            c.drawRect(x0, y0, x0 + bw - 6f, y0 + btnH(), frame)
-            mono.color = when {
-                active -> LcdView.INK
-                homeNudge -> LcdView.FLUO_TURQ
-                else -> LcdView.DIM
-            }
-            mono.textSize = 9f
-            val labels = if (st.labelsZulu) ZULU_LABELS else BTN_LABELS
-            c.drawText(labels[i], x0 + 4f, y0 + btnH() - 8f, mono)
+        // buttons: shadow, cap, label (panel.rs draw)
+        for (b in BTNS) {
+            val i = M2I[b[0]]
+            val led = ledFor(i)
+            val down = zone == 2 && idx == i
+            rrect(c, b[1] + 1f, b[2] + 3f, b[3].toFloat(), b[4].toFloat(), 9f, 0xFF1C1D20.toInt())  // shadow
+            val tint = if (b[0] == 12) GREEN_LED else AMBER_LED
+            val top = if (led > 0f) mix(BTN_TOP, tint, 0.85f) else BTN_TOP
+            val bot = if (led > 0f) mix(BTN_BOT, tint, 0.7f) else BTN_BOT
+            val off = if (down) 2f else 0f
+            rrect(c, b[1].toFloat(), b[2] + off, b[3].toFloat(), b[4].toFloat(), 9f, top, bot)
+            val txt = if (st.labelsZulu) ZULU_LABELS[i] else SILK[b[0]]
+            label(c, b[1] + b[3] / 2f, b[2] + b[4] / 2f + 5f + off, txt,
+                if (led > 0.5f) 0xFF2A1A03 else BTN_INK, 11f)
         }
+        // encoders + the MASTER pot (decorative: the volume lives in the FX/MIX pages)
+        for (i in ENCS.indices) {
+            val (cx, cy, r) = ENCS[i]
+            val glow = if (st.popUntil[i] > now) 1f else 0f
+            knob(c, cx, cy, r, -135f + 270f * st.encVals[i], glow)
+            label(c, cx, cy + r + 13f, st.encLabels[i], SILK_INK, 11f)
+        }
+        knob(c, POT.first, POT.second, POT.third, -135f + 270f * 0.5f, 0f)
 
-        // ---- keys: whites then blacks on top ----
-        val w = whiteW()
+        // keys: mint pills with a ridge, heat and ink follow the charte states
+        val heatOf: (Int, Boolean, Boolean) -> Float = { i, on, rec ->
+            when {
+                rec && blink -> 1f
+                rec -> 0.7f
+                on -> 0.55f
+                i == st.selSlot -> 0.3f
+                else -> 0f
+            }
+        }
         for (i in 0 until 16) {
-            val x0 = i * w
-            val on = st.slotOn[i]
-            val rec = st.slotRec[i]
-            val now = System.currentTimeMillis()
-            val blink = (now / 260) % 2 == 0L
-            frame.color = when {
-                rec && blink -> LcdView.REC_RED
-                rec -> LcdView.REC_RED_OFF
-                on -> LcdView.FLUO_YEL
-                i == st.selSlot -> LcdView.AMBER
-                else -> LcdView.DIM
-            }
-            c.drawRect(x0 + 1f, keyTop(), x0 + w - 1f, keyBot(), frame)
+            val down = zone == 3 && idx == i
+            val heat = maxOf(heatOf(i, st.slotOn[i], st.slotRec[i]), if (down) 0.75f else 0f).coerceAtMost(1f)
+            val off = if (down) 3f else 0f
+            val x = whiteKeyX(i)
+            rrect(c, x + 1f, 680f + 4f, KW, 106f, KW / 2f, 0xFF1A1A1C.toInt())              // shadow
+            rrect(c, x, 680f + off, KW, 106f, KW / 2f, mix(KEY_TOP, AMBER_LED, heat), mix(KEY_BOT, AMBER_LED, heat * 0.8f))
+            rrect(c, x + KW / 2f - 2.5f, 680f + 18f + off, 5f, 106f - 36f, 2.5f,
+                if (heat > 0f) 0xFFEFE2B0 else 0xFF7BD6C5)
         }
         for (bi in BLACK_NOTES.indices) {
-            val x0 = blackEntry(bi).first
             val note = BLACK_NOTES[bi]
-            frame.color = if (note == st.curNote) LcdView.FLUO_PINK else Color.argb(255, 60, 60, 60)
-            c.drawRect(x0, keyTop(), x0 + w * 0.6f, keyTop() + blackH(), frame)
+            val down = zone == 4 && idx == bi
+            val heat = if (note == st.curNote) 0.75f else if (down) 0.75f else 0f
+            val off = if (down) 3f else 0f
+            val x = blackKeyX(bi)
+            rrect(c, x + 1f, 574f + 4f, KW, 94f, KW / 2f, 0xFF1A1A1C.toInt())
+            rrect(c, x, 574f + off, KW, 94f, KW / 2f, mix(KEY_TOP, AMBER_LED, heat), mix(KEY_BOT, AMBER_LED, heat * 0.8f))
+            rrect(c, x + KW / 2f - 2.5f, 574f + 18f + off, 5f, 94f - 36f, 2.5f,
+                if (heat > 0f) 0xFFEFE2B0.toInt() else 0xFF7BD6C5.toInt())
         }
+        c.restore()
     }
 
+    private fun mix(a: Int, b: Int, t: Float): Int = Color.argb(255,
+        (Color.red(a) + (Color.red(b) - Color.red(a)) * t).toInt(),
+        (Color.green(a) + (Color.green(b) - Color.green(a)) * t).toInt(),
+        (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t).toInt())
+
     override fun onTouchEvent(ev: MotionEvent): Boolean {
-        val x = ev.x
-        val y = ev.y
+        val px = toX(ev.x)
+        val py = toY(ev.y)
         when (ev.action) {
             MotionEvent.ACTION_DOWN -> {
-                val (z, i) = zoneAt(x, y)
-                zone = z; idx = i; startY = y; longPosted = false
+                val (z, i) = zoneAt(px, py)
+                zone = z; idx = i; startY = py; longPosted = false
                 when (z) {
                     1 -> { startVal = st.encVals[i]; downTime = System.currentTimeMillis(); encMoved = false
                            handler.postDelayed(encHoldRunnable, 600) }
@@ -229,18 +309,29 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                         st.lastKeyUse = System.currentTimeMillis()   // rappel HOME 20 s (charte)
                         listener.onBlackKey(note, true)
                     }
+                    else -> { zone = 0; idx = -1 }
                 }
                 invalidate()
-                return true
+                return zone != 0
             }
             MotionEvent.ACTION_MOVE -> {
                 if (zone == 1) {
                     encMoved = true
                     handler.removeCallbacks(encHoldRunnable)
-                    val v = (startVal + (startY - y) / 90f).coerceIn(0f, 1f)
+                    val v = (startVal + (startY - py) / 180f).coerceIn(0f, 1f)
                     st.encVals[idx] = v
                     listener.onEncoder(idx, v)
                     invalidate()
+                } else if (zone == 3) {
+                    // glissando over the white pills (panel.rs main.js)
+                    val (z, i) = zoneAt(px, py)
+                    if (z == 3 && i != idx) {
+                        if (idx >= 0) listener.onWhiteKey(idx, false, false)
+                        idx = i
+                        st.lastKeyUse = System.currentTimeMillis()
+                        listener.onWhiteKey(i, true, false)
+                        invalidate()
+                    }
                 }
                 return true
             }
