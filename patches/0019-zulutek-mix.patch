@@ -1,0 +1,465 @@
+diff --git a/atek303/app/ztek_mix.c b/atek303/app/ztek_mix.c
+new file mode 100644
+index 0000000..f82fc2f
+--- /dev/null
++++ b/atek303/app/ztek_mix.c
+@@ -0,0 +1,84 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * patch 0011: page MIX — voir ztek_mix.h. Logique seule ici (pas de gfx) : le dessin est
++ * zmix_draw() dans app.c. SEL = tranche/master, K1 = volume (32 crans), K2 = mute.
++ */
++#include "ztek_mix.h"
++#include "app.h"                 /* plat.h (fm1-base) : EN_SELECT, EN_K1, EN_K2 */
++#include "ztek_siren.h"          /* zsir_get/zsir_set : la tranche SIREN = par[3] (SIREN MIX, ZTF) */
++
++const char *const ZMIX_NAME[ZMIX_NSTRIP] = {"VOICE", "DRUMS", "LOOP", "SIREN", "MASTER"};
++
++static int sel;
++
++int  zmix_sel(void) { return sel; }
++void zmix_sel_set(int s) { sel = s < 0 ? 0 : (s >= ZMIX_NSTRIP ? ZMIX_NSTRIP - 1 : s); }
++
++int zmix_vol(int s) { return (s >= 0 && s < ZMIX_NSTRIP) ? zmix_opt_vol(s) : 255; }
++
++static void say_vol(int s, int v)
++{
++    char t[8];
++    t[0] = (char)('0' + (v / 100) % 10);
++    t[1] = (char)('0' + (v / 10) % 10);
++    t[2] = (char)('0' + v % 10);
++    t[3] = '%';
++    t[4] = 0;
++    zmix_say(ZMIX_NAME[s], t);
++}
++
++void zmix_vol_set(int s, int v)
++{
++    if (s < 0 || s >= ZMIX_NSTRIP)
++        return;
++    if (v < 0) v = 0;
++    if (v > 255) v = 255;
++    if (v == zmix_opt_vol(s))
++        return;
++    zmix_opt_set_vol(s, v);              /* SIREN : écrit aussi zsir par[3] (SIREN MIX / ZTF) */
++    say_vol(s, v);
++}
++
++int zmix_muted(int s) { return (s >= 0 && s < ZMIX_NSTRIP) ? ((zmix_opt_mut() >> s) & 1) : 0; }
++
++void zmix_mute_set(int s, int on)
++{
++    int m;
++    if (s < 0 || s >= ZMIX_NSTRIP)
++        return;
++    m = zmix_opt_mut();
++    if (on) m |= 1 << s; else m &= ~(1 << s);
++    if (m == zmix_opt_mut())
++        return;
++    zmix_opt_set_mut(m);
++    zmix_say(ZMIX_NAME[s], on ? "MUTE" : "ON");
++}
++
++void zmix_encoder(int k, int32_t det)
++{
++    if (k == EN_SELECT) {                 /* SEL = tranche / master */
++        int s = sel + (int)det;
++        sel = (s % ZMIX_NSTRIP + ZMIX_NSTRIP) % ZMIX_NSTRIP;
++        zmix_say("MIX", ZMIX_NAME[sel]);
++        return;
++    }
++    if (k == EN_K1) {                     /* K1 = volume, 8/255 par cran */
++        zmix_vol_set(sel, zmix_vol(sel) + 8 * (int)det);
++        return;
++    }
++    if (k == EN_K2 && det) {              /* K2 = mute on/off */
++        zmix_mute_set(sel, !zmix_muted(sel));
++    }
++}
++
++float zmix_voice_f(void) { return zmix_muted(ZMIX_VOICE) ? 0.0f : zmix_vol(ZMIX_VOICE) / 255.0f; }
++float zmix_drum_f(void)  { return zmix_muted(ZMIX_DRUMS) ? 0.0f : zmix_vol(ZMIX_DRUMS) / 255.0f; }
++float zmix_loop_f(void)  { return zmix_muted(ZMIX_LOOP) ? 0.0f : zmix_vol(ZMIX_LOOP) / 255.0f; }
++
++uint32_t zmix_master_q12(uint32_t m)
++{
++    if (zmix_muted(ZMIX_MASTER))
++        return 0;
++    return m * (uint32_t)zmix_vol(ZMIX_MASTER) / 255u;   /* m <= 4096 (q12) : tient en 32 bits, pas de mul 64-bit inline (check build.py) */
++}
+diff --git a/atek303/app/ztek_mix.h b/atek303/app/ztek_mix.h
+new file mode 100644
+index 0000000..0b5692e
+--- /dev/null
++++ b/atek303/app/ztek_mix.h
+@@ -0,0 +1,39 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * patch 0011: page MIX (15) — table de mixage 4 tranches + master, unifiée avec l'APK
++ * (docs/ZULUTEK-MIX-SIREN.md) : VOICE (basse+lead réunis : le bus voix est mono, un seul
++ * engine rend à la fois) / DRUMS / LOOP / SIREN + MASTER. La tranche SIREN pilote le param
++ * SIREN MIX existant (zsir par[3] = OP_SIREN_MIX, exposé en ZTF P_SIREN_MIX) : aucun nouveau
++ * param ZTF. Les volumes des 4 autres tranches + le masque de mute sont persistés dans
++ * OBJ_OPTIONS (OP_MIX_*), jamais dans les presets.
++ *
++ * Navigation : REC maintenu + SAVE = page 15 ; GLO la quitte. SEL = tranche/master,
++ * K1 = vol, K2 = mute ; blanches 0..4 = les 5 lignes. Le dessin (zmix_draw) est dans app.c.
++ */
++#pragma once
++#include <stdint.h>
++
++#define ZMIX_PAGE 15u
++enum { ZMIX_VOICE = 0, ZMIX_DRUMS, ZMIX_LOOP, ZMIX_SIREN, ZMIX_MASTER, ZMIX_NSTRIP };
++extern const char *const ZMIX_NAME[ZMIX_NSTRIP];
++
++int  zmix_sel(void);
++void zmix_sel_set(int s);
++int  zmix_vol(int s);                    /* 0..255 (SIREN = zsir par[3]) */
++void zmix_vol_set(int s, int v);
++int  zmix_muted(int s);
++void zmix_mute_set(int s, int on);
++void zmix_encoder(int k, int32_t det);  /* EN_* sur la page MIX : SEL=tranche, K1=vol, K2=mute */
++
++float    zmix_voice_f(void);             /* facteurs appliqués dans app_render */
++float    zmix_drum_f(void);
++float    zmix_loop_f(void);
++uint32_t zmix_master_q12(uint32_t m);
++
++/* ---- provided by app.c (patch 0011) ---- */
++int  zmix_opt_vol(int s);                /* SIREN -> zsir_get(3), sinon opt.v[OP_MIX_VOL0+slot] */
++void zmix_opt_set_vol(int s, int v);     /* opt.v + zsir_set(3) + save OBJ_OPTIONS (throttlé) */
++int  zmix_opt_mut(void);                 /* opt.v[OP_MIX_MUT] bitmask */
++void zmix_opt_set_mut(int mask);
++void zmix_say(const char *a, const char *b);
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 3cdb120..494a21e 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -66,6 +66,7 @@
+ #include "ztek_link.h"     /* patch 0009: liaison APK <-> FM-1 ZTF (companion files/params + SysEx) */
+ #include "ztek_fine.h"     /* patch 0012: page FINE (14) — 4 knobs façon Shruthi sur les réglages fins voix */
+ #include "ztek_siren.h"    /* patch 0015: sirène (triple-tap GLO, noires 13/15/17/20) */
++#include "ztek_mix.h"      /* patch 0011: page MIX (15) — 4 tranches + master, unifié APK/FM-1 */
+ 
+ /* the Animatek palette, as on the VCV Rack modules (UZZ-VCV-RACK src/ui/CommonWidgets.hpp, AcidEditor.hpp):
+  * the screens are slate, the values in the displays' blue, the selection in the logo's blue */
+@@ -161,8 +162,10 @@ static int8_t cur_preset = -1;                 /* the one loaded (or saved) last
+ 
+ /* the OPTIONS menu (OCT- + HOME): the unit's own choices, apart from the settings so no preset carries them (OBJ_OPTIONS,
+  * saved as the menu closes). Each an index into its choices */
+-#define OPT_MAGIC 0x4F505436u                  /* "OPT6": patch 0015 ajoute SIREN WAVE/RATE/DEPTH/MIX (vieux records OPT5 = defaults) */                  /* "OPT4": patch 0009 adds OP_ECO, OP_CHOKE_LDR */                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
+-enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_ECO, OP_CHOKE_LDR, OP_FINE,   /* patch 0009 */ OP_SIREN_WAVE, OP_SIREN_RATE, OP_SIREN_DEPTH, OP_SIREN_MIX,   /* patch 0015: sirène */ OP_N = OP_FINE + AT_NOPTS + 2 + 4 };   /* patch 0012: +2 (MODEL/MORPH) ; patch 0015: +4 (sirène) */   /* patch 0005: OP_LUDIQUE */
++#define OPT_MAGIC 0x4F505437u                  /* "OPT7": patch 0011 ajoute OP_MIX_VOL0..3 + OP_MIX_MUT (vieux records OPT6 = defaults) */                  /* "OPT6": patch 0015 ajoute SIREN WAVE/RATE/DEPTH/MIX (vieux records OPT5 = defaults) */                  /* "OPT4": patch 0009 adds OP_ECO, OP_CHOKE_LDR */                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
++enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_ECO, OP_CHOKE_LDR, OP_FINE,   /* patch 0009 */
++       OP_SIREN_WAVE = OP_FINE + AT_NOPTS + 2, OP_SIREN_RATE, OP_SIREN_DEPTH, OP_SIREN_MIX,   /* patch 0015: sirène (après FINE + MODEL/MORPH — patch 0011: valeurs explicites, l'enum séquentiel les écrasait) */
++       OP_MIX_VOL0 = OP_SIREN_MIX + 1, OP_MIX_MUT = OP_MIX_VOL0 + 4, OP_N };   /* patch 0011: volumes VOICE/DRUMS/LOOP/MASTER (SIREN = OP_SIREN_MIX) + masque mute */
+ #define CLK_OFS_MAX 40                         /* OPTIONS > CLK OFFSET: -40 .. +40 ms, stored + 40 */
+ typedef struct {
+     uint32_t magic;
+@@ -190,6 +193,9 @@ static void options_defaults(void)
+     opt.v[OP_SIREN_RATE] = 128;
+     opt.v[OP_SIREN_DEPTH] = 128;
+     opt.v[OP_SIREN_MIX] = 160;
++    for (i = 0; i < ZMIX_NSTRIP - 1; i++)    /* patch 0011: volumes de tranches (SIREN via OP_SIREN_MIX) */
++        opt.v[OP_MIX_VOL0 + i] = 255;
++    opt.v[OP_MIX_MUT] = 0;
+ }
+ static int opt_count(int i)                    /* how many choices item i has */
+ {
+@@ -923,20 +929,31 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
+ {
+     if (n > APP_BLOCK)
+         n = APP_BLOCK;
++    master_q12 = zmix_master_q12(master_q12);   /* patch 0011: tranche MASTER */
+     app_render_events();
+     app_render_voice(mono, n);
++    {   /* patch 0011: tranche VOICE (vol/mute sur le bus voix, avant loop/sirène) */
++        float f = zmix_voice_f();
++        uint32_t i;
++        if (f != 1.0f)
++            for (i = 0; i < n; i++)
++                mono[i] *= f;
++    }
+     zdr_render(n);                           /* patch 0007: drum machine, bus stereo */
++
+     zml_render(n, mono);                     /* patch 0008: MIDI looper (events + ring resample) */                           /* patch 0007: drum machine, bus stéréo */
+-    zsir_render(mono, n);                    /* patch 0015: sirène pre-FX (chaîne APK : … siren → fx → out) */
++    if (!zmix_muted(ZMIX_SIREN))             /* patch 0011: mute SIREN (le vol SIREN = zsir par[3]) */
++        zsir_render(mono, n);                /* patch 0015: sirène pre-FX (chaîne APK : … siren → fx → out) */
+     app_render_fx(mono, lr, n, master_q12);
+-    {   /* patch 0007: bus drum mixé en post-FX (même gain que la chaîne FX) */
++    {   /* patch 0007: bus drum mixé en post-FX (même gain que la chaîne FX) ; patch 0011: facteurs DRUMS/LOOP */
+         const float *dl = zdr_bus_l(), *dr = zdr_bus_r();
+         const float *zl = zml_bus_l(), *zr = zml_bus_r();
++        float df = zmix_drum_f(), lf = zmix_loop_f();
+         int32_t g = (int32_t)(((float)master_q12 / 4096.0f) * 8300000.0f);
+         uint32_t i;
+         for (i = 0; i < n; i++) {
+-            lr[2 * i] += (int32_t)((dl[i] + zl[i]) * (float)g);
+-            lr[2 * i + 1] += (int32_t)((dr[i] + zr[i]) * (float)g);
++            lr[2 * i] += (int32_t)((dl[i] * df + zl[i] * lf) * (float)g);
++            lr[2 * i + 1] += (int32_t)((dr[i] * df + zr[i] * lf) * (float)g);
+         }
+     }
+ }
+@@ -1166,8 +1183,8 @@ void app_init(void)
+ /* --------------------------------------------------------------------- UI --- */
+ /* a knob of a page: a voice parameter (0..), or a sequencer control */
+ enum { K_NONE = -1, K_SQ = 100, K_STEPS = 200, K_SCALE, K_TEMPO, K_ROOT, K_FX = 300 };
+-#define NPAGES 15                          /* patch 0012: + FINE(14); patch 0008: + LOOP(12) MACRO(13); patch 0007: + DRUM(11); patch 0005: + LFO(8) ENV(9) ASSIGN(10) */
+-static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB", "LFO", "ENV", "ASSIGN", "DRUM", "LOOP", "MACRO", "FINE"};   /* patch 0005 + 0007 + 0008 + 0012 */
++#define NPAGES 16                          /* patch 0011: + MIX(15); patch 0012: + FINE(14); patch 0008: + LOOP(12) MACRO(13); patch 0007: + DRUM(11); patch 0005: + LFO(8) ENV(9) ASSIGN(10) */
++static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB", "LFO", "ENV", "ASSIGN", "DRUM", "LOOP", "MACRO", "FINE", "MIX"};   /* patch 0005 + 0007 + 0008 + 0012 + 0011 */
+ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "DECAY"},
+                                             {"ACCENT", "TUNE", "WAVE", "GATE"},
+                                             {"DENSITY", "RANGE", "ACCENTS", "SLIDES"},
+@@ -1181,7 +1198,8 @@ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "
+                                             {"DST", "SRC", "LUD", "DEPTH"},      /* patch 0005: page ASSIGN */
+                                             {"-", "-", "-", "-"},              /* patch 0008: page LOOP, via zml_encoder */
+                                             {"-", "-", "-", "-"},              /* patch 0008: page MACRO, via zmac_encoder */
+-                                            {"-", "-", "-", "-"}};             /* patch 0012: page FINE (14), via zfine_encoder + zfine_draw */
++                                            {"-", "-", "-", "-"},              /* patch 0012: page FINE (14), via zfine_encoder + zfine_draw */
++                                            {"VOL", "MUT", "-", "-"}};        /* patch 0011: page MIX (15), via zmix_encoder + zmix_draw */
+ static const int PAGE_KNOB[NPAGES][4] = {{AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT_DECAY},
+                                     {AT_ACCENT, AT_TUNING, AT_WAVE, K_SQ + SQ_GATE},
+                                     {K_SQ + SQ_DENSITY, K_SQ + SQ_RANGE, K_SQ + SQ_ACCENT, K_SQ + SQ_SLIDE},
+@@ -1196,7 +1214,8 @@ static const int PAGE_KNOB[NPAGES][4] = {{AT_CUTOFF, AT_RESONANCE, AT_ENVMOD, AT
+                                     {K_NONE, K_NONE, K_NONE, K_NONE}, /* patch 0007: page DRUM, via zdr_encoder */
+                                     {K_NONE, K_NONE, K_NONE, K_NONE}, /* patch 0008: page LOOP */
+                                     {K_NONE, K_NONE, K_NONE, K_NONE}, /* patch 0008: page MACRO */
+-                                    {K_NONE, K_NONE, K_NONE, K_NONE}}; /* patch 0012: page FINE (14), via zfine_encoder */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE},  /* patch 0012: page FINE (14), via zfine_encoder */
++                                    {K_NONE, K_NONE, K_NONE, K_NONE}}; /* patch 0011: page MIX (15), via zmix_encoder */
+ 
+ static struct {
+     char msg[2][24];
+@@ -1692,8 +1711,9 @@ static void edit_move(int32_t d)
+ static const char *const OPT_LABEL[OP_N] = {"COLOR", "MIDI IN CH", "MIDI OUT CH", "SEQ NOTES OUT", "CLOCK OUT",
+     "CLK OFFSET", "LUDIQUE", "ECO", "CHOKE LDR",   /* patch 0009 */   /* patch 0005 */ "PULSE WIDTH", "SQUARE DROOP", "SAW RESET", "SAW DROOP", "FILTER DRIVE", "SLIDE TIME", "AUTO LEGATO",
+     "OTA SATURATION", "OUT SATURATION", "ANALOG DRIFT", "UNIT",   /* patch 0012 */ "FILTER MODEL", "FILTER MORPH",
+-    "SIREN WAVE", "SIREN RATE", "SIREN DEPTH", "SIREN MIX"};   /* patch 0015 */
+-static const char *const OPT_SECTION[OP_N] = {"DISPLAY", "MIDI", 0, 0, 0, 0, "FINE TUNING", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};   /* patch 0012: +2 (MODEL/MORPH, même section) */
++    "SIREN WAVE", "SIREN RATE", "SIREN DEPTH", "SIREN MIX",   /* patch 0015 */
++    "MIX VOICE", "MIX DRUMS", "MIX LOOP", "MIX MASTER", "MIX MUTE"};   /* patch 0011 */
++static const char *const OPT_SECTION[OP_N] = {"DISPLAY", "MIDI", 0, 0, 0, 0, "FINE TUNING", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "MIX", "MIX", "MIX", "MIX", "MIX"};   /* patch 0011: +5 (section MIX, OP_N=31) */
+ static void fine_value_text(int idx, int v, char *t)   /* patch 0012: table FINE extraite ; idx AT_NOPTS = MODEL, AT_NOPTS+1 = MORPH */
+ {
+     static const char *const FINE[AT_NOPTS][5] = {
+@@ -1792,6 +1812,38 @@ void zsir_opt_set(int idx, int v)
+             app_say("OPTIONS", "NOT SAVED");
+     }
+ }
++/* ---- patch 0011: accesseurs mixeur (OP_MIX_*, persistés dans OBJ_OPTIONS, save throttlé 1 s) ---- */
++static int zmix_slot(int s) { return s == ZMIX_MASTER ? 3 : s; }   /* VOICE/DRUMS/LOOP/MASTER -> 0..3 ; SIREN = OP_SIREN_MIX */
++int  zmix_opt_vol(int s) { return s == ZMIX_SIREN ? zsir_get(3) : opt.v[OP_MIX_VOL0 + zmix_slot(s)]; }
++void zmix_opt_set_vol(int s, int v)
++{
++    static uint32_t last_save;
++    if (s == ZMIX_SIREN) {
++        opt.v[OP_SIREN_MIX] = (uint8_t)v;
++        zsir_set(3, (uint8_t)v);
++    } else
++        opt.v[OP_MIX_VOL0 + zmix_slot(s)] = (uint8_t)v;
++    ui.opt_dirty = 1;
++    if (plat_ms() - last_save > 1000u) {
++        last_save = plat_ms();
++        if (plat_store_save(OBJ_OPTIONS, &opt, sizeof opt) != 0)
++            app_say("OPTIONS", "NOT SAVED");
++    }
++}
++int  zmix_opt_mut(void) { return opt.v[OP_MIX_MUT]; }
++void zmix_opt_set_mut(int m)
++{
++    static uint32_t last_save;
++    opt.v[OP_MIX_MUT] = (uint8_t)m;
++    ui.opt_dirty = 1;
++    if (plat_ms() - last_save > 1000u) {
++        last_save = plat_ms();
++        if (plat_store_save(OBJ_OPTIONS, &opt, sizeof opt) != 0)
++            app_say("OPTIONS", "NOT SAVED");
++    }
++}
++void zmix_say(const char *a, const char *b) { app_say(a, b); }
++
+ /* accesseurs ZTF (ztek_link.c) */
+ int32_t zlk_siren_get(int k) { return k == 0 ? (int32_t)zsir_get(0) : (int32_t)zsir_get(k) * 1000 / 255; }   /* patch 0015: wave en brut 0..3 */
+ void    zlk_siren_set(int k, int32_t v)
+@@ -1907,6 +1959,11 @@ static void input(void)
+                 for (w = 0; w < 16; w++)
+                     if (WHITE_KEY[w] == k) { zmac_slot(w); break; }
+                 ui.redraw = 1;
++            } else if (set.page == ZMIX_PAGE) {   /* patch 0011: page MIX — blanches 0..4 = VOICE/DRUMS/LOOP/SIREN/MASTER */
++                int w;
++                for (w = 0; w < 16; w++)
++                    if (WHITE_KEY[w] == k) { if (w < ZMIX_NSTRIP) zmix_sel_set(w); break; }
++                ui.redraw = 1;
+             } else {
+             uint32_t v = touch_vel(k);
+             if (ui.edit) {                     /* the editor: the key is the step's note; on to the next step */
+@@ -1998,7 +2055,7 @@ static void input(void)
+             ui.redraw = 1;
+             continue;
+         }
+-        if ((set.page == 12u || set.page == 13u || set.page == ZFINE_PAGE) && k == B_GLO) {  /* patch 0008 + 0012: GLO quitte LOOP/MACRO/FINE */
++        if ((set.page == 12u || set.page == 13u || set.page == ZFINE_PAGE || set.page == ZMIX_PAGE) && k == B_GLO) {  /* patch 0008 + 0012 + 0011: GLO quitte LOOP/MACRO/FINE/MIX */
+             set.page = 0u;
+             ui.redraw = 1;
+             continue;
+@@ -2068,6 +2125,12 @@ static void input(void)
+                 post(EV_GENERATE, 0, 0);
+             }
+             set_dirty = 1;
++        } else if (k == B_SAVE && ui.rec_hold) {   /* patch 0011: REC maintenu + SAVE = page MIX (15) */
++            ui.rec_used = 1;
++            set.page = ZMIX_PAGE;
++            ui.edit = ui.list = 0;
++            app_say("MIX", "PAGE 15");
++            ui.redraw = 1;
+         } else if (k == B_EDIT && ui.rec_hold) {   /* patch 0012: REC maintenu + EDIT = page FINE (14) */
+             ui.rec_used = 1;
+             set.page = ZFINE_PAGE;
+@@ -2224,6 +2287,9 @@ static void input(void)
+         } else if (set.page == ZFINE_PAGE) {   /* patch 0012: page FINE (14) — SEL=banc, K1..K4=réglages du banc */
+             zfine_encoder(k, e);
+             ui.redraw = 1;
++        } else if (set.page == ZMIX_PAGE) {   /* patch 0011: page MIX (15) — SEL=tranche/master, K1=vol, K2=mute */
++            zmix_encoder(k, e);
++            ui.redraw = 1;
+         } else if (k == EN_ALGO) {             /* ALGO: the wave, wherever you are (the VOICE page's WAVE) */
+             char t[24];
+             knob_turn(AT_WAVE, e > 0 ? 1 : -1);
+@@ -2312,6 +2378,7 @@ static int32_t view_base(void)
+     return s / 16 * 16;
+ }
+ static void zfine_draw(void);   /* patch 0012: page FINE (définie avant app_frame) */
++static void zmix_draw(void);    /* patch 0011: page MIX (15) — 5 lignes de tranches */
+ static void draw_pages(int32_t x, int32_t y)   /* the four pages: the one on view lit, the ones beyond the steps dark */
+ {
+     int32_t k, len = seq_len(), on = view_base() / 16;
+@@ -2343,7 +2410,7 @@ static void draw_pattern(int32_t y)
+ }
+ 
+ /* the page navigator at the foot: five tabs at a time around the page, the page boxed, arrows where there are more */
+-static const char *const PAGE_TAB[NPAGES] = {"VCF", "VOICE", "PATT", "SEQ", "DELAY", "CHOR", "DRIVE", "REVRB", "LFO", "ENV", "ASGN", "DRUM"};   /* patch 0005 + 0007 */
++static const char *const PAGE_TAB[NPAGES] = {"VCF", "VOICE", "PATT", "SEQ", "DELAY", "CHOR", "DRIVE", "REVRB", "LFO", "ENV", "ASGN", "DRUM", "LOOP", "MACRO", "FINE", "MIX"};   /* patch 0005 + 0007 + 0008 (LOOP/MACRO) + 0012 (FINE) + 0011 (MIX) — patch 0011: complété, text_w(NULL) crashait sinon */
+ static void draw_nav(int32_t y)
+ {
+     int32_t first = (int32_t)set.page - 2, k;
+@@ -2672,7 +2739,9 @@ static void draw(void)
+         return;
+     }
+     cv_begin(240, 138, C_BLACK);               /* 32 .. 170: no gap under the header */
+-    if (set.page == ZFINE_PAGE)                /* patch 0012: page FINE — 4 colonnes façon Shruthi */
++    if (set.page == ZMIX_PAGE)                 /* patch 0011: page MIX — 5 lignes */
++        zmix_draw();
++    else if (set.page == ZFINE_PAGE)                /* patch 0012: page FINE — 4 colonnes façon Shruthi */
+         zfine_draw();
+     else for (i = 0; i < 4; i++) {
+         int kn = PAGE_KNOB[set.page][i];
+@@ -2775,6 +2844,30 @@ static void zfine_draw(void)
+     }
+ }
+ 
++static void zmix_draw(void)
++{
++    char t[24], n[4];
++    int s = zmix_sel(), i;
++    t[0] = 0;
++    text_cat(t, "MIX ");
++    int_text(s + 1, n);
++    text_cat(t, n);
++    text_cat(t, "/5 ");
++    text_cat(t, ZMIX_NAME[s]);
++    cv_text(120 - text_w(&FONT_B, t) / 2, 4, &FONT_B, t, C_WHITE);
++    cv_text(120 + text_w(&FONT_B, t) / 2 + 8, 6, &FONT_XS, "<SEL>", C_GRAY);
++    for (i = 0; i < ZMIX_NSTRIP; i++) {
++        int v = zmix_vol(i), mut = zmix_muted(i);
++        int32_t y = 30 + i * 20, w;
++        cv_text(4, y, &FONT_XS, ZMIX_NAME[i], i == s ? C_HI : C_GRAY);
++        if (mut)
++            cv_text(202, y, &FONT_XS, "MUT", C_AMB);
++        cv_rect(60, y + 4, 116, 6, C_LINE);
++        w = (int32_t)(116.0f * v / 255.0f + 0.5f);
++        cv_rect(60, y + 4, mut ? 0 : w, 6, i == s ? C_LOGO : C_GRAY);
++    }
++}
++
+ void app_frame(void)
+ {
+     static int32_t last_note = -2;
+@@ -2840,6 +2933,12 @@ int app_expect(const char *what, int *got)
+         *got = set.octave;
+     else if (!strcmp(what, "page"))
+         *got = set.page;
++    else if (!strcmp(what, "mixsel"))         /* patch 0011: page MIX */
++        *got = zmix_sel();
++    else if (!strcmp(what, "mixvol"))
++        *got = zmix_vol(zmix_sel());
++    else if (!strcmp(what, "mixmut"))
++        *got = zmix_muted(zmix_sel());
+     else if (!strcmp(what, "dirty"))
+         *got = set_dirty;
+     else if (!strcmp(what, "accent"))
+diff --git a/atek303/app/tests/mix.txt b/atek303/app/tests/mix.txt
+new file mode 100644
+index 0000000..ec0d14d
+--- /dev/null
++++ b/atek303/app/tests/mix.txt
+@@ -0,0 +1,37 @@
++# patch 0011: page MIX (15) — REC+SAVE ouvre, SEL=tranche, K1=vol, K2=mute, blanches 0..4, GLO quitte
++press REC
++tap SAVE
++release REC
++wait 100
++expect page 15
++expect mixsel 0
++expect mixvol 255
++turn SELECT 1
++wait 50
++expect mixsel 1
++turn K1 -4
++wait 50
++expect mixvol 223
++turn K2 1
++wait 50
++expect mixmut 1
++turn K2 1
++wait 50
++expect mixmut 0
++key 6 down
++wait 50
++expect mixsel 3
++key 6 up
++key 0 down
++wait 50
++expect mixsel 0
++key 0 up
++turn SELECT 4
++wait 50
++expect mixsel 4
++turn K1 -32
++wait 50
++expect mixvol 0
++tap GLO
++wait 50
++expect page 0
+diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+index 4d8fea3..68d07d3 100644
+--- a/atek303/app/fm1.toml
++++ b/atek303/app/fm1.toml
+@@ -8,10 +8,12 @@ ble = false                    # sin radio de momento
+ usb_audio_in = true            # el 303 se graba por USB
+ usb_audio_out = true           # patch 0009: el telefono juega DENTRO del FM-1 (puente audio hibrido APK -> FM-1)
+ backup = true
++ram_layout = "packed"       # patch 0020: un seul budget SRAM (app_packed.ld)
++cache_ram_ways = 7         # patch 0020: +28 Ko (voies du cache data en RAM)
+ companion = true               # patch 0009: services companion (files/params) + ZTF, liaison APK <-> FM-1
+ words = "words.tsv"
+ include = ["dsp"]
+-o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c", "ztek_link.c", "ztek_fine.c", "ztek_siren.c"]   /* patch 0012: + page FINE ; patch 0015: + sirène */   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper ; patch 0009: + ztek_link (ZTF/companion) (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
++o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c", "ztek_link.c", "ztek_fine.c", "ztek_siren.c", "ztek_mix.c"]   /* patch 0012: + page FINE ; patch 0015: + sirène ; patch 0011: + mix */   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper ; patch 0009: + ztek_link (ZTF/companion) (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
+ # el sitio
+ title = "ATEK303"              # el nombre que ve la gente (si no, firmware.json saldría como «Animatek»)
+ tagline = "The ATEK303 acid voice on the M-VAVE FM-1"
