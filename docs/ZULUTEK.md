@@ -268,8 +268,11 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
 
 ## Table de mixage principale (page MIX, 4 tranches)
 
-4 tranches **BASSE / LEAD / DRUMS / LOOP** (BASSE et LEAD partagent le bus voix physique :
-engine 0 = LEAD, engines 1..4 = BASSE). Par tranche, en tête **pré-fader** : filtre traversant
+4 tranches **VOICE / DRUMS / LOOP / SIREN** (décision mixeur 4 tranches unifié APK/FM-1,
+`docs/ZULUTEK-MIX-SIREN.md` : **VOICE** = bus voix unique — BASSE et LEAD réunis, engine 0 =
+LEAD, engines 1..4 = BASSE, un seul rend à la fois ; **SIREN** = tranche dédiée à la sirène,
+vol ↔ `siren_lvl` (param ZTF SIREN MIX), mute ↔ siren off, le routage audio reste dans la baie
+`ZTEK_PSRC_SIREN` inchangé). Par tranche, en tête **pré-fader** : filtre traversant
 **LP — neutre — HP** + cutoff (40 Hz..5 kHz), puis **VOL**, **MUT** ; départs auxiliaires
 **post-fader** : PoW! (P), Loop (L — la tranche LOOP n'en a pas), 2 slots libres AUX1/AUX2
 (assignables dans la baie, module AUX). Master : **BUS** (gain, SEL=tranche 4) + départs aux
@@ -277,4 +280,7 @@ libres master AUX1/AUX2 (vides par défaut, baie) + **VU**. Chaîne FX partagée
 master, Black Hole bridée. Pas d'inserts delay/reverb dans le mixeur (pages instruments).
 Contrôles page MIX : SEL=tranche/master, K1=vol (bus si master), K2=mut, K3=filtre LP/·/HP,
 K4=cutoff, PRE=aux PoW!, ALG=aux Loop. Moteur : `ztek_mix_set/get_strip` (ZTEK_MIX_*), tranches
-préservées par snapshots/kits/undo.
+préservées par snapshots/kits/undo. **Migration** : magic preset `ZTP1` → `ZTP2`, remap
+`strip_par` au load/import (VOICE := ex-LEAD, DRUMS/LOOP décalés, SIREN neuf vol=`siren_lvl`) ;
+`ZTEK_NSTRIP` reste 4 donc la baie (52 ports) ne change pas. ZTF inchangé (aucun param
+renuméroté).

@@ -201,8 +201,13 @@ const char *ztek_preset_name_part(int part, int i);   /* factory name per part (
 void ztek_preset_factory(ztek_t *z, int part, int i);  /* factory pre-patched preset of a part: generic
                                                         * preset + part engine/sound + 4 macro slots filled */
 
-/* ---- table de mixage principale : 4 tranches BASSE/LEAD/DRUMS/LOOP -------------------- */
-enum { ZTEK_STRIP_BASSE = 0, ZTEK_STRIP_LEAD, ZTEK_STRIP_DRUMS, ZTEK_STRIP_LOOP, ZTEK_NSTRIP };
+/* ---- table de mixage principale : 4 tranches VOICE/DRUMS/LOOP/SIREN --------------------
+ * (décision mixeur 4 tranches unifié APK/FM-1, docs/ZULUTEK-MIX-SIREN.md : VOICE = bus voix
+ * unique, BASSE et LEAD réunis ; SIREN = tranche dédiée, vol <-> siren_lvl, mute <-> siren off) */
+enum { ZTEK_STRIP_VOICE = 0, ZTEK_STRIP_DRUMS, ZTEK_STRIP_LOOP, ZTEK_STRIP_SIREN, ZTEK_NSTRIP };
+enum { ZTEK_V1_STRIP_BASSE = 0, ZTEK_V1_STRIP_LEAD, ZTEK_V1_STRIP_DRUMS, ZTEK_V1_STRIP_LOOP };  /* ordre legacy 'ZTP1' */
+#define ZTEK_PRESET_MAGIC_V1 0x5A545031u   /* 'ZTP1' : strips BASSE/LEAD/DRUMS/LOOP (remap au load/import) */
+#define ZTEK_PRESET_MAGIC    0x5A545032u   /* 'ZTP2' : strips VOICE/DRUMS/LOOP/SIREN */
 enum { ZTEK_MIX_CUT, ZTEK_MIX_FMODE, ZTEK_MIX_VOL, ZTEK_MIX_PAN, ZTEK_MIX_MUT, ZTEK_MIX_SOLO,
        ZTEK_MIX_LDR, ZTEK_MIX_AUX_POW, ZTEK_MIX_AUX_LOOP,
        ZTEK_MIX_AUX1, ZTEK_MIX_AUX2, ZTEK_MIX_AUX3, ZTEK_MIX_AUX4, ZTEK_MIX_N };
@@ -217,7 +222,7 @@ enum { ZTEK_MIXM_GAIN, ZTEK_MIXM_AUX1, ZTEK_MIXM_AUX2, ZTEK_MIXM_N };   /* maste
 #define ZT_NPARTS 3
 #define ZT_PSLOTS 16
 typedef struct {
-    uint32_t magic;                  /* 'ZTP1' when used */
+    uint32_t magic;                  /* 'ZTP2' when used ('ZTP1' legacy accepté au load/import, strips remapés) */
     int32_t part, slot;
     char name[16];
     int engine;
@@ -292,7 +297,7 @@ int   ztek_loop_slot_act(const ztek_t *z, int slot);       /* notes actives du s
  *   module 6 OUT   : 5   (155 entrée chaîne FX, 156 MASTER, 157 anneau PoW!,
  *                          158 AUX1, 159 AUX2 = départs auxiliaires LIBRES du master,
  *                          vides par défaut et assignables dans la baie)          offset 155
- *   module 7 AUX   : 8   = 2 slots aux libres x 4 tranches du main mix (BASSE/LEAD/DRUMS/LOOP),
+ *   module 7 AUX   : 8   = 2 slots aux libres x 4 tranches du main mix (VOICE/DRUMS/LOOP/SIREN),
  *                          vides par défaut, assignables                          offset 160
  *   module 8 MIX   : 55  = 13 params x 4 tranches (CUT,FMODE,VOL,PAN,MUT,SOLO,LDR,
  *                          AUX_POW,AUX_LOOP,AUX1..4) + 3 master (GAIN,AUX1,AUX2)     offset 168

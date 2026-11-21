@@ -34,6 +34,8 @@ La sirène est traitée comme un module du rack à part entière : tranche de mi
 
 ## Côté APK (équipe B) — PR dédié de migration des strips
 
+(implémenté : PR #36 `vibe/zulutek-mix-siren-apk-1f7cfe` — magic `ZTP2` + remap `strip_par` au load/import, `STRIP_NAMES = VOICE/DRUMS/LOOP/SIREN`, tranche SIREN vol↔`siren_lvl` / mute↔siren off dans `ztek_mix_set/get_strip`, src SIREN = NULL dans le render)
+
 - Renuméroter : `enum { ZTEK_STRIP_VOICE = 0, ZTEK_STRIP_DRUMS, ZTEK_STRIP_LOOP, ZTEK_STRIP_SIREN, ZTEK_NSTRIP = 4 }`
   (aujourd'hui `BASSE=0, LEAD=1, DRUMS=2, LOOP=3`).
 - `ZTEK_NSTRIP` reste 4 → `ZTEK_MIX_NSTRIP_PORTS` reste 52 : la géométrie de la baie ne change pas,
