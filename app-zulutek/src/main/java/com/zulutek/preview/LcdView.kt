@@ -1,4 +1,3 @@
-successfully downloaded text file (SHA: 3885c063a950f2745b090a286570e70bc3f39576)
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
  *
