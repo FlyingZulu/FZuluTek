@@ -109,6 +109,13 @@ La page LINK 17 gagne la **télécommande live** et le **miroir d'état** :
   PLAY = export local `.ztp1` **+ push vers `ZPRE%02d`** quand l'USB est up ; pull des `ZPRE*` en `.ztp1`
   (ré-importable), `ZKIT*` en `.zkt1`. Le store `ZPRE` côté FM-1 reste à exposer par un prochain patch
   firmware (0010 = ZSMP/ZLUP/ZMAC seulement ; zone libre 0xD2000..0xD3FFF, 1 page de 0x1000).
+- ✅ **Fait côté firmware (patch 0013, PR #21 mergée)** : fichiers companion **virtuels** `ZPRE00..31`
+  (blob `ZTP1`, 1284 o, miroir exact de `ztek_preset_t` APK — `ZPRE%02d` = part×8+slot) et
+  `ZKIT00..02` (blob `ZKT1`, 400 o, kits ZULU/808/909). Aucun octet de flash consommé : le store
+  (PRESETS_A..D) sert de backing, les écritures sont accumulées en RAM et appliquées au commit
+  (`app_zpre_import` → `plat_store_save`). Testé e2e sur host sim : 57 fichiers, round-trip ZPRE
+  octet-identique (part/slot normalisés au nom de fichier, comme `ztek_preset_import` APK),
+  delete ZPRE vidé + sauvé, delete ZKIT refusé.
 
 ## 5. Limites v1/v2 connues
 
