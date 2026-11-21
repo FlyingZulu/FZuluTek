@@ -1,4 +1,3 @@
-successfully downloaded text file (SHA: de0902c9eb79242cf0eb10eb7f7aebeae81fb3cc)
 # ZuluTek & Zulu Kontrol — charte graphique (APK preview, compagnon tablette, firmware FM-1)
 
 L'écran du FM-1 est **240×240**, monochrome avec accents fluo. L'APK `app-zulutek` (LcdView)
@@ -196,3 +195,22 @@ reste sans badge : le crédit « Flying Zulu » est au bas de l'écran.
   `rgb(0,255,224)` en bas-droite (`draw_title` dans `tools/make_icon.py`).
 - Côté LCD 240×240 du FM-1 : mêmes règles, dessin direct en pixels (RGB565, ST7789) ; voir
   `docs/FM1-RESSOURCES.md` (émulateur fm1-emu, miroir d'écran fm1-projector, police pixel 3x de fm1-sampler).
+
+## Façade simulée (SurfaceView, APK et compagnon)
+
+La façade reproduit le panneau canonique du FM-1, dessiné d'après l'art de référence de
+l'émulateur fm1-emu (github.com/joakimeriksson/fm1-emu, crates/fm1-live/src/panel.rs, lui
+même d'après le diagramme Felucca) : canevas logique 1280x820 mis à l'échelle au centre de
+la vue. Disposition : MASTER/SELECT/PRESETS/ALGORITHM à gauche avec OCT-/OCT+ dessous dans
+leur tray, bezel LCD au centre (le LcdView s'affiche au-dessus), KNOB1..4 puis les 12
+boutons carrés en 2 rangées de 6 dans le tray droit (FX SCL ENV LFO EDIT GLO / HOME SAVE
+ARP SEQ PLAY REC, PLAY+REC entourés), et les 27 touches pill F3..G5 en bas (16 blanches =
+slots, 11 noires = notes, noir d'abord au hit-test). Thème « black-green », celui de la
+machine : corps rgb(58,58,61)/rgb(46,46,48), trays rgb(117,192,183), sérigraphie
+rgb(160,216,208), boutons et pills menthe rgb(101,198,184)/rgb(82,176,160) à encre sombre
+rgb(30,56,48), ombres et enfoncement (offset 2-3 px) quand enfoncé. Les états de la charte
+teintent la capsule en ambre (vert pour PLAY), le pop d'encodeur fait un halo ambre, et les
+pills chauffent à l'ambre selon slot/rec/sélection. La sérigraphie des encodeurs est
+statique (SELECT/PRESETS/ALGORITHM/KNOB1..4) et le relabel dynamique s'affiche dessous.
+Le dispatch reste par index SurfaceListener (l'ordre matrice machine est converti).
+La façade suit le style MATÉRIEL ; le LCD garde la charte noir/encre/fluo inchangée.
