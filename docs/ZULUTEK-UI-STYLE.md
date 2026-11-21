@@ -101,8 +101,12 @@ pour les états** (thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
   le boot ZuluTek.
 - Crédit **« Flying Zulu »** : petit, **en bas, centré, dans le splash** — identique ZuluTek
   (gris atténué, police mono). Aucun crédit permanent dans l'app.
-- Mode VHS : scanlines **uniquement sur le noir** (blend LIGHTEN, gris `argb(255,24,24,28)`,
-  lignes 1 px tous les 4 px à partir de y = 2), identique ZuluTek ; ON/OFF global.
+- Mode VHS : scanlines **uniquement sur le noir** (blend LIGHTEN, gris très sombre), les
+  plus **fines et discrètes** possible : lignes 1 px tous les 3 px (`VhsOverlay`), jamais
+  sur le flash inversé ; le glitch est **réactif aux moteurs audio** — les notes (VCO),
+  paramètres et blips du `LocalEngineLink` envoient des pulses (`onPulse` câblé dans
+  `MainActivity`) qui densifient brièvement la trame et font défiler une bande de
+  tracking, sans jamais gêner la lecture des paramètres. ON/OFF global.
 - Nyan Cat (`NyanView`) : **le** remix officiel **v3**, géométrie strictement identique au
   `drawCat` de FZuluTek (zébrures en tons du blaster + trame halftone, platine-visor
   zébrée claire, yeux = HP XXL collés aux bords à cadre noir élargi, truffe ovale
@@ -110,6 +114,11 @@ pour les états** (thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
   cassette = bouche REC/PLAY/STOP, antenne fine, traînée arc-en-ciel 6 bandes + étoiles) ;
   blaster **menthe ZK** `rgb(175,255,240)` / croûte `rgb(46,210,180)`, comme l'icône —
   aucun autre chat, aucune variante.
+- **Étiquettes Game Boy partout** : tous les labels des pads/kits/widgets qui pop dans
+  les menus utilisent la typo pixel **5×9 à EMPATTEMENTS** de l'étiquette de titre
+  (`PixelFont.kt`, mêmes glyphes que `TITLE_GLYPHS` de `make_icon.py`) : un mot court =
+  une ligne, un mot composé (« MIDI LOOP ») = DEUX lignes JUSTIFIÉES à la même largeur,
+  à l'échelle du contrôle, couleurs d'état inchangées (PadBar, KitBar, ControlZone).
 ### Icônes des apps : un dessin, des initiales
 
 Chaque app Zulu garde **la même icône** (le remix officiel généré par `tools/make_icon.py`,
@@ -128,8 +137,13 @@ varie — **ZT** rose `rgb(255,158,222)` / croûte `rgb(226,74,168)` ; **ZK** me
 
 Toute nouvelle app suit le même schéma : mêmes cotes, initiales + accent dédiés. Le splash
 reste sans badge : le crédit « Flying Zulu » est au bas de l'écran.
-- Veille : 30 s sans toucher → Nyan en grand écran qui se balade ; gyro armé = le chat glisse
-  selon le tilt (niveau à bulle). Désactivable.
+- Veille : après le délai d'inactivité → **fond « intérieur du FM-1 »** : le décor PCB
+  pixel art du `draw_pcb` de `tools/make_icon.py` (mêmes cotes : chip CPU épinglé, pistes
+  cuivre, câbles colorés, condensateurs, LED, vis) en grand écran très sombre, parcouru
+  par le chat qui se balade avec un **effet lampe de poche** — un halo radial révèle le
+  circuit autour de lui — et des pulses de signal turquoise le long des câbles
+  (`NyanView`, bitmap grille 240 agrandie au plus proche voisin). Gyro armé = le chat
+  glisse selon le tilt (niveau à bulle, fond noir). Désactivable.
 - Prompt pour UI designer externe : `docs/PROMPT-UI-ZKONTROL.md` (FZulu-Control), dérivé de
   cette charte. Spec complète : `docs/CONTROL.md`.
 
