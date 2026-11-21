@@ -1,8 +1,11 @@
-# ZuluTek — charte graphique (APK preview + firmware FM-1)
+successfully downloaded text file (SHA: de0902c9eb79242cf0eb10eb7f7aebeae81fb3cc)
+# ZuluTek & Zulu Kontrol — charte graphique (APK preview, compagnon tablette, firmware FM-1)
 
 L'écran du FM-1 est **240×240**, monochrome avec accents fluo. L'APK `app-zulutek` (LcdView)
 imite cet écran à l'identique : **mêmes règles, mêmes couleurs, mêmes animations** côté APK
-et côté firmware (patch `animatek/FM1-Animatek`).
+et côté firmware (patch `animatek/FM1-Animatek`). Le compagnon tablette **Zulu Kontrol**
+(`FlyingZulu/FZulu-Control`, dépôt privé) applique la même charte — ses variantes sont
+documentées dans la section « Zulu Kontrol » plus bas.
 
 ## Palette (constantes dans `LcdView.companion`)
 
@@ -66,6 +69,27 @@ image → LCD (240×240, 1 bit + accents) dans `tools/lcd_image.py`.
 
 **Crédit** : pendant le splash, un petit **« Flying Zulu »** s'affiche tout en bas de
 l'écran, centré, gris atténué, police mono (comme un générique de fin de film).
+
+## Zulu Kontrol (compagnon tablette — FlyingZulu/FZulu-Control)
+
+L'app tablette **Zulu Kontrol** (console Vankyo, module `zkontrol`, package `com.zulukontrol`,
+label **ZKontrol**) applique **la même charte, unifiée** : fond sombre, encre mono, accents
+fluo ZU/LU/turquoise/REC/ambre **uniquement pour les états** (thème `ZcDark`/`ZcTheme`,
+`Theme.kt`), **5 skins**. Variantes assumées :
+
+- Intro **« Zulu Kontrol »** ~2 s, split RGB ; même pixel art fin que le boot ZuluTek.
+- Crédit **« Flying Zulu »** : petit, **en bas à droite** côté Zulu Kontrol (en bas, centré,
+  côté ZuluTek) — même gris atténué, même police mono.
+- Mode VHS : scanlines **sur toute l'app**, ON/OFF global (là où le FM-1 les réserve à
+  l'option LUXE, page par page).
+- Nyan Cat (`NyanView`) : même remix Ghetto Blaster × Nyan Cat, **variante galop** — le chat
+  pop-tart (croûte + sprinkles, oreilles, yeux, joues roses, moustaches) porte la boombox
+  sur le dos (2 HP, cassette, poignée, antenne, LED REC clignotante 260 ms), pattes en galop,
+  traînée arc-en-ciel 6 bandes ondulée, étoiles scintillantes.
+- Veille : 30 s sans toucher → Nyan en grand écran qui se balade ; gyro armé = le chat glisse
+  selon le tilt (niveau à bulle). Désactivable.
+- Prompt pour UI designer externe : `docs/PROMPT-UI-ZKONTROL.md` (FZulu-Control), dérivé de
+  cette charte. Spec complète : `docs/CONTROL.md`.
 
 ## Fichiers
 
