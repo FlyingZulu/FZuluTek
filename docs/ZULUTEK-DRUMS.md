@@ -26,7 +26,7 @@ Notre cible : une mini-PĒRKONS logicielle.
   patterns par pad éditables, RAND.
 - Delay BBD, LFO morphable, MIDI → plus tard (FX page PATCH côté app-zulutek, ZuluLink).
 
-## 1. Philosophie (demandes FlyingZulu, 2026-11-20)
+## 1. Philosophie (demandes Flying Zulu, 2026-11-20)
 
 - Drums **analogiques inspirés Elektron/PĒRKONS** (punch, drive, hybridation), pas de samples.
 - **Kick/snare style Mutable Instruments** (Braids/Elements, GPL-3.0, crédits Émilie Gillet) :
@@ -89,7 +89,7 @@ Notre cible : une mini-PĒRKONS logicielle.
 - `g++ -std=c++17 -fsyntax-only` bridge (stubs jni/oboe) → RC=0.
 - CI `gradle assembleDebug` → `ZuluTekDrums-debug.apk`.
 
-## 5b. Mises à jour v2.1 (2026-11-20 ~03:20Z, demandes FlyingZulu)
+## 5b. Mises à jour v2.1 (2026-11-20 ~03:20Z, demandes Flying Zulu)
 
 - **P0 = PITCH sur les 8 voies** (règle 808/909/PĒRKONS) : KICK 40–200 Hz, SNARE corps 150–400 Hz,
   HAT multiplieur des 6 carrés, CLAP fc du BP 400–3600 Hz (one-pole LP+HP), TOM 80–300 Hz,
@@ -112,7 +112,7 @@ Notre cible : une mini-PĒRKONS logicielle.
 
 ## 5c. Mises à jour v2.2 (2026-11-20 ~03:35Z)
 
-- **12 knobs par voie = 3 pages de 4** (demande FlyingZulu) : page 3 = **P8 PAN, P9 SEND DELAY,
+- **12 knobs par voie = 3 pages de 4** (demande Flying Zulu) : page 3 = **P8 PAN, P9 SEND DELAY,
   P10 SEND REVERB, P11 SEND COMP** (contribution au détecteur du compresseur, ducking ciblé).
   Le render passe en **stéréo** (`drum_render(d, outL, outR, n)`, pan law cos/sin par voie).
 - **Delay bus partagé** (ring `DR_DLY_MAX` = 16384 éch ≈ 0,34 s ; 8192 en `DR_FM1_ECO`), params
@@ -124,6 +124,46 @@ Notre cible : une mini-PĒRKONS logicielle.
   PING (FM aigu mod 3,5×). Test host : les 5 rendent, P0=PITCH 200–1000 Hz.
 - Tests host v2.2 RC=0 : PAN gauche/droite OK (eL 51.7/eR 0 et inverse), DELAY OK, REVERB OK,
   ELIXIR 5/5 OK, COND 1:2 régression 31/32, compile C99 -Wall OK, bridge stubs OK.
+
+## 5d. Mises à jour v2.4 (2026-11-22, patch 0023, demandes Flying Zulu)
+
+- **FM-1 passe à 6 pads : CLAP et COWBELL sautent** (choix Flying Zulu). Pads FM-1 :
+  KICK, SNARE, HAT, TOM, ELIXIR, FM. **L'APK garde ses 8 pads inchangés**
+  (KICK SNARE HAT HAT-O CLAP TOM CONGA COWBELL).
+- **Divergence de listes documentée** : les 8 lignes FM-1 d'origine étaient
+  KICK SNARE HAT CLAP TOM ELIXIR COWBELL FM, l'APK a sa propre lignée
+  (deux drum_engine jamais synchronisés depuis le portage). C'est préexistant ;
+  le remap ci-dessous neutralise, APK non touché.
+- **Garde DR_NPADS** : `drum_engine.h` définit `DR_NPADS 8` sous
+  `#ifndef DR_NPADS` ; les unités FM-1 (`ztek_drum.c`, `ztek_drum_fm1.c` posent
+  `#define DR_NPADS 6` avant l'inclusion, les DEUX unités, sinon .bss doublé et
+  offsets drum_t divergents). Enum adaptatif : KICK=0, SNARE=1, HAT=2, TOM=3,
+  ELIXIR=4, FM=5 en 6 pads ; code CLAP/COWBELL sous `#if DR_NPADS == 8`.
+- **Tables canoniques inchangées** (flash) : KITPAR/names restent à 8 lignes
+  (`DR_TABPADS 8`) ; remap `DR_TAB()` = {0,1,2,4,5,7} (lignes CLAP/COWBELL
+  ignorées sur FM-1).
+- **Blob ZKT1 à taille fixe 8** (`DR_ZKT1_NPADS`) : export = kits usine
+  canoniques 8 lignes, import clampé aux pads montés. Contrat APK intact
+  (`zlk_ztp1_fits`, ZKIT00..02), `dr_zkt1_t` (par[8] fixe) taille constante.
+- **ONE-SHOT séquenceur drums** : `drum_set_oneshot`/`drum_get_oneshot`.
+  Fin = **dernier step relevé** : à la fin du pattern les notes/coupes sont
+  relevées (pas de bouclage), position figée, DRUM FIN relayé ; PLAY repart du
+  step 0.
+- **ONE-SHOT looper MIDI** : `ml_set_oneshot`/`ml_get_oneshot`. Les 5 sens
+  (NORM/REV/PING-PONG x2/RANDOM) arment un rebond vers l'arrêt à leur wrap
+  final ; `ml_oneshot_stop` relève les notes actives via note_off.
+- **UI FM-1** : SHIFT = dernière touche noire maintenue (mode d'emploi, hors
+  mode clavier, 11 noires, index bi==10). **SHIFT+SEQ sur pages 11/12** =
+  toggle one-shot (drums / looper).
+- **APK** : toggle SHIFT+SEQ dans les pages drum et looper (JNI/Kotlin).
+- **Routage looper (bug APK seulement)** : le looper MIDI ne doit enregistrer
+  QUE les notes jouées en amont du séquenceur (clavier), pas celles générées
+  par le séquenceur acid → `ztek_engine.c` `ztek_acid_step` passe record=1 à 0.
+  Vérifié : ce bug n'existe PAS sur FM-1 (l'acid passe par at_gate, jamais par
+  la file EV_NOTE_ON qui alimente zml_note_in).
+- Validation : rejeu du patch 0023 sur l'arbre reconstruit post-0022 = arbres
+  identiques octet à octet ; garde #if/#endif équilibrée ; aucune réf
+  CLAP/COWBELL active en 6 pads ; build réel CI/toolchain JieLi.
 
 ## 6. À faire ensuite (PAS pushé sans aval utilisateur)
 
