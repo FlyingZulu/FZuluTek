@@ -1,0 +1,103 @@
+diff --git a/atek303/app/app.h b/atek303/app/app.h
+index 762445e..60afeab 100644
+--- a/atek303/app/app.h
++++ b/atek303/app/app.h
+@@ -42,6 +42,21 @@ void app_backup_restored(void);
+ #define APP_USB_IN                                         /* hook audio USB entrant (patch fm1-base uac tap) */
+ void app_usb_in(const int32_t *lr, uint32_t n);
+ 
++/* device/companion.c (inclus par unity.c avant app.c) appelle ces hooks : leurs prototypes doivent être ici
++ * (contrat fm1-base, include/plat.h), sinon déclarations implicites puis conflit de types à la définition */
++int app_file(int i, plat_file_info_t *f);
++int app_file_read(int i, uint32_t off, void *dst, uint32_t n);
++int app_file_begin(int i, uint32_t size);
++int app_file_write(int i, uint32_t off, const void *src, uint32_t n);
++int app_file_commit(int i, uint32_t size, uint32_t crc);
++int app_file_delete(int i);
++int app_file_busy(void);
++int app_param(int i, plat_param_t *p);
++const char *app_param_group(int g);
++int32_t app_param_get(int i);
++int32_t app_param_set(int i, int32_t v);
++void app_file_changed(uint32_t obj);
++
+ void app_init(void);
+ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12);
+ void app_panic(void);
+diff --git a/atek303/app/ztek_drum.c b/atek303/app/ztek_drum.c
+index 79ac822..5c381b8 100644
+--- a/atek303/app/ztek_drum.c
++++ b/atek303/app/ztek_drum.c
+@@ -4,6 +4,7 @@
+  * ztek_drum.c — glue FM-1 de la drum machine (voir ztek_drum.h). C99, pas d'allocation dynamique.
+  * Le moteur lui-même est dsp/drum_engine.c (vendored, compilé avec DR_FM1_ECO via ztek_drum_fm1.c). */
+ #include <string.h>
++#define DR_FM1_ECO 1                     /* même taille de drum_t que l'unité moteur ztek_drum_fm1.c (sinon .bss x2 et struct mismatch) */
+ #include "ztek_drum.h"
+ #include "dsp/drum_engine.h"
+ 
+diff --git a/atek303/app/ztek_drum_fm1.c b/atek303/app/ztek_drum_fm1.c
+index 526019f..fc21a01 100644
+--- a/atek303/app/ztek_drum_fm1.c
++++ b/atek303/app/ztek_drum_fm1.c
+@@ -5,4 +5,15 @@
+  * DR_FM1_ECO réduit le ring du delay (8192 éch. au lieu de 16384) pour la RAM de l'AC791N.
+  * Le fichier dsp/drum_engine.c reste vendored tel quel (même source que l'APK, PR #5). */
+ #define DR_FM1_ECO 1
++#ifndef PLAT_HOST                       /* au build FM-1, libm n'est pas lié : les appels libm du vendored */
++#include "fastmath.h"                    /* drum_engine.c (même source que l'APK, PR #5) passent par fm_* */
++#define floorf(x)  fm_floorf(x)
++#define sinf(x)    fm_sinf(x)
++#define cosf(x)    fm_cosf(x)
++#define expf(x)    fm_expf(x)
++#define powf(x,y)  fm_powf(x,y)
++#define sqrtf(x)   fm_sqrtf(x)
++#define fabsf(x)   fm_fabsf(x)
++#define tanhf(x)   fm_tanhf(x)
++#endif
+ #include "dsp/drum_engine.c"
+diff --git a/atek303/app/ztek_link.c b/atek303/app/ztek_link.c
+index b552aef..bb93315 100644
+--- a/atek303/app/ztek_link.c
++++ b/atek303/app/ztek_link.c
+@@ -84,14 +84,20 @@ static uint32_t zlk_vsize(int i)
+     return 0;
+ }
+ 
++static void zlk_mkname(char *dst, const char *pfx, int k)   /* "ZPRE%02d" sans snprintf (pas de libc printf au build FM-1) */
++{
++    dst[0] = pfx[0]; dst[1] = pfx[1]; dst[2] = pfx[2]; dst[3] = pfx[3];
++    dst[4] = (char)('0' + k / 10); dst[5] = (char)('0' + k % 10); dst[6] = 0;
++}
++
+ void zlk_init(void)
+ {
+     int k;
+     cur_file = -1;
+     for (k = 0; k < ZLK_NPRE; k++)
+-        snprintf(zlk_vnames[k], 8, "ZPRE%02d", k);
++        zlk_mkname(zlk_vnames[k], "ZPRE", k);
+     for (k = 0; k < ZLK_NKIT; k++)
+-        snprintf(zlk_vnames[ZLK_NPRE + k], 8, "ZKIT%02d", k);
++        zlk_mkname(zlk_vnames[ZLK_NPRE + k], "ZKIT", k);
+ }
+ 
+ /* applique un fichier commité (relit depuis la flash et applique au moteur) ; 0 ok */
+diff --git a/atek303/app/ztek_siren.c b/atek303/app/ztek_siren.c
+index dae799b..022f780 100644
+--- a/atek303/app/ztek_siren.c
++++ b/atek303/app/ztek_siren.c
+@@ -5,6 +5,13 @@
+  * mixée pre-FX (le bus mono part dans fx_process, comme la chaîne APK : … → siren → fx → out). */
+ #include <math.h>
+ #include <string.h>
++#ifndef PLAT_HOST                       /* au build FM-1, libm n'est pas lié */
++#include "fastmath.h"
++#define sinf(x)    fm_sinf(x)
++#define expf(x)    fm_expf(x)
++static float sir_fmodf(float x, float y) { return x - fm_floorf(x / y) * y; }   /* fmodf à y > 0 */
++#define fmodf(x,y) sir_fmodf(x,y)
++#endif
+ #include "ztek_siren.h"
+ 
+ const char *const ZSIR_NAMES[ZSIR_NW] = { "CLASSIQUE", "CHOP", "POLICE", "LASER" };
