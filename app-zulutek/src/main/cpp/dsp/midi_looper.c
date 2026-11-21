@@ -462,6 +462,26 @@ static float ml_ulaw_dec(uint8_t u)
 void ml_set_eco(ml_t *m, int on) { m->eco = on ? 1 : 0; }
 int  ml_get_eco(const ml_t *m)   { return m->eco; }
 
+/* one-shot (liaison APK/FM-1, même sémantique que le séquenceur drums) :
+ * un slot qui boucle (wrap/rebond) s'arrête là — dernier passage relevé (note_off des
+ * notes tenues via s->act[]), pas de nouveau tour. Les événements restent dans le
+ * slot : le relancer le rejoue depuis le début. */
+void ml_set_oneshot(ml_t *m, int on) { m->oneshot = on ? 1 : 0; }
+int  ml_get_oneshot(const ml_t *m)   { return m->oneshot; }
+
+/* arrêt one-shot d'un slot — relève les coupes (note_off des notes actives) */
+static void ml_oneshot_stop(ml_t *m, int slot, ml_slot_t *s)
+{
+    int a;
+    for (a = 0; a < s->n_act; a++)
+        if (m->note_off) m->note_off(m->ctx, slot, s->act[a].note);
+    s->n_act = 0;
+    s->on = 0;
+    s->pos = 0.0f;
+    s->last_pos = 0.0f;
+    s->dir = 1;
+}
+
 void ml_rs_start(ml_t *m, int dst, uint16_t monmask, uint32_t cap, int fmt, int khz)
 {
     uint32_t maxc;
@@ -645,13 +665,18 @@ void ml_render(ml_t *m, uint32_t n)
         p0 = s->last_pos;
         if (s->sp.mode == 1) {                                 /* reverse */
             p1 = p0 - step;
-            if (p1 < 0.0f) { ml_fire(m, i, s, p0, 0.0f, -1); p1 += (float)s->len; ml_fire(m, i, s, (float)s->len, p1, -1); }
+            if (p1 < 0.0f) {
+                ml_fire(m, i, s, p0, 0.0f, -1);           /* dernier passage relevé jusqu'à 0 */
+                if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* one-shot : fin au wrap (reverse) */
+                p1 += (float)s->len; ml_fire(m, i, s, (float)s->len, p1, -1);
+            }
             else ml_fire(m, i, s, p0, p1, -1);
         } else if (s->sp.mode == 2) {                          /* ping-pong */
             if (s->dir > 0) {
                 p1 = p0 + step;
                 if (p1 >= (float)s->len) {
                     ml_fire(m, i, s, p0, (float)s->len, 1);
+                    if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* one-shot : fin au rebond haut */
                     s->dir = -1;
                     p1 = 2.0f * (float)s->len - p1;
                     ml_fire(m, i, s, (float)s->len, p1, -1);
@@ -660,6 +685,7 @@ void ml_render(ml_t *m, uint32_t n)
                 p1 = p0 - step;
                 if (p1 <= 0.0f) {
                     ml_fire(m, i, s, p0, 0.0f, -1);
+                    if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* one-shot : fin au rebond bas */
                     s->dir = 1;
                     p1 = -p1;
                     ml_fire(m, i, s, 0.0f, p1, 1);
@@ -669,6 +695,7 @@ void ml_render(ml_t *m, uint32_t n)
             p1 = p0 + step;
             if (p1 >= (float)s->len) {
                 ml_fire(m, i, s, p0, (float)s->len, 1);
+                if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* one-shot : fin au wrap (random) */
                 p1 = (float)(ml_rnd(m) % (uint32_t)s->len);    /* nouvelle position aléatoire */
                 if (m->randp > 0.0f && (float)(ml_rnd(m) & 0xFFFF) / 65536.0f < m->randp)
                     ml_rand_slot(m, i);                        /* RAND au wrap : re-génère le slot */
@@ -678,6 +705,7 @@ void ml_render(ml_t *m, uint32_t n)
             p1 = p0 + step;
             if (p1 >= (float)s->len) {
                 ml_fire(m, i, s, p0, (float)s->len, 1);
+                if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* one-shot : fin au wrap, dernier step relevé */
                 p1 -= (float)s->len;
                 if (m->randp > 0.0f && (float)(ml_rnd(m) & 0xFFFF) / 65536.0f < m->randp)
                     ml_rand_slot(m, i);                        /* RAND au wrap (mode normal aussi) */
@@ -761,3 +789,4 @@ void ml_clear_leader(ml_t *m, int grp)
 {
     if (grp > 0 && grp <= 6) m->lead[grp] = -1;
 }
+
