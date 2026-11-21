@@ -489,6 +489,9 @@ ztek_t *ztek_create(float sr)
         z->strip[s].lp = 0.0f;
         for (int p = 0; p < ZTEK_MIX_N; p++) z->strip_mod[s][p] = 0.0f;
     }
+    /* tranche SIREN : vol/mute sont des miroirs de siren_lvl / siren_on (décision mixeur 4 tranches) */
+    z->strip[ZTEK_STRIP_SIREN].vol = z->siren_lvl;
+    z->strip[ZTEK_STRIP_SIREN].mut = z->siren_on ? 0 : 1;
     z->master_par[ZTEK_MIXM_GAIN] = 1.0f; z->master_par[ZTEK_MIXM_AUX1] = 0.0f; z->master_par[ZTEK_MIXM_AUX2] = 0.0f;
     for (int p = 0; p < ZTEK_MIXM_N; p++) z->master_mod[p] = 0.0f;
     z->undo_n = 0; z->redo_n = 0;
@@ -542,10 +545,10 @@ static void ztek_note_on_int(ztek_t *z, int note, int vel, int accent, int slide
     }
     if (z->engine == 0) {
         at_gate(&z->voice, 1, note, accent, slide);
-        if (z->strip[ZTEK_STRIP_LEAD].ldr) bass_panic(&z->bass);    /* LDR LEAD : la lead coupe la basse */
+        if (z->strip[ZTEK_STRIP_VOICE].ldr) bass_panic(&z->bass);   /* LDR VOICE : la lead coupe la basse */
     } else {
         bass_gate(&z->bass, 1, note, accent, slide);
-        if (z->strip[ZTEK_STRIP_BASSE].ldr) at_panic(&z->voice);    /* LDR BASSE : la basse coupe le lead */
+        if (z->strip[ZTEK_STRIP_VOICE].ldr) at_panic(&z->voice);     /* LDR VOICE : la basse coupe la lead */
     }
 }
 
@@ -750,9 +753,13 @@ void ztek_mix_set_strip(ztek_t *z, int strip, int param, float v)
     switch (param) {
     case ZTEK_MIX_CUT:      st->cut = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
     case ZTEK_MIX_FMODE:    st->fmode = (int)v; if (st->fmode < 0) st->fmode = 0; if (st->fmode > 2) st->fmode = 2; break;
-    case ZTEK_MIX_VOL:      st->vol = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
+    case ZTEK_MIX_VOL:      st->vol = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
+        if (strip == ZTEK_STRIP_SIREN) z->siren_lvl = st->vol;   /* tranche SIREN : vol = siren_lvl */
+        break;
     case ZTEK_MIX_PAN:      st->pan = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v; break;
-    case ZTEK_MIX_MUT:      st->mut = v > 0.5f ? 1 : 0; break;
+    case ZTEK_MIX_MUT:      st->mut = v > 0.5f ? 1 : 0;
+        if (strip == ZTEK_STRIP_SIREN) z->siren_on = st->mut ? 0 : 1;  /* tranche SIREN : mute = siren off */
+        break;
     case ZTEK_MIX_SOLO:     st->solo = v > 0.5f ? 1 : 0; break;
     case ZTEK_MIX_LDR:
         st->ldr = v > 0.5f ? 1 : 0;
@@ -776,9 +783,9 @@ float ztek_mix_get_strip(const ztek_t *z, int strip, int param)
     switch (param) {
     case ZTEK_MIX_CUT:      return st->cut;
     case ZTEK_MIX_FMODE:    return (float)st->fmode;
-    case ZTEK_MIX_VOL:      return st->vol;
+    case ZTEK_MIX_VOL:      return (strip == ZTEK_STRIP_SIREN) ? z->siren_lvl : st->vol;
     case ZTEK_MIX_PAN:      return st->pan;
-    case ZTEK_MIX_MUT:      return (float)st->mut;
+    case ZTEK_MIX_MUT:      return (strip == ZTEK_STRIP_SIREN) ? (z->siren_on ? 0.0f : 1.0f) : (float)st->mut;
     case ZTEK_MIX_SOLO:     return (float)st->solo;
     case ZTEK_MIX_LDR:      return (float)st->ldr;
     case ZTEK_MIX_AUX_POW:  return st->aux_pow;
@@ -2033,12 +2040,37 @@ static int ztek_pslot_ok(int part, int slot)
     return part >= 0 && part < ZT_NPARTS && slot >= 0 && slot < ZT_PSLOTS;
 }
 
+static int ztek_preset_magic_ok(uint32_t m)
+{
+    return m == ZTEK_PRESET_MAGIC || m == ZTEK_PRESET_MAGIC_V1;
+}
+
+/* remap strip_par d'un preset 'ZTP1' (BASSE=0,LEAD=1,DRUMS=2,LOOP=3) vers 'ZTP2'
+ * (VOICE=0,DRUMS=1,LOOP=2,SIREN=3) — décision mixeur 4 tranches, docs/ZULUTEK-MIX-SIREN.md :
+ * VOICE := ex-LEAD, DRUMS := ex-DRUMS, LOOP := ex-LOOP, SIREN := neuf (vol = siren_lvl, mute = siren off) */
+static void ztek_preset_remap_v1(ztek_preset_t *p, float siren_lvl, int siren_on)
+{
+    float old[ZTEK_NSTRIP][ZTEK_MIX_N];
+    memcpy(old, p->strip_par, sizeof old);
+    for (int q = 0; q < ZTEK_MIX_N; q++) {
+        p->strip_par[ZTEK_STRIP_VOICE][q] = old[ZTEK_V1_STRIP_LEAD][q];
+        p->strip_par[ZTEK_STRIP_DRUMS][q] = old[ZTEK_V1_STRIP_DRUMS][q];
+        p->strip_par[ZTEK_STRIP_LOOP][q]  = old[ZTEK_V1_STRIP_LOOP][q];
+    }
+    {
+        float sir[ZTEK_MIX_N] = { 0.5f, 1.0f, siren_lvl, 0.5f, siren_on ? 0.0f : 1.0f,
+                                  0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+        memcpy(p->strip_par[ZTEK_STRIP_SIREN], sir, sizeof sir);
+    }
+    p->magic = ZTEK_PRESET_MAGIC;
+}
+
 void ztek_preset_save(ztek_t *z, int part, int slot)
 {
     if (!ztek_pslot_ok(part, slot)) return;
     ztek_preset_t *p = &z->pstore[part][slot];
     memset(p, 0, sizeof(*p));
-    p->magic = 0x5A545031u;                     /* 'ZTP1' */
+    p->magic = ZTEK_PRESET_MAGIC;               /* 'ZTP2' */
     p->part = part;
     p->slot = slot;
     snprintf(p->name, sizeof(p->name), "P%d-%d", part + 1, slot + 1);
@@ -2074,8 +2106,9 @@ void ztek_preset_save(ztek_t *z, int part, int slot)
 void ztek_preset_load(ztek_t *z, int part, int slot)
 {
     if (!ztek_pslot_ok(part, slot)) return;
-    const ztek_preset_t *p = &z->pstore[part][slot];
-    if (p->magic != 0x5A545031u) return;
+    ztek_preset_t *p = &z->pstore[part][slot];
+    if (!ztek_preset_magic_ok(p->magic)) return;
+    if (p->magic == ZTEK_PRESET_MAGIC_V1) ztek_preset_remap_v1(p, z->siren_lvl, z->siren_on);
     ztek_set_engine(z, p->engine);
     for (int i = 0; i < AT_NPARAMS; i++) ztek_set_param(z, i, p->param[i]);
     for (int i = 0; i < FX_NPARAMS; i++) ztek_fx_set(z, i, p->fx[i]);
@@ -2110,14 +2143,14 @@ void ztek_preset_load(ztek_t *z, int part, int slot)
 int ztek_preset_used(const ztek_t *z, int part, int slot)
 {
     if (!ztek_pslot_ok(part, slot)) return 0;
-    return z->pstore[part][slot].magic == 0x5A545031u;
+    return ztek_preset_magic_ok(z->pstore[part][slot].magic);
 }
 
 /* unified bank load: user save wins; otherwise the factory preset if the slot is in range */
 void ztek_bank_load(ztek_t *z, int part, int slot)
 {
     if (!ztek_pslot_ok(part, slot)) return;
-    if (z->pstore[part][slot].magic == 0x5A545031u) ztek_preset_load(z, part, slot);
+    if (ztek_preset_magic_ok(z->pstore[part][slot].magic)) ztek_preset_load(z, part, slot);
     else if (slot < ZT_NPRESETS) ztek_preset_factory(z, part, slot);   /* factory pre-patched, per part */
 }
 
@@ -2131,7 +2164,7 @@ void ztek_preset_set_name(ztek_t *z, int part, int slot, const char *name)
 {
     if (!ztek_pslot_ok(part, slot) || !name) return;
     ztek_preset_t *p = &z->pstore[part][slot];
-    if (p->magic != 0x5A545031u) { p->magic = 0x5A545031u; p->part = part; p->slot = slot; }
+    if (!ztek_preset_magic_ok(p->magic)) { p->magic = ZTEK_PRESET_MAGIC; p->part = part; p->slot = slot; }
     snprintf(p->name, sizeof(p->name), "%s", name);
 }
 
@@ -2144,7 +2177,7 @@ const char *ztek_preset_slot_name(const ztek_t *z, int part, int slot)
 int ztek_preset_export(const ztek_t *z, int part, int slot, uint8_t *buf, int cap)
 {
     if (!ztek_pslot_ok(part, slot)) return 0;
-    if (z->pstore[part][slot].magic != 0x5A545031u) return 0;
+    if (!ztek_preset_magic_ok(z->pstore[part][slot].magic)) return 0;
     if (!buf || cap < (int)sizeof(ztek_preset_t)) return 0;
     memcpy(buf, &z->pstore[part][slot], sizeof(ztek_preset_t));
     return (int)sizeof(ztek_preset_t);
@@ -2156,7 +2189,8 @@ int ztek_preset_import(ztek_t *z, int part, int slot, const uint8_t *buf, int le
     if (!buf || len != (int)sizeof(ztek_preset_t)) return 0;
     ztek_preset_t tmp;
     memcpy(&tmp, buf, sizeof(tmp));
-    if (tmp.magic != 0x5A545031u) return 0;
+    if (!ztek_preset_magic_ok(tmp.magic)) return 0;
+    if (tmp.magic == ZTEK_PRESET_MAGIC_V1) ztek_preset_remap_v1(&tmp, z->siren_lvl, z->siren_on);
     tmp.part = part;
     tmp.slot = slot;
     z->pstore[part][slot] = tmp;
@@ -2805,10 +2839,10 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
             const float *src[ZTEK_NSTRIP];
             int any_solo = 0;
             int s;
-            src[ZTEK_STRIP_BASSE] = (z->engine != 0) ? z->mono : NULL;   /* BASSE/LEAD partagent le bus voix */
-            src[ZTEK_STRIP_LEAD]  = (z->engine == 0) ? z->mono : NULL;
-            src[ZTEK_STRIP_DRUMS] = z->drumbuf;
-            src[ZTEK_STRIP_LOOP]  = z->loopbuf;
+            src[ZTEK_STRIP_VOICE]  = z->mono;                        /* bus voix unique (engine 0 = lead, 1..4 = basses) */
+            src[ZTEK_STRIP_DRUMS]  = z->drumbuf;
+            src[ZTEK_STRIP_LOOP]   = z->loopbuf;
+            src[ZTEK_STRIP_SIREN]  = NULL;   /* sirène routée via la baie (ZTEK_PSRC_SIREN) ; la tranche pilote siren_lvl/siren_on */
             for (s = 0; s < ZTEK_NSTRIP; s++)
                 if (ztek_strip_eff(z, s, ZTEK_MIX_SOLO) > 0.5f) any_solo = 1;
             for (s = 0; s < ZTEK_NSTRIP; s++) {
