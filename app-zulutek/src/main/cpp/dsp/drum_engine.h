@@ -49,6 +49,8 @@ typedef struct {
     int8_t   lead[DR_NCHOKE];   /* leader explicite par groupe (touche POLY), -1 = auto (1er assigné) */
     uint8_t  leader;    /* 1 = mode hybride (leader), 0 = choke mutuel classique */
     uint8_t  eco;       /* MODE ECO : polyphonie 8 -> 5 (la plus vieille voix est coupée) */
+    uint8_t  oneshot;      /* 1 = le seq s'arrête une fois le dernier step (15) relevé, pas de wrap */
+    uint8_t  oneshot_off; /* interne : 1 = one-shot terminé, horloge figée (les voix finissent de sonner) */
 } drum_t;
 
 void drum_init(drum_t *d, float sr);                 /* patterns 4-on-the-floor par défaut */
@@ -64,6 +66,8 @@ void drum_set_level(drum_t *d, int pad, float lvl);
 void drum_set_master(drum_t *d, float m);
 int  drum_get_step(const drum_t *d);
 void drum_reset(drum_t *d);                          /* remet le seq au step 0 */
+void drum_set_oneshot(drum_t *d, int on);             /* one-shot : le seq s'arrête une fois le dernier step relevé */
+int  drum_get_oneshot(const drum_t *d);
 
 void drum_set_choke(drum_t *d, int pad, int grp);    /* grp 0..6 ; 1er assigné = master */
 int  drum_get_choke(const drum_t *d, int pad);
@@ -80,3 +84,4 @@ int  drum_get_eco(const drum_t *d);
 #endif
 
 #endif /* DRUM_ENGINE_H */
+
