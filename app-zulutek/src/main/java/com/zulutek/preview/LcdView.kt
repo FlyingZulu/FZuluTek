@@ -1,5 +1,6 @@
-successfully downloaded text file (SHA: b9d5ef3603a672bd99bdf90b8feabebafafa0223)
-successfully downloaded text file (SHA: 3885c063a950f2745b090a286570e70bc3f39576)
+<<<<<<< HEAD
+=======
+>>>>>>> origin/vibe/fix-download-marker-line1-7f3a21
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
  *

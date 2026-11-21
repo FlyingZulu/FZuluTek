@@ -7,7 +7,7 @@ Firmware ATEK303 personnalisé (dérivé GPL-3.0 d'Animatek — crédits : Anima
 code publié en GPL-3.0 + crédits Animatek, nouvelle clé de signature générée (l'actuelle
 reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
 
-## État des branches (maj 2026-11-21) — `main` = `ecdb43b` (PR #35 spec mixeur 4 tranches mergée, CI verte run 44879057251) ; PR #36 ouverte (implémentation APK), drafts #32/#33/#34 côté équipe A
+## État des branches (maj 2026-11-21 ~15:10Z) — `main` = `254936f` ; mergées : #30 #31 #35 #36 #40 ; drafts ouvertes : #32/#33/#34 (équipe A, rebasées sur main), #37 (patches 0019-0022), #39 (doc), #41 (fix CI)
 
 - **Mergées dans main** (ordre : #3 → #9 → #5 → #2 → #4 → #6 → #7 → #8 puis **#1** `3ca9446` par la session B — baie v3 hiérarchique + DRUMS + choke MONO/POLY + OPTIONS(ECO/LDR) + mixeur 4 tranches + page DRUMS, CI verte run 44722534300 ; `gh pr merge` bloqué par le proxy → merges via `git merge --no-ff` + `git push origin main`, branches conservées) :
   - **PR #3** `vibe/zulutek-seq-plus-c9ef18` — pack SEQ+ APK (modulation 8/8, ASSIGN typé LUDIQUE, presets, ARP page 13, MACRO page 14)
@@ -31,6 +31,12 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
 - **PR #35** `vibe/zulutek-mix-siren-spec-7f3a21` MERGÉE (`ecdb43b`) — doc spec **mixeur 4 tranches unifié APK/FM-1 (VOICE/DRUMS/LOOP/SIREN)** : `docs/ZULUTEK-MIX-SIREN.md`.
 - **PR #36** `vibe/zulutek-mix-siren-apk-1f7cfe` (équipe B, MERGED `16bc6e1`) — implémentation APK de la spec #35 : strips `ZTEK_STRIP_VOICE/DRUMS/LOOP/SIREN` (`ZTEK_NSTRIP`=4, baie inchangée), VOICE = bus voix unique, tranche SIREN vol↔`siren_lvl`/mute↔siren off (aucun nouveau param ZTF), migration presets magic `ZTP1`→`ZTP2` + remap `strip_par` (sizeof POD inchangé 1284 o), `STRIP_NAMES` Kotlin, doc `docs/ZULUTEK.md`.
 - **PR #40** `vibe/zulutek-apk-landscape-1f7cfe` (équipe B) — **APK en paysage comme le FM-1** (objet horizontal) : suppression du verrou `screenOrientation="portrait"` du manifeste initial (commit `7fa5491`, restauration de branche — jamais documenté, contradictoire avec « clone de la surface du FM-1 »), `sensorLandscape` + `configChanges` sur MainActivity (pas de recréation à la rotation, audio continu), `LcdView` ajusté par la hauteur en paysage, docs (`ZULUTEK.md` ligne orientation, `FM1-RESSOURCES.md` références visuelles FM-1 en ligne : manuel, Ars Technica, fm1-emu, firmware hub). Patch 0011/0019 FM-1 reste à écrire côté équipe A après le régime SRAM (PR #34/#37).
+- **Session 2026-11-21 ~15:10Z (VibeCode)** :
+  - **PR #37** `vibe/fm1-patch-0019-0020-mix-sram-7f3a21` — patches **0019** (page MIX 15, 4 tranches VOICE/DRUMS/LOOP/SIREN unifiée APK #36), **0020** (régime SRAM : 37 Ko libres, `.fwsc` 616 059 o buildable), **0021** (ZPRE `'ZTP2'` accepté/exporté côté FM-1, miroir APK), **0022** (fix `settings_ok` `page < NPAGES` — bug réel : presets sauvés sur page ≥ 8 perdus au reboot ; re-baseline `tests/options.txt` drift index 18). Vérifié sandbox : 8934f53 + 0001..0022 `git apply` propre, build host OK, **9/9 scénarios sim 0 FAIL**, build `.fwsc` OK.
+  - **PR #32 / #33** rebasées sur main (conflits `patches/README.md` résolus). Leurs CI rouges = `tools/make_icon.py` corrompu sur main (voir #41), pas leur code.
+  - **PR #41** `vibe/fix-download-marker-line1-7f3a21` — fix urgent : ligne parasite `successfully downloaded text file (SHA: …)` en tête de 4 fichiers poussés via le connecteur (`make_icon.py`, `LcdView.kt`, `MainActivity.kt`, `SurfaceView.kt`) cassait la CI de toutes les PRs. CI verte run 44911528814.
+  - **PR #39** doc statut FM-1 dans `docs/ZULUTEK-MIX-SIREN.md`. **PR #38** fermée (supersédée par #36).
+  - Reste : merger #41 → #32 → #33 → #34 → #37 → #39 (dans l'ordre de la série de patches), puis flash FM-1 (backup AT64 + dump JTAG) et test ZPRE ZTP2 de bout en bout.
 - 🗺️ **Carte de la flash 1 MiB (zones interdites en écriture)** : `docs/FM1-FLASHMAP.md` — boot head `0x0..0x3FFF` et `key_mac 0xFF000` jamais écrits, zone app `0x4000..0x97000` réservée au loader OTA, VM/BTIF `0xE7000..0xE9FFF` interdits, nos fichiers ZTF validés dans `0xB0000..0xD3FFF`. Voir aussi `docs/FM1-HARDWARE.md` (FM-1 rev octobre 2026 = flash UC25HQ80 JEDEC `B3 60 14`, unbrick par `WL82 UBOOT1.00` USB ou dongle Seeed XIAO RP2040).
 
 <details><summary>Détail des PR mergées (archive)</summary>

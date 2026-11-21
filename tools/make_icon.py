@@ -1,4 +1,3 @@
-successfully downloaded text file (SHA: 2f406d10ebd837f5f420c34ea6883caa21384215)
 #!/usr/bin/env python3
 # tools/make_icon.py — génère les visuels de l'APK zuluTek en PIXEL ART fin
 # (style console portable 16 bits type Game Gear, pas le gros pixel Game Boy) :
