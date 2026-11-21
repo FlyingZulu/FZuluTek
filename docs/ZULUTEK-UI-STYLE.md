@@ -60,12 +60,16 @@ modules dans la liste IN, et toutes les mentions de câbles. Les couleurs :
 
 ## Intro (boot, ~1,9 s)
 
-**Remix Hello Kitty × Nyan Cat × Ghetto Blaster (v2)** dans la même charte : le corps du
-walkman est une pop-tart (croûte + sprinkles), la platine cassette recentrée est le visage
-du chat où **LES DEUX HP GÉANTS SONT LES YEUX** (rondelle claire `rgb(178,184,198)` +
-membrane `rgb(116,122,140)` + cœur blanc + reflets kawaii), truffe jaune Hello Kitty,
-joues roses, sourire, moustaches au niveau de la truffe, oreilles de chat arrondies,
-poignée, antenne, bouton + LED, traînée arc-en-ciel étoilée, angles du blaster arrondis.
+**Remix Hello Kitty × Nyan Cat × Ghetto Blaster (v3)** dans la même charte : le corps du
+blaster porte des **zébrures de zèbre EN TONS DU BLASTER** (jamais noir/blanc) + une
+**trame pop art halftone** (petits points décalés), la platine-visage remontée et élargie
+est **ZÉBRÉE noir sur clair** `rgb(218,222,232)` où **LES DEUX HP XXL SONT LES YEUX**
+collés aux bords dans un cadre noir élargi (rondelle très claire `rgb(232,236,244)` +
+membrane `rgb(148,154,168)` + cœur blanc + reflets kawaii), **truffe OVALE contourée**
+Hello Kitty (jaune fluo à liseré sombre), joues roses, **TROIS moustaches par côté avec
+ombre noire**, oreilles **blanches** à bord noir fin, **LECTEUR CASSETTE = LA BOUCHE**
+(étiquette, fenêtre bande + 2 bobines, 4 vis, boutons **REC/PLAY/STOP**), antenne fine
+collée au blaster, traînée arc-en-ciel étoilée. Plus de poignée, plus de sourire trait.
 Line-art pixel art fin + accents **rose fluo / jaune fluo / turquoise**.
 Le prompt pour IA générative vit dans `docs/PROMPT-BOOT-IA.md`, l'outil de conversion
 image → LCD (240×240, 1 bit + accents) dans `tools/lcd_image.py`.
@@ -86,12 +90,13 @@ pour les états** (thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
   (gris atténué, police mono). Aucun crédit permanent dans l'app.
 - Mode VHS : scanlines **uniquement sur le noir** (blend LIGHTEN, gris `argb(255,24,24,28)`,
   lignes 1 px tous les 4 px à partir de y = 2), identique ZuluTek ; ON/OFF global.
-- Nyan Cat (`NyanView`) : **le** remix officiel **v2**, géométrie strictement identique au
-  `drawCat` de FZuluTek (yeux = HP XXL avec rondelle claire, cœur blanc + reflets kawaii,
-  truffe Hello Kitty, moustaches au niveau du nez, joues, sourire, oreilles arrondies,
-  angles arrondis, bouton + LED, traînée arc-en-ciel 6 bandes, 4 étoiles) ; blaster **menthe
-  ZK** `rgb(175,255,240)` / croûte `rgb(46,210,180)`, comme l'icône — aucun autre chat,
-  aucune variante.
+- Nyan Cat (`NyanView`) : **le** remix officiel **v3**, géométrie strictement identique au
+  `drawCat` de FZuluTek (zébrures en tons du blaster + trame halftone, platine-visor
+  zébrée claire, yeux = HP XXL collés aux bords à cadre noir élargi, truffe ovale
+  contourée, 3 moustaches ombrées par côté, joues, oreilles blanches à bord fin, lecteur
+  cassette = bouche REC/PLAY/STOP, antenne fine, traînée arc-en-ciel 6 bandes + étoiles) ;
+  blaster **menthe ZK** `rgb(175,255,240)` / croûte `rgb(46,210,180)`, comme l'icône —
+  aucun autre chat, aucune variante.
 ### Icônes des apps : un dessin, des initiales
 
 Chaque app Zulu garde **la même icône** (le remix officiel généré par `tools/make_icon.py`,
@@ -133,8 +138,10 @@ reste sans badge : le crédit « Flying Zulu » est au bas de l'écran.
   style console portable 16 bits (Game Gear) — pas le gros pixel Game Boy : grille interne **240×240**
   (comme l'écran du FM-1), redimensionnement **au plus proche voisin** (pixels nets, jamais de lissage).
 - Générateur : `tools/make_icon.py` (pur Python, PNG écrits en zlib) → `mipmap-*/ic_launcher.png`
-  + `drawable-nodpi/splash_boombox.png` (le remix Hello Kitty × Nyan Cat × Ghetto Blaster v2). Splash ~1,9 s :
-  boombox-pop-tart (couleur du blaster par app), visage de chat sur la platine où les yeux
-  sont les haut-parleurs, traînée arc-en-ciel étoilée, tap = passer.
+  + `drawable-nodpi/splash_boombox.png` (le remix Hello Kitty × Nyan Cat × Ghetto Blaster v3). Splash ~1,9 s :
+  boombox zébré pop en tons du blaster + trame halftone (couleur du blaster par app),
+  visage de chat sur la platine zébrée où les yeux-HP XXL sont collés aux bords du cadre
+  noir, truffe ovale, lecteur cassette en bouche (REC/PLAY/STOP), traînée arc-en-ciel
+  étoilée, tap = passer.
 - Côté LCD 240×240 du FM-1 : mêmes règles, dessin direct en pixels (RGB565, ST7789) ; voir
   `docs/FM1-RESSOURCES.md` (émulateur fm1-emu, miroir d'écran fm1-projector, police pixel 3x de fm1-sampler).
