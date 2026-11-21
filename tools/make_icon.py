@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 # tools/make_icon.py — génère les visuels de l'APK zuluTek en PIXEL ART fin
 # (style console portable 16 bits type Game Gear, pas le gros pixel Game Boy) :
-# REMIX Ghetto Blaster x Nyan Cat : corps pop-tart rose (croûte + sprinkles), platine
-# cassette devenue visage de chat, oreilles, poignée, antenne, HP, traînée étoilée.
+# REMIX Hello Kitty x Nyan Cat x Ghetto Blaster : corps pop-tart (croûte + sprinkles),
+# platine cassette devenue visage de chat — les DEUX HP GÉANTS sont les YEUX, v2 :
+# couleur du blaster par app ; rev2 : visage recentré, rondelle claire + membrane
+# lumineuse, coeur blanc + reflets kawaii, truffe Hello Kitty, moustaches au niveau du
+# nez, angles arrondis, oreilles de chat plus douces.
 # - icônes launcher : master 120x120 -> nearest vers mipmap 48..192
 # - splash : master 240x240 -> drawable-nodpi/splash_boombox.png (480 px, fond transparent)
 # Redimensionnement au plus proche voisin : les pixels restent nets.
@@ -75,11 +78,17 @@ PINK_D = (226, 74, 168, 255)
 DARK = (22, 23, 30, 255)
 GRAY = (200, 204, 214, 255)
 
-def draw(cv, bg=True, tag="ZT", accent=(255, 45, 160, 255), base=(10, 10, 16, 255)):
-    # REMIX GHETTO BLASTER x NYAN CAT (drawing in 120 units, scaled to the grid)
-    # le walkman-cat : corps pop-tart rose a croote + sprinkles, platine cassette devenue
-    # visage de chat (yeux, joues roses, sourire, moustaches), oreilles, poignee, antenne,
-    # deux HP, trainee arc-en-ciel etoilee derriere.
+def draw(cv, bg=True, tag="ZT", accent=(255, 45, 160, 255), base=(10, 10, 16, 255),
+         tart=(255, 158, 222, 255), crust_c=(226, 74, 168, 255),
+         eye_core=(255, 255, 255, 255), eye_shine=True):
+    # REMIX Hello Kitty x NYAN CAT x GHETTO BLASTER (drawing in 120 units, scaled)
+    # le walkman-cat : corps pop-tart (croûte + sprinkles), platine cassette devenue
+    # visage de chat : les DEUX HP GÉANTS sont les yeux (rondelle claire, membrane
+    # lumineuse, anneau sombre, coeur blanc + reflets kawaii), truffe Hello Kitty,
+    # joues roses, sourire, moustaches au niveau de la truffe ; oreilles arrondies,
+    # poignée, antenne, bouton + LEDs, traînée arc-en-ciel étoilée.
+    # La couleur du ghetto blaster (pop-tart + croûte) varie par app : ZT rose
+    # (255,158,222 / 226,74,168), ZK menthe (175,255,240 / 46,210,180).
     k = cv.s / 120.0
     def X(v):
         return v * k
@@ -96,49 +105,61 @@ def draw(cv, bg=True, tag="ZT", accent=(255, 45, 160, 255), base=(10, 10, 16, 25
     cv.line(X(96), X(30), X(114), X(10), 2.2 * k, GRAY)
     cv.circle(X(114), X(10), 2.6 * k, GRAY)
     # poignee entre les oreilles
-    cv.rect(X(52), X(26), X(74), X(29), PINK_D)
-    cv.rect(X(52), X(36), X(74), X(39), PINK_D)
-    cv.rect(X(52), X(26), X(55), X(39), PINK_D)
-    cv.rect(X(71), X(26), X(74), X(39), PINK_D)
-    # oreilles de chat (contour sombre puis rose)
-    cv.tri(X(40), X(38), X(36), X(19), X(54), X(38), DARK)
-    cv.tri(X(88), X(38), X(74), X(38), X(92), X(19), DARK)
-    cv.tri(X(42), X(37), X(39), X(23), X(52), X(37), PINK)
-    cv.tri(X(86), X(37), X(77), X(37), X(89), X(23), PINK)
-    # corps du ghetto blaster : contour sombre, croote pop-tart, interieur rose
-    cv.rect(X(26), X(36), X(106), X(104), DARK, r=8 * k)
-    cv.rect(X(28.5), X(38.5), X(103.5), X(101.5), PINK_D)
-    cv.rect(X(30), X(40), X(102), X(100), PINK, r=6 * k)
-    # sprinkles sur la pop-tart (hors platine/HP)
+    cv.rect(X(52), X(26), X(74), X(29), crust_c)
+    cv.rect(X(52), X(36), X(74), X(39), crust_c)
+    cv.rect(X(52), X(26), X(55), X(39), crust_c)
+    cv.rect(X(71), X(26), X(74), X(39), crust_c)
+    # oreilles de chat plus douces : tips arrondis (cercle), legerement versees
+    # vers l'exterieur ; interieur pop-tart.
+    cv.tri(X(41), X(40), X(58), X(40), X(43), X(25), DARK)
+    cv.circle(X(43.5), X(24), 2.2 * k, DARK)
+    cv.tri(X(45), X(39), X(56), X(39), X(44.5), X(28), tart)
+    cv.circle(X(45), X(29), 1.3 * k, tart)
+    cv.tri(X(82), X(40), X(99), X(40), X(97), X(25), DARK)
+    cv.circle(X(96.5), X(24), 2.2 * k, DARK)
+    cv.tri(X(84), X(39), X(95), X(39), X(95.5), X(28), tart)
+    cv.circle(X(95), X(29), 1.3 * k, tart)
+    # corps du ghetto blaster : contour sombre, croute pop-tart, interieur pop-tart
+    # angles arrondis (r=11 v2rev2)
+    cv.rect(X(26), X(37), X(106), X(105), DARK, r=11 * k)
+    cv.rect(X(28.5), X(39.5), X(103.5), X(102.5), crust_c, r=9 * k)
+    cv.rect(X(30), X(41), X(102), X(100), tart, r=7 * k)
+    # sprinkles sur la pop-tart (hors platine/visage/poignee/boutons)
     SPR = [(255, 255, 255, 255), (255, 238, 0, 255), (0, 255, 224, 255),
            (255, 48, 48, 255), (0, 160, 255, 255), (170, 60, 255, 255)]
-    for si, (sx, sy) in enumerate(((34, 44), (40, 42), (58, 43), (70, 43), (84, 44), (95, 42), (102, 74), (103, 88))):
+    for si, (sx, sy) in enumerate(((36, 43), (48, 42), (62, 42), (76, 42), (90, 43),
+                                   (33, 53), (33, 67), (100, 53), (100, 67),
+                                   (44, 88), (55, 86), (77, 86), (88, 89))):
         cv.circle(X(sx), X(sy), 1.3 * k, SPR[si % 6])
-    # platine cassette = visage du chat (grande fenetre centrale)
-    cv.rect(X(46), X(46), X(94), X(77), DARK, r=4 * k)
-    cv.rect(X(48), X(48), X(92), X(75), (36, 37, 48, 255), r=3 * k)
-    cv.circle(X(59), X(58), 2.6 * k, (255, 255, 255, 255))       # oeil gauche
-    cv.circle(X(81), X(58), 2.6 * k, (255, 255, 255, 255))       # oeil droit
-    cv.circle(X(59.6), X(58.6), 1.1 * k, DARK)
-    cv.circle(X(81.6), X(58.6), 1.1 * k, DARK)
-    cv.circle(X(54), X(66), 2.2 * k, (255, 120, 160, 255))       # joue rose
-    cv.circle(X(86), X(66), 2.2 * k, (255, 120, 160, 255))
-    cv.tri(X(58), X(66), X(70), X(66), X(64), X(71), (255, 255, 255, 255))   # sourire
-    cv.tri(X(70), X(66), X(82), X(66), X(76), X(71), (255, 255, 255, 255))
-    cv.line(X(49), X(55), X(57), X(56), 1 * k, (255, 255, 255, 255))          # moustaches
-    cv.line(X(49), X(61), X(57), X(60), 1 * k, (255, 255, 255, 255))
-    cv.line(X(91), X(55), X(83), X(56), 1 * k, (255, 255, 255, 255))
-    cv.line(X(91), X(61), X(83), X(60), 1 * k, (255, 255, 255, 255))
-    # haut-parleurs (cones)
-    for cx in (40, 92):
-        cv.circle(X(cx), X(89), 9.5 * k, DARK)
-        cv.circle(X(cx), X(89), 8 * k, (46, 48, 60, 255))
-        cv.circle(X(cx), X(89), 4.5 * k, DARK)
-        cv.circle(X(cx), X(89), 2 * k, PINK_D)
+    # platine cassette = visage du chat, recentre (centre x=66 sur 120)
+    cv.rect(X(36), X(44), X(96), X(82), DARK, r=5 * k)
+    cv.rect(X(38), X(46), X(94), X(80), (36, 37, 48, 255), r=4 * k)
+    # === YEUX = HAUT-PARLEURS XXL === : rondelle claire (contraste avec le fond
+    # sombre), contour sombre, membrane lumineuse, anneau sombre, coeur blanc,
+    # reflets kawaii Hello Kitty (grand + petit).
+    for ex in (51, 81):
+        cv.circle(X(ex), X(58), 12.5 * k, (178, 184, 198, 255))
+        cv.circle(X(ex), X(58), 10.5 * k, DARK)
+        cv.circle(X(ex), X(58), 8.5 * k, (116, 122, 140, 255))
+        cv.circle(X(ex), X(58), 5 * k, DARK)
+        cv.circle(X(ex), X(58), 2.2 * k, eye_core)
+        if eye_shine:
+            cv.circle(X(ex - 3), X(54.6), 1.6 * k, (255, 255, 255, 255))
+            cv.circle(X(ex + 2.2), X(60.6), 0.8 * k, (255, 255, 255, 255))
+    # truffe Hello Kitty (petit nez jaune) + joues roses + sourire
+    cv.circle(X(66), X(71), 1.3 * k, (255, 238, 0, 255))
+    cv.circle(X(44), X(76), 2.2 * k, (255, 120, 160, 255))       # joue rose
+    cv.circle(X(88), X(76), 2.2 * k, (255, 120, 160, 255))
+    cv.tri(X(62), X(75), X(70), X(75), X(66), X(79), (255, 255, 255, 255))   # sourire
+    # moustaches sur la pop-tart, AU NIVEAU DE LA TRUFFE (y ~ 72-79)
+    cv.line(X(30), X(72.5), X(36), X(73.5), 1 * k, (255, 255, 255, 255))
+    cv.line(X(30), X(78.5), X(36), X(77.5), 1 * k, (255, 255, 255, 255))
+    cv.line(X(102), X(72.5), X(96), X(73.5), 1 * k, (255, 255, 255, 255))
+    cv.line(X(102), X(78.5), X(96), X(77.5), 1 * k, (255, 255, 255, 255))
     # bouton + LED sous la platine
-    cv.rect(X(62), X(84), X(70), X(87), (46, 48, 60, 255), r=1 * k)
-    cv.circle(X(64.5), X(92), 1.4 * k, (255, 60, 60, 255))
-    cv.circle(X(68.5), X(92), 1.4 * k, (255, 238, 0, 255))
+    cv.rect(X(60), X(87), X(72), X(90), (46, 48, 60, 255), r=1 * k)
+    cv.circle(X(64), X(93.5), 1.4 * k, (255, 60, 60, 255))
+    cv.circle(X(68), X(93.5), 1.4 * k, (255, 238, 0, 255))
     if bg and tag:
         draw_tag(cv, tag, accent)
 
