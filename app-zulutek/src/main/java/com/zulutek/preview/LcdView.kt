@@ -361,110 +361,162 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         Color.rgb(255, 60, 60), Color.rgb(255, 160, 40), Color.rgb(255, 238, 0),
         Color.rgb(60, 220, 90), Color.rgb(60, 160, 255), Color.rgb(150, 80, 255))
 
-    /* the REMIX Hello Kitty x Nyan Cat x Ghetto Blaster (same art as tools/make_icon.py v2):
-     * pop-tart body with crust + sprinkles, recentered cassette deck as the cat face where
-     * the TWO SPEAKERS ARE THE EYES (light rim, bright membrane, white core + kawaii
-     * highlights), Hello Kitty nose + whiskers at nose level, rounded cat ears, rounded
-     * boombox corners, button + LEDs, starred rainbow trail. Official rose in ZuluTek. */
+    /* the REMIX Hello Kitty x Nyan Cat x Ghetto Blaster (same art as tools/make_icon.py v3):
+     * zebra stripes in blaster tones + halftone pop-art dots on the body, striped light
+     * deck/visor as the face where the TWO SPEAKERS ARE THE EYES (huge light rim in an
+     * enlarged dark frame, membrane, white core + kawaii highlights), outlined oval cat
+     * nose, THREE whiskers per side with dark shadow, white cat ears, CASSETTE DECK as
+     * the mouth (REC/PLAY/STOP), thin antenna hugging the boombox, starred rainbow trail.
+     * Official rose in ZuluTek. */
     private fun drawCat(c: Canvas, x: Float, y: Float, scale: Float) {
         val s = scale
+        fun fx(v: Float) = x + (v - 66f) * s
+        fun fy(v: Float) = y + (v - 71f) * s
         val pink = Paint().apply { color = Color.rgb(255, 150, 190); style = Paint.Style.FILL }
         val crust = Paint().apply { color = Color.rgb(255, 100, 155); style = Paint.Style.FILL }
         val line = Paint().apply { color = Color.rgb(22, 23, 30); style = Paint.Style.FILL }
         val deck = Paint().apply { color = Color.rgb(36, 37, 48); style = Paint.Style.FILL }
-        val rim = Paint().apply { color = Color.rgb(178, 184, 198); style = Paint.Style.FILL }
-        val cone = Paint().apply { color = Color.rgb(116, 122, 140); style = Paint.Style.FILL }
+        val zebra = Paint().apply { color = Color.rgb(218, 222, 232); style = Paint.Style.FILL }
+        val rim = Paint().apply { color = Color.rgb(232, 236, 244); style = Paint.Style.FILL }
+        val cone = Paint().apply { color = Color.rgb(148, 154, 168); style = Paint.Style.FILL }
         val white = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
         val cheek = Paint().apply { color = Color.rgb(255, 120, 160); style = Paint.Style.FILL }
         val nose = Paint().apply { color = Color.rgb(255, 238, 0); style = Paint.Style.FILL }
-        val led = Paint().apply { color = Color.rgb(255, 60, 60); style = Paint.Style.FILL }
+        val rec = Paint().apply { color = Color.rgb(255, 60, 60); style = Paint.Style.FILL }
+        val play = Paint().apply { color = Color.rgb(60, 220, 90); style = Paint.Style.FILL }
         val gray = Paint().apply { color = Color.rgb(200, 204, 214); style = Paint.Style.FILL }
+        val tape = Paint().apply { color = Color.rgb(120, 125, 138); style = Paint.Style.FILL }
+        val label = Paint().apply { color = Color.rgb(198, 203, 214); style = Paint.Style.FILL }
+        val reel = Paint().apply { color = Color.rgb(200, 205, 215); style = Paint.Style.FILL }
         val sprinkle = Paint().apply { style = Paint.Style.FILL }
         val spr = intArrayOf(Color.WHITE, Color.rgb(255, 238, 0), Color.rgb(0, 255, 224),
             Color.rgb(255, 60, 60), Color.rgb(60, 160, 255), Color.rgb(170, 60, 255))
-        // traînée arc-en-ciel
+        // traînée arc-en-ciel derrière le boombox
         for (k in RAINBOW.indices) {
             frame.color = RAINBOW[k]
-            frame.strokeWidth = 2.2f * s
-            val yy = y + (k - 2.5f) * 3.2f * s
-            c.drawLine(x - 8f * s, yy, x - 52f * s, yy, frame)
+            frame.strokeWidth = 4.4f * s
+            val yy = fy(54f + k * 6f + 3f)
+            c.drawLine(fx(26f), yy, fx(26f) - 60f * s, yy, frame)
         }
         // étoiles blanches dans la traînée
         frame.color = Color.WHITE
-        frame.strokeWidth = 1.2f * s
-        for (st in arrayOf(floatArrayOf(-40f, -13f), floatArrayOf(-27f, 11f),
-                           floatArrayOf(-46f, 4f), floatArrayOf(-33f, -18f))) {
-            val dx = x + st[0] * s; val dy = y + st[1] * s
+        frame.strokeWidth = 1.4f * s
+        for (st in arrayOf(floatArrayOf(-18f, 46f), floatArrayOf(-30f, 74f), floatArrayOf(-34f, 58f))) {
+            val dx = fx(st[0]); val dy = fy(st[1])
             c.drawLine(dx - 2.5f * s, dy, dx + 2.5f * s, dy, frame)
             c.drawLine(dx, dy - 2.5f * s, dx, dy + 2.5f * s, frame)
         }
-        // antenne (tige + boule grise, comme l'icône)
-        c.drawLine(x + 19f * s, y - 8f * s, x + 27f * s, y - 16f * s, frame)
-        c.drawCircle(x + 27.5f * s, y - 16.5f * s, 1.5f * s, gray)
-        // poignée entre les oreilles
-        c.drawRect(x - 3.5f * s, y - 12f * s, x + 4.5f * s, y - 10.6f * s, crust)
-        c.drawRect(x - 3.5f * s, y - 9.4f * s, x + 4.5f * s, y - 8.6f * s, crust)
-        // oreilles de chat douces : contour sombre, tip arrondi, intérieur pop-tart
+        frame.strokeWidth = 1f
+        // antenne fine, collée au blaster, dégagée de l'oreille droite
+        frame.color = Color.rgb(200, 204, 214)
+        frame.strokeWidth = 1.3f * s
+        c.drawLine(fx(98f), fy(34f), fx(106f), fy(14f), frame)
+        c.drawCircle(fx(106.5f), fy(13f), 1.9f * s, gray)
+        frame.strokeWidth = 1f
+        // oreilles de chat : pointes arrondies, intérieur BLANC, bord noir fin
         val p = android.graphics.Path()
-        p.moveTo(x - 8.6f * s, y - 8.6f * s); p.lineTo(x - 9.8f * s, y - 12.6f * s); p.lineTo(x - 3.4f * s, y - 8.6f * s); p.close()
+        p.moveTo(fx(42f), fy(42f)); p.lineTo(fx(62f), fy(42f)); p.lineTo(fx(40f), fy(25f)); p.close()
         c.drawPath(p, line)
-        c.drawCircle(x - 9.6f * s, y - 12.7f * s, 0.6f * s, line)
+        c.drawCircle(fx(40.5f), fy(24.5f), 2.2f * s, line)
         p.reset()
-        p.moveTo(x - 7.6f * s, y - 8.6f * s); p.lineTo(x - 8.8f * s, y - 11.8f * s); p.lineTo(x - 4.6f * s, y - 8.6f * s); p.close()
-        c.drawPath(p, pink)
-        c.drawCircle(x - 8.4f * s, y - 11.6f * s, 0.35f * s, pink)
+        p.moveTo(fx(43.9f), fy(42f)); p.lineTo(fx(60.1f), fy(42f)); p.lineTo(fx(41.3f), fy(27.3f)); p.close()
+        c.drawPath(p, white)
         p.reset()
-        p.moveTo(x + 3.4f * s, y - 8.6f * s); p.lineTo(x + 9.8f * s, y - 12.6f * s); p.lineTo(x + 8.6f * s, y - 8.6f * s); p.close()
+        p.moveTo(fx(70f), fy(42f)); p.lineTo(fx(90f), fy(42f)); p.lineTo(fx(92f), fy(25f)); p.close()
         c.drawPath(p, line)
-        c.drawCircle(x + 9.6f * s, y - 12.7f * s, 0.6f * s, line)
+        c.drawCircle(fx(91.5f), fy(24.5f), 2.2f * s, line)
         p.reset()
-        p.moveTo(x + 4.6f * s, y - 8.6f * s); p.lineTo(x + 8.8f * s, y - 11.8f * s); p.lineTo(x + 7.6f * s, y - 8.6f * s); p.close()
-        c.drawPath(p, pink)
-        c.drawCircle(x + 8.4f * s, y - 11.6f * s, 0.35f * s, pink)
-        // corps pop-tart arrondi : croûte puis intérieur rose (angles arrondis v2)
-        val bodyC = android.graphics.RectF(x - 12f * s, y - 8.6f * s, x + 13f * s, y + 9f * s)
-        c.drawRoundRect(bodyC, 1.8f * s, 1.8f * s, crust)
-        val bodyP = android.graphics.RectF(x - 10.6f * s, y - 7.2f * s, x + 11.6f * s, y + 7.6f * s)
-        c.drawRoundRect(bodyP, 1.4f * s, 1.4f * s, pink)
-        // sprinkles multicolores (hors platine/visage/poignée/boutons)
-        val spxy = arrayOf(-8.8f to -6.7f, -5.2f to -6.8f, 0f to -6.8f, 5.2f to -6.8f, 8.8f to -6.7f,
-                           -10.9f to -3f, -10.9f to 0.5f, 10.9f to -3f, 10.9f to 0.5f,
-                           -6.5f to 6.2f, -2.5f to 5.8f, 2.5f to 5.8f, 6.5f to 6.2f)
+        p.moveTo(fx(71.9f), fy(42f)); p.lineTo(fx(88.1f), fy(42f)); p.lineTo(fx(90.7f), fy(27.3f)); p.close()
+        c.drawPath(p, white)
+        // corps du ghetto blaster : contour sombre, croûte pop-tart, intérieur pop-tart
+        c.drawRoundRect(android.graphics.RectF(fx(26f), fy(37f), fx(106f), fy(105f)), 11f * s, 11f * s, line)
+        c.drawRoundRect(android.graphics.RectF(fx(28.5f), fy(39.5f), fx(103.5f), fy(102.5f)), 9f * s, 9f * s, crust)
+        c.drawRoundRect(android.graphics.RectF(fx(30f), fy(41f), fx(102f), fy(100f)), 7f * s, 7f * s, pink)
+        // zébrures pop EN TONS DE LA CROÛTE + trame halftone (clipées au corps)
+        c.save()
+        c.clipRect(android.graphics.RectF(fx(31f), fy(42f), fx(101f), fy(99f)))
+        frame.color = Color.rgb(255, 100, 155)
+        frame.strokeWidth = 2.2f * s
+        for (u in -62..106 step 8)
+            c.drawLine(fx(u.toFloat()), fy(41f), fx(u + 58f), fy(99f), frame)
+        for (gy in 43 until 99 step 6) {
+            val off = if ((gy / 6) % 2 == 1) 3 else 0
+            for (gx in 33 + off until 99 step 6)
+                if (31 < gx && gx < 101 && 42 < gy && gy < 99)
+                    c.drawCircle(fx(gx.toFloat()), fy(gy.toFloat()), 0.55f * s, crust)
+        }
+        c.restore()
+        frame.strokeWidth = 1f
+        // sprinkles multicolores (hors platine/visage/lecteur)
+        val spxy = arrayOf(33f to 43f, 64f to 43f, 95f to 43f, 31.5f to 52f,
+            31.5f to 70f, 100.5f to 52f, 100.5f to 70f)
         for (i in spxy.indices) {
             sprinkle.color = spr[i % spr.size]
-            c.drawCircle(x + spxy[i].first * s, y + spxy[i].second * s, 0.8f * s, sprinkle)
+            c.drawCircle(fx(spxy[i].first), fy(spxy[i].second), 1.3f * s, sprinkle)
         }
-        // platine cassette recentrée = visage : les DEUX HP GÉANTS sont les yeux
-        val face = android.graphics.RectF(x - 8f * s, y - 5.2f * s, x + 8f * s, y + 5f * s)
-        c.drawRoundRect(face, 0.9f * s, 0.9f * s, deck)
-        for (ex in floatArrayOf(-3.5f, 3.5f)) {
-            c.drawCircle(x + ex * s, y - 1.3f * s, 3.4f * s, rim)     // rondelle claire
-            c.drawCircle(x + ex * s, y - 1.3f * s, 2.9f * s, line)    // contour sombre
-            c.drawCircle(x + ex * s, y - 1.3f * s, 2.35f * s, cone)   // membrane claire
-            c.drawCircle(x + ex * s, y - 1.3f * s, 1.4f * s, line)    // anneau sombre
-            c.drawCircle(x + ex * s, y - 1.3f * s, 0.6f * s, white)   // coeur blanc
-            c.drawCircle(x + (ex - 0.8f) * s, y - 2.2f * s, 0.45f * s, white)   // reflets kawaii
-            c.drawCircle(x + (ex + 0.6f) * s, y - 0.6f * s, 0.25f * s, white)
-        }
-        // truffe Hello Kitty + joues roses + sourire
-        c.drawCircle(x, y + 0.15f * s, 0.4f * s, nose)
-        c.drawCircle(x - 5.4f * s, y + 1.4f * s, 1.1f * s, cheek)
-        c.drawCircle(x + 5.4f * s, y + 1.4f * s, 1.1f * s, cheek)
-        p.reset()
-        p.moveTo(x - 1.1f * s, y + 1.3f * s); p.lineTo(x + 1.1f * s, y + 1.3f * s); p.lineTo(x, y + 2.4f * s); p.close()
-        c.drawPath(p, white)
-        // moustaches AU NIVEAU DE LA TRUFFE
-        frame.color = Color.WHITE
-        frame.strokeWidth = 0.8f * s
-        c.drawLine(x - 11.6f * s, y + 0.9f * s, x - 8.5f * s, y + 1.1f * s, frame)
-        c.drawLine(x - 11.6f * s, y + 2.3f * s, x - 8.5f * s, y + 2.1f * s, frame)
-        c.drawLine(x + 11.6f * s, y + 0.9f * s, x + 8.5f * s, y + 1.1f * s, frame)
-        c.drawLine(x + 11.6f * s, y + 2.3f * s, x + 8.5f * s, y + 2.1f * s, frame)
-        // bouton + LED sous la platine (l'ancien bloc HP est supprimé : les yeux SONT les HP)
-        c.drawRect(x - 2f * s, y + 6.2f * s, x + 2f * s, y + 6.9f * s, deck)
-        c.drawCircle(x - 0.9f * s, y + 7.8f * s, 0.4f * s, led)
-        c.drawCircle(x + 0.9f * s, y + 7.8f * s, 0.4f * s, nose)
+        // platine-visage ZÉBRÉE (noir sur clair), remontée, élargie
+        c.drawRoundRect(android.graphics.RectF(fx(33f), fy(44f), fx(99f), fy(78f)), 5f * s, 5f * s, line)
+        c.drawRoundRect(android.graphics.RectF(fx(35f), fy(46f), fx(97f), fy(76f)), 4f * s, 4f * s, zebra)
+        c.save()
+        c.clipRect(android.graphics.RectF(fx(35f), fy(46f), fx(97f), fy(76f)))
+        frame.color = Color.rgb(22, 23, 30)
+        frame.strokeWidth = 2.6f * s
+        for (u in -40..92 step 8)
+            c.drawLine(fx(u.toFloat()), fy(43f), fx(u + 34f), fy(79f), frame)
+        c.restore()
         frame.strokeWidth = 1f
+        // === YEUX = HAUT-PARLEURS XXL === : cadre noir élargi, rondelle très claire,
+        // membrane, anneau sombre, coeur blanc + reflets kawaii
+        for (ex in floatArrayOf(49f, 83f)) {
+            c.drawCircle(fx(ex), fy(61f), 14.8f * s, rim)
+            c.drawCircle(fx(ex), fy(61f), 12.6f * s, line)
+            c.drawCircle(fx(ex), fy(61f), 9.9f * s, cone)
+            c.drawCircle(fx(ex), fy(61f), 5.8f * s, line)
+            c.drawCircle(fx(ex), fy(61f), 2.55f * s, white)
+            c.drawCircle(fx(ex - 3.7f), fy(56.9f), 2.0f * s, white)
+            c.drawCircle(fx(ex + 2.7f), fy(64.1f), 1.0f * s, white)
+        }
+        // === TRUFFE DE CHAT === : ovale contouré + joues roses
+        c.drawRoundRect(android.graphics.RectF(fx(62.4f), fy(73.1f), fx(69.6f), fy(78.5f)), 2.7f * s, 2.7f * s, line)
+        c.drawRoundRect(android.graphics.RectF(fx(63.1f), fy(73.9f), fx(68.9f), fy(77.8f)), 2.1f * s, 2.1f * s, nose)
+        c.drawCircle(fx(41f), fy(75f), 2.2f * s, cheek)
+        c.drawCircle(fx(91f), fy(75f), 2.2f * s, cheek)
+        // moustaches : TROIS traits par côté, au niveau de la truffe, ombre noire dessous
+        frame.color = Color.rgb(22, 23, 30)
+        frame.strokeWidth = 1f * s
+        val wh = arrayOf(floatArrayOf(70.8f, 70.2f, 71.8f, 71.2f), floatArrayOf(75f, 75.4f, 76f, 76.4f),
+                         floatArrayOf(79.2f, 78.4f, 80.2f, 79.4f))
+        for (w in wh) {
+            c.drawLine(fx(36.5f), fy(w[2]), fx(28f), fy(w[3]), frame)
+            c.drawLine(fx(96.5f), fy(w[2]), fx(105f), fy(w[3]), frame)
+        }
+        frame.color = Color.WHITE
+        for (w in wh) {
+            c.drawLine(fx(36f), fy(w[0]), fx(27.5f), fy(w[1]), frame)
+            c.drawLine(fx(96f), fy(w[0]), fx(104.5f), fy(w[1]), frame)
+        }
+        frame.strokeWidth = 1f
+        // === LECTEUR CASSETTE = LA BOUCHE === : étiquette, fenêtre bande + 2 bobines,
+        // 4 vis, boutons ghetto blaster REC / PLAY / STOP
+        c.drawRoundRect(android.graphics.RectF(fx(40f), fy(80f), fx(92f), fy(98f)), 3f * s, 3f * s, line)
+        c.drawRoundRect(android.graphics.RectF(fx(42f), fy(82f), fx(90f), fy(96f)), 2.5f * s, 2.5f * s, deck)
+        c.drawRoundRect(android.graphics.RectF(fx(44f), fy(83.4f), fx(88f), fy(89f)), 1f * s, 1f * s, label)
+        c.drawRoundRect(android.graphics.RectF(fx(46f), fy(84.6f), fx(50.5f), fy(87.8f)), 0.6f * s, 0.6f * s, rim)
+        c.drawRoundRect(android.graphics.RectF(fx(81.5f), fy(84.6f), fx(86f), fy(87.8f)), 0.6f * s, 0.6f * s, rim)
+        c.drawRoundRect(android.graphics.RectF(fx(54f), fy(84.8f), fx(78f), fy(87.6f)), 0.8f * s, 0.8f * s, line)
+        frame.color = Color.rgb(120, 125, 138)
+        frame.strokeWidth = 0.8f * s
+        c.drawLine(fx(58.5f), fy(86.2f), fx(73.5f), fy(86.2f), frame)
+        frame.strokeWidth = 1f
+        c.drawCircle(fx(59.5f), fy(86.2f), 1.2f * s, reel)
+        c.drawCircle(fx(59.5f), fy(86.2f), 0.45f * s, line)
+        c.drawCircle(fx(72.5f), fy(86.2f), 1.2f * s, reel)
+        c.drawCircle(fx(72.5f), fy(86.2f), 0.45f * s, line)
+        for (sv in arrayOf(43.4f to 83.2f, 88.6f to 83.2f, 43.4f to 95f, 88.6f to 95f))
+            c.drawCircle(fx(sv.first), fy(sv.second), 0.5f * s, tape)
+        c.drawCircle(fx(52f), fy(91.6f), 1.9f * s, rec)
+        c.drawCircle(fx(66f), fy(91.6f), 1.9f * s, play)
+        c.drawCircle(fx(80f), fy(91.6f), 1.9f * s, nose)
     }
 
 
