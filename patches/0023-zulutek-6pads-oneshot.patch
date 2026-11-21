@@ -1,0 +1,602 @@
+From 9a1c4b7e0d3a52f8b1c69e2a4c5d6e7f89a0b1c2 Mon Sep 17 00:00:00 2001
+From: t <z@z>
+Date: Sun, 22 Nov 2026 00:30:00 +0000
+Subject: [PATCH] feat(atek303): patch 0023 zuluTek — 6 pads FM-1 (CLAP/COWBELL
+ retirés, garde DR_NPADS, blob ZKT1 fixe 8) + one-shot (drums + looper, fin =
+ dernier step relevé, SHIFT = dernière noire + SEQ) — même sémantique one-shot
+ côté APK (PR vibe, SHIFT+SEQ pages DRUMS/LOOPER)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ atek303/app/app.c  |  22  ++++++++++++++++++++--
+ atek303/app/dsp/drum_engine.c  |  94  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-------------------
+ atek303/app/dsp/drum_engine.h  |  14  ++++++++++++--
+ atek303/app/dsp/midi_looper.c  |  30  +++++++++++++++++++++++++++++-
+ atek303/app/dsp/midi_looper.h  |  3  +++
+ atek303/app/ztek_drum.c  |  18  ++++++++++++++++++
+ atek303/app/ztek_drum.h  |  5  ++++-
+ atek303/app/ztek_drum_fm1.c  |  1  +
+ atek303/app/ztek_loop.c  |  3  +++
+ atek303/app/ztek_loop.h  |  3  +++
+
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -1240,6 +1240,7 @@
+     uint32_t last_seq_tap, last_env_tap, last_lfo_tap, last_arp_tap, last_glo_tap;   /* patch 0007 */
+     uint8_t glo_taps;                        /* patch 0015: nb de taps GLO dans la fenêtre (triple-tap = SIREN) */
+     uint8_t rec_hold, rec_used;              /* patch 0008: REC maintenu = combos (+PLAY = LOOP 12, +SEQ = MACRO 13) */
++    uint8_t zshift;                         /* patch 0023: SHIFT FM-1 = dernière noire (11e) maintenue, pages DRUM/LOOP : +SEQ = one-shot */
+ } ui;
+ 
+ /* ---- ztek_seqplus accessors (patch 0005) ---- */
+@@ -1695,6 +1696,19 @@
+ }
+ /* in the list, SEL or a white key: the preset loads at once (running too, without waiting for the pattern's end) */
+ static const uint8_t WHITE_KEY[16] = PLAT_WHITE_KEYS;
++
++/* patch 0023: SHIFT FM-1 = la dernière touche noire du clavier (mode d'emploi), maintenue.
++ * Hors mode clavier (pages DRUM 11 / LOOP 12 pour l'instant) : +SEQ = toggle one-shot. */
++static int zshift_key(void)
++{
++    int k, w, last = -1;
++    for (k = 0; k < NKEYS; k++) {
++        int isw = 0;
++        for (w = 0; w < 16; w++) if (WHITE_KEY[w] == (uint8_t)k) { isw = 1; break; }
++        if (!isw) last = k;
++    }
++    return last;
++}
+ static int list_half(void) { return ui.list_cur >= 16 ? 16 : 0; }   /* the white keys: presets 1..16 or 17..32 */
+ static void preset_load_now(int c)
+ {
+@@ -1926,6 +1940,10 @@
+     }
+     touch_poll();
+     keys = touch_keys();
++    {   /* patch 0023: SHIFT FM-1 — dernière noire maintenue = modificateur (pages DRUM/LOOP : +SEQ = one-shot) */
++        int sk = zshift_key();
++        ui.zshift = (sk >= 0 && (set.page == 11u || set.page == 12u) && (keys & (1u << sk))) ? 1 : 0;
++    }
+     for (k = 0; k < NKEYS; k++) {
+         uint32_t bit = 1u << k;
+         int32_t note = 53 + (int32_t)k + 12 * set.octave;
+@@ -2074,7 +2092,7 @@
+             else if (k == B_LFO) zdr_act_mode();
+             else if (k == B_EDIT) zdr_act_kit();
+             else if (k == B_SAVE) zdr_act_comp();
+-            else if (k == B_SEQ) zdr_act_rand();
++            else if (k == B_SEQ) { if (ui.zshift) zdr_set_oneshot(!zdr_get_oneshot()); else zdr_act_rand(); }   /* patch 0023: SHIFT+SEQ = one-shot */
+             else if (k == B_ARP) zdr_act_clear();
+             ui.redraw = 1;
+             continue;
+@@ -2090,7 +2108,7 @@
+             else if (k == B_ENV) zml_act_od();
+             else if (k == B_LFO) zml_act_erase();
+             else if (k == B_EDIT) zml_act_rs();
+-            else if (k == B_SEQ) zml_act_mutate();
++            else if (k == B_SEQ) { if (ui.zshift) zml_set_oneshot(!zml_get_oneshot()); else zml_act_mutate(); }   /* patch 0023: SHIFT+SEQ = one-shot */
+             else if (k == B_ARP) zml_act_rand();
+             ui.redraw = 1;
+             continue;
+
+diff --git a/atek303/app/dsp/drum_engine.c b/atek303/app/dsp/drum_engine.c
+--- a/atek303/app/dsp/drum_engine.c
++++ b/atek303/app/dsp/drum_engine.c
+@@ -14,7 +14,11 @@
+ #endif
+ 
+ const char *DR_PAD_NAMES[DR_NPADS] = {
++#if DR_NPADS == 8
+     "KICK", "SNARE", "HAT", "CLAP", "TOM", "ELIXIR", "COWBELL", "FM"
++#else   /* patch 0023: FM-1 6 pads — CLAP et COWBELL retires */
++    "KICK", "SNARE", "HAT", "TOM", "ELIXIR", "FM"
++#endif
+ };
+ const char *DR_ELIXIR_NAMES[5] = { "BELL", "CHIME", "KALIMBA", "GLASS", "PING" };
+ const char *DR_LFO_DST_NAMES[DR_LFO_DST_N] = { "PITCH", "DECAY", "PAN", "D.SEND", "R.SEND", "GLITCH", "COMP" };
+@@ -23,14 +27,23 @@
+ /* Règle FlyingZulu : le knob P0 de TOUTES les voies = PITCH (hauteur), comme 808/909/PĒRKONS.
+  * 12 knobs = 3 pages de 4 : page3 = PAN / SEND DELAY / SEND REVERB / SEND COMP. */
+ const char *DR_PARAM_NAMES[DR_NPADS][DR_NPAR] = {
+-    {"PITCH", "DECAY", "DROP", "DRIVE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},
+-    {"PITCH", "DECAY", "NOISE", "DRIVE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},
+-    {"PITCH", "DECAY", "METAL", "-", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},
+-    {"PITCH", "DECAY", "BURST", "SPC", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},
+-    {"PITCH", "DECAY", "DROP", "-", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},
+-    {"PITCH", "DECAY", "TYPE", "NOISE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"}, /* ELIXIR */
+-    {"PITCH", "DECAY", "-", "-", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},
+-    {"PITCH", "DECAY", "RATIO", "INDEX", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},
++#if DR_NPADS == 8
++    {"PITCH", "DECAY", "DROP", "DRIVE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},   /* KICK */
++    {"PITCH", "DECAY", "NOISE", "DRIVE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},   /* SNARE */
++    {"PITCH", "DECAY", "METAL", "-", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},       /* HAT */
++    {"PITCH", "DECAY", "BURST", "SPC", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},     /* CLAP */
++    {"PITCH", "DECAY", "DROP", "-", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},        /* TOM */
++    {"PITCH", "DECAY", "TYPE", "NOISE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},    /* ELIXIR */
++    {"PITCH", "DECAY", "-", "-", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},           /* COWBELL */
++    {"PITCH", "DECAY", "RATIO", "INDEX", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},    /* FM */
++#else   /* patch 0023: FM-1 6 pads — CLAP et COWBELL retires */
++    {"PITCH", "DECAY", "DROP", "DRIVE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},     /* KICK */
++    {"PITCH", "DECAY", "NOISE", "DRIVE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},   /* SNARE */
++    {"PITCH", "DECAY", "METAL", "-", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},      /* HAT */
++    {"PITCH", "DECAY", "DROP", "-", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},       /* TOM */
++    {"PITCH", "DECAY", "TYPE", "NOISE", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},   /* ELIXIR */
++    {"PITCH", "DECAY", "RATIO", "INDEX", "HYB", "B.WAVE", "B.RES", "LEVEL", "PAN", "D.SEND", "R.SEND", "C.SEND"},  /* FM */
++#endif
+ };
+ 
+ const char *DR_COND_NAMES[DR_COND_N] = { "1:1", "1:2", "1:3", "1:4", "1:8", "FILL" };
+@@ -38,7 +51,17 @@
+ 
+ /* params par défaut des 8 pads x 8 knobs, par kit (ZULU / 808 / 909).
+  * Colonnes : P0..P3 custom, P4 HYB, P5 B.WAVE, P6 B.RES, P7 LEVEL. */
+-static const float KITPAR[DR_KIT_N][DR_NPADS][DR_NPAR] = {
++/* patch 0023: les tables canoniques gardent 8 lignes (flash), les pads FM-1 (6) y accedent
++ * via DR_TAB() (remap), pour garder un source unique vendored APK (8) / FM-1 (6). */
++#define DR_TABPADS 8
++#if DR_NPADS == 8
++#define DR_TAB(i) (i)
++#else
++static const unsigned DR_TABMAP[DR_NPADS] = { 0, 1, 2, 4, 5, 7 };  /* KICK SNARE HAT TOM ELIXIR FM (CLAP/COWBELL exclus) */
++#define DR_TAB(i) ((int)DR_TABMAP[i])
++#endif
++
++static const float KITPAR[DR_KIT_N][DR_TABPADS][DR_NPAR] = {
+     { /* ZULU */
+         {0.45f, 0.55f, 0.60f, 0.25f, 0.25f, 0.50f, 0.50f, 0.90f, 0.50f, 0.00f, 0.00f, 0.00f},
+         {0.35f, 0.45f, 0.50f, 0.20f, 0.25f, 0.50f, 0.50f, 0.90f, 0.50f, 0.00f, 0.00f, 0.00f},
+@@ -84,9 +107,9 @@
+  *     KICK->SUB (grave), SNARE/HAT/CLAP/COWBELL->8BIT (bruit/pulse lo-fi), TOM/PERC->PLUK
+  *     (Karplus-Strong = corde pincée), FM->FM.
+  * Le param hyb (0..1) fait le crossfade entre les deux. */
+-static const int BASS_ENG[DR_NPADS] = { 3, 4, 4, 4, 1, 1, 4, 2 };  /* SUB 8BIT 8BIT 8BIT PLUK PLUK 8BIT FM */
+-static const int BASS_NOTE0[DR_NPADS] = { 24, 45, 70, 50, 40, 60, 80, 36 }; /* note de base (midi) */
+-static const int BASS_NOTESPAN[DR_NPADS] = { 24, 12, 12, 12, 24, 24, 8, 24 };
++static const int BASS_ENG[DR_TABPADS] = { 3, 4, 4, 4, 1, 1, 4, 2 };  /* SUB 8BIT 8BIT 8BIT PLUK PLUK 8BIT FM */
++static const int BASS_NOTE0[DR_TABPADS] = { 24, 45, 70, 50, 40, 60, 80, 36 }; /* note de base (midi) */
++static const int BASS_NOTESPAN[DR_TABPADS] = { 24, 12, 12, 12, 24, 24, 8, 24 };
+ 
+ static float frand(unsigned *s) { return ((lcg(s) >> 9) & 0xFFFF) / 65536.0f; }
+ 
+@@ -136,7 +159,7 @@
+     d->lfo_blk = 0;
+     for (int p = 0; p < DR_NPADS; p++) {
+         d->pad[p].mode = DR_MODE_NORM;
+-        memcpy(d->pad[p].par, KITPAR[DR_KIT_ZULU][p], sizeof(d->pad[p].par));
++        memcpy(d->pad[p].par, KITPAR[DR_KIT_ZULU][DR_TAB(p)], sizeof(d->pad[p].par));
+         d->v[p].t = -1.0f;
+         bass_init(&d->bass[p], sr);
+     }
+@@ -146,7 +169,9 @@
+     d->pad[DR_SNARE].st[4].vel = d->pad[DR_SNARE].st[12].vel = 100;
+     for (int s = 0; s < DR_NSTEPS; s += 2) { d->pad[DR_HAT].st[s].on = 1; d->pad[DR_HAT].st[s].vel = 70; }
+     d->pad[DR_HAT].st[14].vel = 90;
++#if DR_NPADS == 8   /* patch 0023: pas de CLAP sur FM-1 */
+     d->pad[DR_CLAP].st[12].on = 1; d->pad[DR_CLAP].st[12].vel = 90;
++#endif
+     d->pad[DR_PERC].st[6].on = d->pad[DR_PERC].st[14].on = 1;
+     d->pad[DR_PERC].st[6].vel = d->pad[DR_PERC].st[14].vel = 80;
+ }
+@@ -301,11 +326,13 @@
+         v->dec = 0.02f + 0.38f * par[1];
+         v->pdec = 0.05f;
+         break;
++#if DR_NPADS == 8   /* patch 0023: pas de CLAP sur FM-1 */
+     case DR_CLAP:
+         v->f0 = v->f1 = 1.0f;
+         v->dec = 0.08f + 0.30f * par[1];
+         v->pdec = 0.05f;
+         break;
++#endif
+     case DR_TOM:
+         v->f0 = 80.0f + 220.0f * par[0];
+         v->f1 = v->f0;
+@@ -318,6 +345,7 @@
+         v->dec = 0.05f + 0.30f * par[1];
+         v->pdec = 0.05f;
+         break;
++#if DR_NPADS == 8   /* patch 0023: pas de COWBELL sur FM-1 */
+     case DR_COWBELL: {
+         float mul = powf(2.0f, (par[0] - 0.5f) * 2.0f);   /* P0 = PITCH */
+         v->f0 = 845.0f * mul;
+@@ -326,6 +354,7 @@
+         v->pdec = 0.05f;
+         break;
+     }
++#endif
+     case DR_FM:
+         v->f0 = 60.0f + 340.0f * par[0];            /* P0 = PITCH porteuse */
+         v->f1 = 1.0f + 7.0f * par[2];               /* P2 = RATIO modulateur */
+@@ -336,7 +365,7 @@
+     /* hybridation : configure aussi le moteur basse/lead du pad (SUB/8BIT/PLUK/FM) */
+     {
+         bass_t *b = &d->bass[pad];
+-        int eng = BASS_ENG[pad];
++        int eng = BASS_ENG[DR_TAB(pad)];
+         bass_set(b, AT_ENGINE, (float)eng / (float)(AT_NENGINES - 1));
+         bass_set(b, AT_TUNING, par[0]);
+         bass_set(b, AT_DECAY, par[1]);
+@@ -345,7 +374,7 @@
+         bass_set(b, AT_CUTOFF, 0.85f);
+         bass_set(b, AT_ENVMOD, 0.35f);
+         bass_set(b, AT_ACCENT, 0.8f);
+-        int note = BASS_NOTE0[pad] + (int)(par[0] * (float)BASS_NOTESPAN[pad]);
++        int note = BASS_NOTE0[DR_TAB(pad)] + (int)(par[0] * (float)BASS_NOTESPAN[DR_TAB(pad)]);
+         bass_gate(b, 0, note, 0, 0);                 /* reset */
+         bass_gate(b, 1, note, 1, 0);                 /* re-strike */
+     }
+@@ -469,6 +498,7 @@
+         s = (hpf * bright + band * (1.0f - bright) * 0.3f) * env * 0.45f;
+         break;
+     }
++#if DR_NPADS == 8   /* patch 0023: pas de CLAP sur FM-1 */
+     case DR_CLAP: {
+         /* P0 = PITCH du filtre passe-bande (one-pole LP + HP = BP), fc 400..3600 Hz */
+         float fc = 400.0f + 3200.0f * par[0];
+@@ -485,6 +515,7 @@
+         s = bp * (burst > 0.0f ? 1.0f : 0.25f) * expf(-t / 0.09f) * 0.7f * env;
+         break;
+     }
++#endif
+     case DR_TOM: {
+         float drop = par[2] * 4.0f;
+         f = v->f0 * (1.0f + drop * penv);
+@@ -536,6 +567,7 @@
+         s += hp * expf(-t / 0.02f) * 0.2f * par[3];   /* P3 = NOISE */
+         break;
+     }
++#if DR_NPADS == 8   /* patch 0023: pas de COWBELL sur FM-1 */
+     case DR_COWBELL: {
+         v->phase += v->f0 * d->mod_pitch / sr;
+         v->phase2 += v->f1 / sr;
+@@ -546,6 +578,7 @@
+         s = (sq1 * 0.6f + sq2 * 0.4f) * env * 0.5f + hp * expf(-t / 0.10f) * 0.15f;
+         break;
+     }
++#endif
+     case DR_FM: {
+         /* Braids FM drum : P0=PITCH porteuse, P2=RATIO, P3=INDEX, feedback fixe */
+         float idx = par[3] * 5.0f;
+@@ -594,6 +627,24 @@
+     if (d->ph < stepDur + off) return;
+     d->ph -= stepDur + off;
+     int prev = d->gpos;
++    /* patch 0023: one-shot — si le step qui vient d'être joué était le dernier (le prochain
++     * mouvement bouclerait/rebondirait), on arrête là : dernier step relevé, voix laissées
++     * sonner, pas de wrap (les steps 0..N-1 ont tous été joués une fois). */
++    if (d->oneshot) {
++        int last = -1;
++        switch (d->seq_mode) {
++        case 1:  last = 0; break;                                              /* REV : dernier = step 0 */
++        case 2:  last = (d->seq_dir > 0) ? DR_NSTEPS - 1 : 0; break;            /* PING-PONG : rebond */
++        default: last = DR_NSTEPS - 1; break;                                  /* NORM / RANDOM : dernier = step 15 */
++        }
++        if (prev == last) {
++            d->playing = 0;
++            d->gpos = -1;                    /* le prochain PLAY repart du step 0 (drum_reset) */
++            d->step = -1;
++            d->ph = 0.0f;
++            return;
++        }
++    }
+     switch (d->seq_mode) {
+     case 1:  d->gpos = (d->gpos + DR_NSTEPS - 1) % DR_NSTEPS; break;            /* REV */
+     case 2:  d->gpos += d->seq_dir;                                             /* PING-PONG */
+@@ -809,7 +860,7 @@
+ {
+     if (kit < 0 || kit >= DR_KIT_N) return;
+     for (int p = 0; p < DR_NPADS; p++)
+-        memcpy(d->pad[p].par, KITPAR[kit][p], sizeof(d->pad[p].par));
++        memcpy(d->pad[p].par, KITPAR[kit][DR_TAB(p)], sizeof(d->pad[p].par));
+ }
+ 
+ /* patch 0013: export/import d'un kit en blob 'ZKT1' (fichiers companion ZKIT00..02) */
+@@ -821,7 +872,7 @@
+     t.magic = DR_ZKT1_MAGIC;
+     t.kit = (uint32_t)kit;
+     memcpy(t.name, DR_KIT_NAMES[kit], sizeof t.name - 1);
+-    for (int p = 0; p < DR_NPADS; p++)
++    for (int p = 0; p < DR_ZKT1_NPADS; p++)   /* patch 0023: blob canonique 8 pads (contrat APK), CLAP/COWBELL preset par defaut */
+         memcpy(t.par[p], KITPAR[kit][p], sizeof t.par[p]);
+     memcpy(buf, &t, sizeof t);
+     return (int)sizeof t;
+@@ -833,8 +884,8 @@
+     if (!d || kit < 0 || kit >= DR_KIT_N || !buf || len != (int)sizeof t) return 0;
+     memcpy(&t, buf, sizeof t);
+     if (t.magic != DR_ZKT1_MAGIC || (int)t.kit != kit) return 0;
+-    for (int p = 0; p < DR_NPADS; p++)
+-        memcpy(d->pad[p].par, t.par[p], sizeof d->pad[p].par);
++    for (int p = 0; p < DR_NPADS; p++)        /* patch 0023: ignore les lignes CLAP/COWBELL (non montees sur FM-1) */
++        memcpy(d->pad[p].par, t.par[DR_TAB(p)], sizeof d->pad[p].par);
+     return 1;
+ }
+ 
+@@ -911,5 +962,10 @@
+ void drum_set_master(drum_t *d, float m) { if (m >= 0.0f && m <= 1.0f) d->master = m; }
+ void drum_play(drum_t *d, int on)        { d->playing = on ? 1 : 0; if (on) drum_reset(d); }
+ void drum_set_rec(drum_t *d, int on)     { d->rec = on ? 1 : 0; }
++/* patch 0023: one-shot — le séquenceur s'arrête une fois le dernier step relevé (les voix en
++ * cours continuent de sonner), au lieu de boucler. Arrêt au wrap (NORM/REV/RANDOM) ou au
++ * rebond (PING-PONG), détecté sur le step qui vient d'être joué (prev). */
++void drum_set_oneshot(drum_t *d, int on) { d->oneshot = on ? 1 : 0; }
++int  drum_get_oneshot(const drum_t *d)   { return d->oneshot; }
+ int  drum_get_cur_step(const drum_t *d)   { return d->step; }
+ float drum_get_clk64(const drum_t *d)    { return d->clk64; }
+
+diff --git a/atek303/app/dsp/drum_engine.h b/atek303/app/dsp/drum_engine.h
+--- a/atek303/app/dsp/drum_engine.h
++++ b/atek303/app/dsp/drum_engine.h
+@@ -19,12 +19,18 @@
+ extern "C" {
+ #endif
+ 
+-#define DR_NPADS 8
++#ifndef DR_NPADS
++#define DR_NPADS 8     /* patch 0023: 8 pads (contrat ZKT1/APK) ; le firmware FM-1 definit DR_NPADS 6 (CLAP et COWBELL retires, CPU/DSP/RAM) */
++#endif
+ #define DR_NSTEPS 16
+ #define DR_NCHOKE 7                     /* patch 0009: groupes de choke : 0 = off, 1..6 (style Koala) */
+ #define DR_BAR64 64            /* 1 mesure 4/4 = 64 soixante-quatrièmes ; 1 step = 4 unités */
+ 
++#if DR_NPADS == 8
+ enum { DR_KICK = 0, DR_SNARE, DR_HAT, DR_CLAP, DR_TOM, DR_PERC, DR_COWBELL, DR_FM };
++#else   /* patch 0023: FM-1 6 pads — CLAP et COWBELL retires, indices remappes (KICK SNARE HAT TOM ELIXIR FM) */
++enum { DR_KICK = 0, DR_SNARE, DR_HAT, DR_TOM, DR_PERC, DR_FM };
++#endif
+ extern const char *DR_PAD_NAMES[DR_NPADS];
+ extern const char *DR_ELIXIR_NAMES[5];   /* sous-sons du pad ELIXIR (P2 = TYPE) */
+ /* 12 knobs de params par voie (3 pages de 4, façon PĒRKONS HD-01 qui a 8 commandes + sends) :
+@@ -125,6 +131,7 @@
+     float ph;        /* reste d'horloge (secondes) */
+     int   playing;
+     int   rec;       /* REC live : les hits sont enregistrés à la position courante */
++    int   oneshot;   /* patch 0023: 1 = s'arrête une fois le dernier step relevé (pas de bouclage) */
+     int   play_pos;  /* position de lecture 0..15 (avec mode rev/ping-pong) */
+     int   play_dir;
+     unsigned rng;
+@@ -198,11 +205,12 @@
+ 
+ /* patch 0013: blob kit 'ZKT1' (fichiers companion ZKIT00..02, contrat APK PR #20 : .zkt1 opaque) */
+ #define DR_ZKT1_MAGIC 0x5A4B5431u                              /* 'ZKT1' */
++#define DR_ZKT1_NPADS 8                                       /* patch 0023: taille du blob FIXE (contrat APK, ZKIT00..02), independante de DR_NPADS */
+ typedef struct {
+     uint32_t magic;                                            /* 'ZKT1' */
+     uint32_t kit;                                              /* DR_KIT_* */
+     char     name[8];                                          /* DR_KIT_NAMES[kit] */
+-    float    par[DR_NPADS][DR_NPAR];                           /* KITPAR[kit] */
++    float    par[DR_ZKT1_NPADS][DR_NPAR];                      /* KITPAR[kit] — 8 pads canoniques, import clampé à DR_NPADS */
+ } dr_zkt1_t;
+ int drum_kit_export(int kit, uint8_t *buf, int cap);           /* octets, 0 si kit invalide */
+ int drum_kit_import(drum_t *d, int kit, const uint8_t *buf, int len);  /* 1 ok : params appliqués aux pads */
+@@ -218,6 +226,8 @@
+ void drum_set_master(drum_t *d, float m);
+ void drum_play(drum_t *d, int on);
+ void drum_set_rec(drum_t *d, int on);
++void drum_set_oneshot(drum_t *d, int on);   /* patch 0023: one-shot (1 = le sequenceur s'arrete au wrap au lieu de boucler) */
++int  drum_get_oneshot(const drum_t *d);
+ int  drum_get_cur_step(const drum_t *d);
+ float drum_get_clk64(const drum_t *d);
+ void drum_reset(drum_t *d);
+
+diff --git a/atek303/app/dsp/midi_looper.c b/atek303/app/dsp/midi_looper.c
+--- a/atek303/app/dsp/midi_looper.c
++++ b/atek303/app/dsp/midi_looper.c
+@@ -461,6 +461,26 @@
+  * khz: 0 = native ring rate, else the ring runs at khz kHz (32 = lighter on the FM-1) */
+ void ml_set_eco(ml_t *m, int on) { m->eco = on ? 1 : 0; }
+ int  ml_get_eco(const ml_t *m)   { return m->eco; }
++
++/* patch 0023: one-shot (liaison APK/FM-1, même sémantique que le séquenceur drums) :
++ * un slot qui boucle (wrap/rebond) s'arrête là — dernier passage relevé (note_off des
++ * notes tenues via s->act[]), pas de nouveau tour. Les événements restent dans le
++ * slot : le relancer le rejoue depuis le début. */
++void ml_set_oneshot(ml_t *m, int on) { m->oneshot = on ? 1 : 0; }
++int  ml_get_oneshot(const ml_t *m)  { return m->oneshot; }
++
++/* patch 0023: arrêt one-shot d'un slot — relève les coupes (note_off des notes actives) */
++static void ml_oneshot_stop(ml_t *m, int slot, ml_slot_t *s)
++{
++    int a;
++    for (a = 0; a < s->n_act; a++)
++        if (m->note_off) m->note_off(m->ctx, slot, s->act[a].note);
++    s->n_act = 0;
++    s->on = 0;
++    s->pos = 0.0f;
++    s->last_pos = 0.0f;
++    s->dir = 1;
++}
+ 
+ void ml_rs_start(ml_t *m, int dst, uint16_t monmask, uint32_t cap, int fmt, int khz)
+ {
+@@ -645,13 +665,18 @@
+         p0 = s->last_pos;
+         if (s->sp.mode == 1) {                                 /* reverse */
+             p1 = p0 - step;
+-            if (p1 < 0.0f) { ml_fire(m, i, s, p0, 0.0f, -1); p1 += (float)s->len; ml_fire(m, i, s, (float)s->len, p1, -1); }
++            if (p1 < 0.0f) {
++                ml_fire(m, i, s, p0, 0.0f, -1);          /* dernier passage relevé jusqu'à 0 */
++                if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* patch 0023: fin au wrap (reverse) */
++                p1 += (float)s->len; ml_fire(m, i, s, (float)s->len, p1, -1);
++            }
+             else ml_fire(m, i, s, p0, p1, -1);
+         } else if (s->sp.mode == 2) {                          /* ping-pong */
+             if (s->dir > 0) {
+                 p1 = p0 + step;
+                 if (p1 >= (float)s->len) {
+                     ml_fire(m, i, s, p0, (float)s->len, 1);
++                    if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* patch 0023: fin au rebond haut */
+                     s->dir = -1;
+                     p1 = 2.0f * (float)s->len - p1;
+                     ml_fire(m, i, s, (float)s->len, p1, -1);
+@@ -660,6 +685,7 @@
+                 p1 = p0 - step;
+                 if (p1 <= 0.0f) {
+                     ml_fire(m, i, s, p0, 0.0f, -1);
++                    if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* patch 0023: fin au rebond bas */
+                     s->dir = 1;
+                     p1 = -p1;
+                     ml_fire(m, i, s, 0.0f, p1, 1);
+@@ -669,6 +695,7 @@
+             p1 = p0 + step;
+             if (p1 >= (float)s->len) {
+                 ml_fire(m, i, s, p0, (float)s->len, 1);
++                if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* patch 0023: fin au wrap (random) */
+                 p1 = (float)(ml_rnd(m) % (uint32_t)s->len);    /* nouvelle position aléatoire */
+                 if (m->randp > 0.0f && (float)(ml_rnd(m) & 0xFFFF) / 65536.0f < m->randp)
+                     ml_rand_slot(m, i);                        /* RAND au wrap : re-génère le slot */
+@@ -678,6 +705,7 @@
+             p1 = p0 + step;
+             if (p1 >= (float)s->len) {
+                 ml_fire(m, i, s, p0, (float)s->len, 1);
++                if (m->oneshot) { ml_oneshot_stop(m, i, s); continue; }   /* patch 0023: fin au wrap, dernier step relevé */
+                 p1 -= (float)s->len;
+                 if (m->randp > 0.0f && (float)(ml_rnd(m) & 0xFFFF) / 65536.0f < m->randp)
+                     ml_rand_slot(m, i);                        /* RAND au wrap (mode normal aussi) */
+
+diff --git a/atek303/app/dsp/midi_looper.h b/atek303/app/dsp/midi_looper.h
+--- a/atek303/app/dsp/midi_looper.h
++++ b/atek303/app/dsp/midi_looper.h
+@@ -93,6 +93,7 @@
+     int8_t   lead[7];        /* leader explicite par groupe (touche POLY), -1 = auto (1er assign\u00e9) */
+     uint8_t  leader;         /* 1 = mode hybride (leader), 0 = choke mutuel classique */
+     uint8_t  eco;            /* MODE ECO : resample en \u00b5-law + paliers lo-fi, ring 32 kHz, capacit\u00e9 /2 */
++    uint8_t  oneshot;        /* patch 0023: 1 = un slot s'arr\u00eate \u00e0 la fin de son loop (notes/coupes relev\u00e9es) au lieu de boucler */
+ } ml_t;
+ 
+ void ml_init(ml_t *m, float sr);
+@@ -138,3 +139,5 @@
+ void ml_clear_leader(ml_t *m, int grp);              /* POLY sans pad : mode leader d\u00e9sactiv\u00e9 pour le groupe */
+ void ml_set_eco(ml_t *m, int on);                    /* MODE ECO : bitrate du ring resample au plus bas */
+ int  ml_get_eco(const ml_t *m);
++void ml_set_oneshot(ml_t *m, int on);                /* patch 0023: one-shot (fin = notes relevées au wrap, pas de bouclage) */
++int  ml_get_oneshot(const ml_t *m);
+
+diff --git a/atek303/app/ztek_drum.c b/atek303/app/ztek_drum.c
+--- a/atek303/app/ztek_drum.c
++++ b/atek303/app/ztek_drum.c
+@@ -5,6 +5,7 @@
+  * Le moteur lui-même est dsp/drum_engine.c (vendored, compilé avec DR_FM1_ECO via ztek_drum_fm1.c). */
+ #include <string.h>
+ #define DR_FM1_ECO 1                     /* même taille de drum_t que l'unité moteur ztek_drum_fm1.c (sinon .bss x2 et struct mismatch) */
++#define DR_NPADS 6                       /* patch 0023: FM-1 = 6 pads (CLAP et COWBELL retirés) — DOIT matcher ztek_drum_fm1.c (sinon .bss x2 et struct mismatch) */
+ #include "ztek_drum.h"
+ #include "dsp/drum_engine.h"
+ 
+@@ -33,6 +34,12 @@
+     if (n > ZDR_BUS_MAX) n = ZDR_BUS_MAX;
+     for (i = 0; i < n; i++) { busL[i] = 0.0f; busR[i] = 0.0f; }   /* patch 0020: drum_render accumule (outL[i] +=), bus remis à zéro par bloc comme zml_render */
+     drum_set_bpm(&d, (float)zdr_tempo());
++    /* patch 0023: one-shot — le moteur arrête d.playing quand le dernier step est relevé ;
++     * on relaie l'arrêt au transport du glue (FIN) au lieu de relancer la lecture. */
++    if (s_playing && !d.playing && d.oneshot) {
++        s_playing = 0;
++        zdr_say("DRUM", "FIN");
++    }
+     d.playing = s_playing;
+     d.rec = s_rec;
+     drum_render(&d, busL, busR, (int)n);
+@@ -56,6 +63,7 @@
+ 
+ void zdr_pad_hit(int pad)
+ {
++    if (pad < 0 || pad >= DR_NPADS) return;   /* patch 0023: FM-1 = 6 pads (CLAP/COWBELL retirés) */
+     drum_hit(&d, pad);                    /* REC live automatique si d.rec (voir drum_hit) */
+     zdr_say(DR_PAD_NAMES[pad], "HIT");
+ }
+@@ -179,8 +187,18 @@
+ void zdr_act_play(void)
+ {
+     s_playing = !s_playing;
++    if (s_playing) drum_play(&d, 1);     /* patch 0023: repart du step 0 après un one-shot terminé */
+     zdr_say("DRUM", s_playing ? "PLAY" : "STOP");
+ }
++
++/* patch 0023: one-shot, transport via PLAY/STOP, fin = dernier step relevé (voix laissées sonner) */
++void zdr_set_oneshot(int on)
++{
++    drum_set_oneshot(&d, on);
++    zdr_say("1SHOT", on ? "ON" : "OFF");
++}
++
++int zdr_get_oneshot(void) { return drum_get_oneshot(&d); }
+ 
+ void zdr_act_rec(void)
+ {
+
+diff --git a/atek303/app/ztek_drum.h b/atek303/app/ztek_drum.h
+--- a/atek303/app/ztek_drum.h
++++ b/atek303/app/ztek_drum.h
+@@ -6,10 +6,11 @@
+  *
+  * Layout (variante A de la SPEC, retenue) :
+  *   - 16 touches blanches = les 16 steps du pad sélectionné (tap = on/off)
+- *   - 8 premières touches noires = les 8 pads (tap = hit ; REC armé = REC live)
++ *   - touches noires 0..DR_NPADS-1 = les pads (tap = hit ; REC armé = REC live) — FM-1 : 6 pads (patch 0023, CLAP/COWBELL retirés ; MONO/POLY = noires suivantes)
+  *   - encodeurs : SELECT = pad, PRESET = page de params (1/2), ALGO = swing, K1..K4 = P0..P3 de la page
+  *   - boutons : PLAY = transport, REC = REC live, ENV = COND du step courant, LFO = MODE du pad,
+  *               EDIT = kit (ZULU/808/909), SAVE = compresseur on/off, SEQ = RAND du pad, ARP = CLEAR,
++ *               SHIFT (dernière noire maintenue) + SEQ = one-shot (patch 0023),
+  *               GLO = quitte la page (double-tap GLO depuis ailleurs = page DRUM)
+  * Le bus stéréo du module est mixé en post-FX par app.c (zdr_bus_l/r).
+  *
+@@ -46,6 +47,8 @@
+ void  zdr_act_clear(void);               /* ARP : clear du pad sel */
+ int   zdr_playing(void);
+ int   zdr_sel_pad(void);
++void  zdr_set_oneshot(int on);              /* patch 0023: one-shot (fin = dernier step relevé, pas de bouclage) */
++int   zdr_get_oneshot(void);
+ 
+ /* patch 0008: cibles de modulation du bus drum (matrice ASSIGN du pack SEQ+ + macros) :
+  * k 0..7 = 0 MASTER 1 SWING 2 COMP RATIO 3 COMP ON 4 GMUT 5 GLITCH 6 DLY WET 7 REV WET */
+
+diff --git a/atek303/app/ztek_drum_fm1.c b/atek303/app/ztek_drum_fm1.c
+--- a/atek303/app/ztek_drum_fm1.c
++++ b/atek303/app/ztek_drum_fm1.c
+@@ -5,6 +5,7 @@
+  * DR_FM1_ECO réduit le ring du delay (8192 éch. au lieu de 16384) pour la RAM de l'AC791N.
+  * Le fichier dsp/drum_engine.c reste vendored tel quel (même source que l'APK, PR #5). */
+ #define DR_FM1_ECO 1
++#define DR_NPADS 6                       /* patch 0023: FM-1 = 6 pads (CLAP et COWBELL retirés) — DOIT matcher ztek_drum.c (sinon .bss x2 et struct mismatch) ; blob ZKT1 toujours 8 (contrat APK) */
+ #ifndef PLAT_HOST                       /* au build FM-1, libm n'est pas lié : les appels libm du vendored */
+ #include "fastmath.h"                    /* drum_engine.c (même source que l'APK, PR #5) passent par fm_* */
+ #define floorf(x)  fm_floorf(x)
+
+diff --git a/atek303/app/ztek_loop.c b/atek303/app/ztek_loop.c
+--- a/atek303/app/ztek_loop.c
++++ b/atek303/app/ztek_loop.c
+@@ -174,6 +174,9 @@
+ 
+ void zml_set_leader(int on)     { ml_set_leader(&ml, on); }
+ void zml_set_eco(int on)        { ml_set_eco(&ml, on); }
++/* patch 0023: one-shot (liaison APK/FM-1) — un slot s'arrête à la fin de son loop */
++void zml_set_oneshot(int on)    { ml_set_oneshot(&ml, on); }
++int  zml_get_oneshot(void)      { return ml_get_oneshot(&ml); }
+ int  zml_get_choke(int slot)    { return ml_get_choke(&ml, slot); }
+ int  zml_choke_master(int grp)  { return ml_choke_master(&ml, grp); }
+ 
+
+diff --git a/atek303/app/ztek_loop.h b/atek303/app/ztek_loop.h
+--- a/atek303/app/ztek_loop.h
++++ b/atek303/app/ztek_loop.h
+@@ -11,6 +11,7 @@
+  *   - boutons : PLAY = transport du looper, REC = REC (start sur le slot SEL; re-REC = stop;
+  *               si un resample tourne: stop), ENV = overdub on/off, LFO = efface le slot SEL,
+  *               EDIT = resample (ring audio) start/stop, SEQ = mutate (layer TIME/PITCH/ARTIC),
++ *               SHIFT (dernière noire maintenue) + SEQ = one-shot (patch 0023),
+  *               ARP = RAND global (randp 0/25/50/100 %), SAVE = volume du slot SEL (via K1? non :
+  *               consommé, voir ci-dessous), GLO = quitte la page
+  *   - REC maintenu + PLAY = page LOOP (12) ; REC maintenu + SEQ = page MACRO (13)
+@@ -70,6 +71,8 @@
+ void  zml_choke_close(void);
+ void  zml_set_leader(int on);                 /* OPTIONS > CHOKE LDR = ON/OFF */
+ void  zml_set_eco(int on);                    /* OPTIONS > ECO (resample ring au plus bas) */
++void  zml_set_oneshot(int on);                /* patch 0023: one-shot (fin = notes relevées au wrap, pas de bouclage) */
++int   zml_get_oneshot(void);
+ int   zml_get_choke(int slot);
+ int   zml_choke_master(int grp);
+ /* patch 0009: import/export pour la liaison APK <-> FM-1 (fichiers companion ZSMP/ZLUP) */
+-- 
+2.47.3
