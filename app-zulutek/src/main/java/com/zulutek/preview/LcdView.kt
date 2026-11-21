@@ -1,3 +1,4 @@
+successfully downloaded text file (SHA: 3885c063a950f2745b090a286570e70bc3f39576)
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
  *
@@ -41,6 +42,9 @@ class LcdState {
     val slotRec = BooleanArray(16)
     val popUntil = LongArray(10)      // per-widget pop animation (frame turquoise while it runs)
     fun pop(i: Int) { popUntil[i] = System.currentTimeMillis() + 1200 }
+    var popVal = ""                   // charte : valeur (ou cible de navigation) en grand au centre du panneau pop
+    var popState = ""                 // état attenant (S/L/E/X), affiché en ambre sous la valeur
+    var lastKeyUse = 0L               // dernière note du clavier — rappel HOME toutes les 20 s (charte)
 
     // veille auto (docs/ZULUTEK.md) : 0 off, 1 traversée ~7 s, 2 spectacle 30 s, 3 écran éteint
     var veilleOn = true
@@ -240,6 +244,13 @@ class LcdState {
 
     fun cableColor(src: Int) = patchCableColors[src % patchCableColors.size]
 
+    /* une couleur par module (charte) : chaque source ET chaque module entrant de la baie
+     * de patch garde sa couleur — cadres de boîtes, noms, câbles. Décalage +8 pour que les
+     * modules ne tombent pas sur les mêmes couleurs que les sources. */
+    fun modColor(m: Int) = patchCableColors[(m + 8) % patchCableColors.size]
+    fun boxColor(box: Int): Int = if (box < ZtekAudio.NSRC_ACTIVE)
+        cableColor(ZtekAudio.SRC_IDX[box]) else modColor(box - ZtekAudio.NSRC_ACTIVE)
+
     /* première ligne visible d'une fenêtre de `vis` lignes autour de `sel` dans `n` entrées */
     fun winFirst(sel: Int, n: Int, vis: Int) = (sel - vis / 2).coerceIn(0, (n - vis).coerceAtLeast(0))
 
@@ -281,7 +292,7 @@ class LcdState {
     var snapArmUntil = 0L
     var keysLockUntil = 0L                        // clavier inactif 1,5 s pendant la capture
     var camUntil = 0L                             // icône caméra visible
-    var camShrinkAt = 0L                          // rétrécissement vers le fond (0,8 s) à partir de là
+    var camShrinkAt = 0L                          // rétrécissement vers le fond (400 ms, charte) à partir de là
     var snapSide = 0                              // page SNAP : 0 = ZU (8 gauches), 1 = LU (8 droites) — K1
     var loopRecArm = -1                           // proc REC+GLO : -2 = fenêtre PAD?, >=0 = slot armé, -1 = rien
     var loopRecWinUntil = 0L                      // fin de la fenêtre PAD? (2 s) ou du slot armé (1,2 s)
@@ -331,6 +342,14 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         style = Paint.Style.FILL
     }
     private val frame = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 1f }
+
+    /* scanlines VHS (OPTIONS > LUXE) : blend LIGHTEN avec un gris très sombre — seul le noir
+     * s'éclaircit en trame, l'encre blanche et les accents fluo restent intacts (charte :
+     * « uniquement sur le noir »), et le flash inversé retourne avant ce dessin. */
+    private val scanPaint = Paint().apply {
+        color = Color.argb(255, 24, 24, 28)
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.LIGHTEN)
+    }
 
     /* décor PCB pixel art (généré en CI par tools/make_icon.py ; absent en build local nu :
      * référencé par nom pour que le code compile même sans les PNG générés) */
@@ -408,9 +427,9 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             return
         }
 
-        // icône caméra (capture SNAP REC+PLAY / proc REC+GLO) : plein cadre, puis rétrécit vers le fond en 0,8 s
+        // icône caméra (capture SNAP REC+PLAY / proc REC+GLO) : plein cadre, puis rétrécit vers le fond en 400 ms (charte)
         if (now < st.camUntil) {
-            val t = if (st.camShrinkAt > 0 && now > st.camShrinkAt) ((now - st.camShrinkAt) / 800f).coerceIn(0f, 1f) else 0f
+            val t = if (st.camShrinkAt > 0 && now > st.camShrinkAt) ((now - st.camShrinkAt) / 400f).coerceIn(0f, 1f) else 0f
             val s = 1f - 0.85f * t
             val cx = 120f + 100f * t
             val cy = 110f + 100f * t
@@ -882,8 +901,9 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                         val name = if (isSrc) ">" + ZtekAudio.SRC_NAME[si]
                                    else "<" + ZtekAudio.MOD_NAME[i - ZtekAudio.NSRC_ACTIVE]
                         val n = if (isSrc) st.srcOut[si] else st.modIn[i - ZtekAudio.NSRC_ACTIVE]
-                        box(c, 6f, y, 234f, y + 15f, if (sel) (if (blink) FLUO_PINK else FLUO_YEL) else DIM)
-                        text(c, 12f, y + 12f, name, if (sel) INK else DIM, 10f)
+                        val mc = if (isSrc) st.cableColor(si) else st.modColor(i - ZtekAudio.NSRC_ACTIVE)
+                        box(c, 6f, y, 234f, y + 15f, if (sel) (if (blink) FLUO_PINK else FLUO_YEL) else if (n > 0) mc else DIM)
+                        text(c, 12f, y + 12f, name, if (sel) INK else mc, 10f)
                         text(c, 196f, y + 12f, if (isSrc) "▶$n" else "$n▶",
                             if (n > 0) FLUO_TURQ else DIM, 10f)
                     }
@@ -905,7 +925,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                             val m = -1 - en
                             box(c, 6f, y, 234f, y + 15f, if (sel) FLUO_YEL else DIM)
                             text(c, 12f, y + 12f, (if (st.expanded[m]) "▾ " else "▸ ") + ZtekAudio.MOD_NAME[m],
-                                if (st.modIn[m] > 0) AMBER else DIM, 10f)
+                                if (st.modIn[m] > 0) st.modColor(m) else DIM, 10f)
                             text(c, 210f, y + 12f, "${st.modIn[m]}", if (st.modIn[m] > 0) FLUO_TURQ else DIM, 9f)
                         } else {        // port : estompé + × si incompatible (protection VCV Rack)
                             val ok = st.inOk.getOrElse(i) { true }
@@ -1187,6 +1207,32 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             if (st.linkProg.isNotEmpty()) text(c, 6f, 228f, st.linkProg, FLUO_TURQ, 8f)
             if (st.linkAud) text(c, 200f, 228f, "AUD", FLUO_PINK, 8f)
             text(c, 6f, 92f, "PLAY push/pull SAVE scan ARP load FX rm ENV aud SEQ wav EDIT wide | K1 PG K2 TMP K3 CUT K4 LPG", DIM, 7f)
+        }
+        // panneau pop d'un paramètre touché (charte) : cadre turquoise fluo, valeur en grand au
+        // centre (ou la cible si le contrôle sert à la navigation), nom du contrôle au-dessus en
+        // atténué, état en dessous en ambre (S/L/E/X) sinon le message en cours.
+        val iPop = (0 until 7).firstOrNull { st.popUntil[it] > now }
+        if (iPop != null && st.popVal.isNotEmpty()) {
+            c.drawRect(46f, 54f, 194f, 106f, Paint().apply { color = BG })
+            box(c, 46f, 54f, 194f, 106f, FLUO_TURQ)
+            val nm = st.encLabels.getOrElse(iPop) { "?" }
+            mono.textSize = 9f; mono.color = DIM; mono.style = Paint.Style.FILL
+            c.drawText(nm, 120f - mono.measureText(nm) / 2f, 70f, mono)
+            mono.textSize = 22f; mono.color = INK
+            c.drawText(st.popVal, 120f - mono.measureText(st.popVal) / 2f, 92f, mono)
+            val stTxt = when {
+                st.popState.isNotEmpty() -> st.popState
+                now < st.hintUntil && st.hintMsg.isNotEmpty() -> st.hintMsg
+                else -> ""
+            }
+            if (stTxt.isNotEmpty()) {
+                mono.textSize = 8f; mono.color = AMBER
+                c.drawText(stTxt, (120f - mono.measureText(stTxt) / 2f).coerceAtLeast(6f), 101f, mono)
+            }
+        }
+        // option VHS (OPTIONS > LUXE) : scanlines légères uniquement sur le noir (charte)
+        if (st.luxeOn) {
+            for (yy in 2 until H step 4) c.drawRect(0f, yy.toFloat(), W.toFloat(), yy + 1f, scanPaint)
         }
         // panneau "sens interdit" (rond rouge + barre blanche) + suggestions / bulles de conseils
         if (now < st.noEntryUntil) {
