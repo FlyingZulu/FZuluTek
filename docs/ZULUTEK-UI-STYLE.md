@@ -4,8 +4,8 @@ successfully downloaded text file (SHA: de0902c9eb79242cf0eb10eb7f7aebeae81fb3cc
 L'écran du FM-1 est **240×240**, monochrome avec accents fluo. L'APK `app-zulutek` (LcdView)
 imite cet écran à l'identique : **mêmes règles, mêmes couleurs, mêmes animations** côté APK
 et côté firmware (patch `animatek/FM1-Animatek`). Le compagnon tablette **Zulu Kontrol**
-(`FlyingZulu/FZulu-Control`, dépôt privé) applique la même charte — ses variantes sont
-documentées dans la section « Zulu Kontrol » plus bas.
+(`FlyingZulu/FZulu-Control`, dépôt privé) applique **la même charte à l'identique strict** (un seul design pour tout
+l'écosystème Zulu, comme iOS sur iPhone et iPad) — voir la section « Zulu Kontrol » plus bas.
 
 ## Palette (constantes dans `LcdView.companion`)
 
@@ -75,17 +75,20 @@ l'écran, centré, gris atténué, police mono (comme un générique de fin de f
 L'app tablette **Zulu Kontrol** (console Vankyo, module `zkontrol`, package `com.zulukontrol`,
 label **ZKontrol**) applique **la même charte, unifiée** : fond sombre, encre mono, accents
 fluo ZU/LU/turquoise/REC/ambre **uniquement pour les états** (thème `ZcDark`/`ZcTheme`,
-`Theme.kt`), **5 skins**. Variantes assumées :
+`Theme.kt`) — un seul design pour tout
+l'écosystème Zulu (comme iOS sur iPhone et iPad) : mêmes couleurs, mêmes durées, même dessin.
+Fond sombre, encre mono, accents fluo ZU/LU/turquoise/REC/ambre **uniquement pour les états**
+(thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
 
 - Intro **« Zulu Kontrol »** ~2 s, split RGB ; même pixel art fin que le boot ZuluTek.
-- Crédit **« Flying Zulu »** : petit, **en bas à droite** côté Zulu Kontrol (en bas, centré,
-  côté ZuluTek) — même gris atténué, même police mono.
-- Mode VHS : scanlines **sur toute l'app**, ON/OFF global (là où le FM-1 les réserve à
-  l'option LUXE, page par page).
-- Nyan Cat (`NyanView`) : même remix Ghetto Blaster × Nyan Cat, **variante galop** — le chat
-  pop-tart (croûte + sprinkles, oreilles, yeux, joues roses, moustaches) porte la boombox
-  sur le dos (2 HP, cassette, poignée, antenne, LED REC clignotante 260 ms), pattes en galop,
-  traînée arc-en-ciel 6 bandes ondulée, étoiles scintillantes.
+- Crédit **« Flying Zulu »** : petit, **en bas, centré, dans le splash** — identique ZuluTek
+  (gris atténué, police mono). Aucun crédit permanent dans l'app.
+- Mode VHS : scanlines **uniquement sur le noir** (blend LIGHTEN, gris `argb(255,24,24,28)`,
+  lignes 1 px tous les 4 px à partir de y = 2), identique ZuluTek ; ON/OFF global.
+- Nyan Cat (`NyanView`) : **le** remix Ghetto Blaster × Nyan Cat officiel, identique strict
+  au `drawCat` de FZuluTek (pop-tart croûte + sprinkles, visage de chat sur la platine
+  cassette, oreilles, poignée, antenne, 2 HP, traînée arc-en-ciel 6 bandes, 4 étoiles) —
+  aucun autre chat, aucune variante.
 - Veille : 30 s sans toucher → Nyan en grand écran qui se balade ; gyro armé = le chat glisse
   selon le tilt (niveau à bulle). Désactivable.
 - Prompt pour UI designer externe : `docs/PROMPT-UI-ZKONTROL.md` (FZulu-Control), dérivé de
