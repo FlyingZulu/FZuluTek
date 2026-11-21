@@ -131,7 +131,6 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
     /* ---- geometry adaptative : tout en pixels du device, recalcule au layout ---- */
     private var vw = 0f
     private var vh = 0f
-    private val portrait get() = vh > vw
     private var pad = 0f
     private var ts = 1f                       // facteur d'echelle des textes
     private val enc = Array(7) { FloatArray(3) }   // [SELECT, PRESETS, ALGO, K1, K2, K3, K4] cx, cy, r
@@ -160,7 +159,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         vw = w.toFloat(); vh = h.toFloat()
         pad = 0.018f * min(vw, vh)
         ts = min(vw, vh) / 640f
-        if (portrait) layoutPortrait() else layoutLandscape()
+        layoutLandscape()   // pas de vue verticale (Flying Zulu) : le FM-1 est une facade paysage
     }
 
     private fun layoutLandscape() {
@@ -238,75 +237,6 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         playRing[0] = btn[12][0] - 3f * ts; playRing[1] = min(btn[12][1], btn[13][1]) - 3f * ts
         playRing[2] = btn[13][0] + btn[13][2] + 3f * ts - playRing[0]
         playRing[3] = btn[13][1] + btn[13][3] + 3f * ts - playRing[1]
-    }
-
-    private fun layoutPortrait() {
-        val W = vw; val H = vh
-        val p = pad
-        val kbH = 0.24f * H
-        val kbTop = H - p - kbH
-        val topH = kbTop - p
-        // LCD en haut, carre auto
-        val bs = min(W * 0.9f, topH * 0.32f)
-        val bx = (W - bs) / 2f
-        val by = p
-        val frame = (bs * 0.04f).coerceAtLeast(3f)
-        bezelR[0] = bx; bezelR[1] = by; bezelR[2] = bs; bezelR[3] = frame
-        lcdL = bx + frame; lcdT = by + frame; lcdS = bs - 2f * frame
-        brandCx = bx + bs / 2f; brandCy = 0f   // pas de place : marque au dessus du LCD
-        brandCy = by - 2f * ts
-        var y = by + bs + topH * 0.02f
-        // OCT- / OCT+ en dessous du LCD
-        val octH = topH * 0.055f
-        val octW = W * 0.36f
-        octTray[0] = (W - 2f * octW - octW * 0.2f) / 2f; octTray[1] = y; octTray[2] = 2f * octW + octW * 0.2f; octTray[3] = octH
-        btn[0][0] = octTray[0]; btn[0][1] = y + octH * 0.15f; btn[0][2] = octW * 0.92f; btn[0][3] = octH * 0.7f
-        btn[1][0] = octTray[0] + octW * 1.08f; btn[1][1] = btn[0][1]; btn[1][2] = btn[0][2]; btn[1][3] = btn[0][3]
-        y += octH + topH * 0.02f
-        // rangee MASTER SELECT PRESETS ALGORITHM
-        val rA = min(W * 0.10f, topH * 0.065f)
-        val rB = rA * 0.8f
-        val rowAc = y + rA
-        // disposition : centres a 1/8, 3/8, 5/8, 7/8 de la largeur
-        val cxA0 = W * 0.125f; val cxA1 = W * 0.375f; val cxA2 = W * 0.625f; val cxA3 = W * 0.875f
-        pot[0] = cxA0; pot[1] = rowAc; pot[2] = rA
-        enc[0][0] = cxA1; enc[0][1] = rowAc; enc[0][2] = rA
-        enc[1][0] = cxA2; enc[1][1] = rowAc; enc[1][2] = rA
-        enc[2][0] = cxA3; enc[2][1] = rowAc; enc[2][2] = rA
-        for (i in 0..2) { encSilkL[i][0] = enc[i][0]; encSilkL[i][1] = rowAc - rA - 6f * ts }
-        y = rowAc + rA + topH * 0.005f
-        // rangee KNOB1..4
-        val rowBc = y + rB
-        for (i in 0..3) {
-            enc[3 + i][0] = cxA0 + (cxA1 - cxA0) * i; enc[3 + i][1] = rowBc; enc[3 + i][2] = rB
-            encSilkL[3 + i][0] = enc[3 + i][0]; encSilkL[3 + i][1] = rowBc - rB - 6f * ts
-        }
-        y = rowBc + rB + topH * 0.03f
-        // 2 rangees de six candies
-        val tH = kbTop - p - y - topH * 0.015f
-        bdTray[0] = W * 0.04f; bdTray[1] = y; bdTray[2] = W * 0.92f; bdTray[3] = tH
-        val cw = bdTray[2] / 6f * 0.84f
-        val ch = tH / 2f * 0.68f
-        for (id in 2..13) {
-            val col = (id - 2) % 6; val row = (id - 2) / 6
-            btn[id][0] = bdTray[0] + bdTray[2] * (col + 0.5f) / 6f - cw / 2f
-            btn[id][1] = y + tH * (row + 0.5f) / 2f - ch / 2f
-            btn[id][2] = cw; btn[id][3] = ch
-        }
-        playRing[0] = btn[12][0] - 3f * ts; playRing[1] = btn[12][1] - 3f * ts
-        playRing[2] = btn[13][0] + btn[13][2] + 3f * ts - playRing[0]
-        playRing[3] = maxOf(btn[12][1] + btn[12][3], btn[13][1] + btn[13][3]) + 3f * ts - playRing[1]
-        // clavier : une rangee de 27 pills pleine largeur
-        kbTray[0] = p; kbTray[1] = kbTop; kbTray[2] = W - 2f * p; kbTray[3] = kbH
-        val m = 0.015f * W
-        val avail = kbTray[2] - 2f * m
-        wW = avail / 3.7f
-        val g = 0.18f * wW
-        wDx = wW + g
-        wX0 = p + m
-        bW = wW * 0.94f
-        bH = kbH * 0.42f; bY = kbTop + kbH * 0.08f
-        wH = kbH * 0.46f; wY = kbTop + kbH * 0.46f
     }
 
     private val mono = Paint().apply { typeface = Typeface.MONOSPACE; isAntiAlias = true }
