@@ -201,8 +201,10 @@ const char *ztek_preset_name_part(int part, int i);   /* factory name per part (
 void ztek_preset_factory(ztek_t *z, int part, int i);  /* factory pre-patched preset of a part: generic
                                                         * preset + part engine/sound + 4 macro slots filled */
 
-/* ---- table de mixage principale : 4 tranches BASSE/LEAD/DRUMS/LOOP -------------------- */
-enum { ZTEK_STRIP_BASSE = 0, ZTEK_STRIP_LEAD, ZTEK_STRIP_DRUMS, ZTEK_STRIP_LOOP, ZTEK_NSTRIP };
+/* ---- table de mixage principale : 4 tranches VOICE/DRUMS/LOOP/SIREN --------------------
+ * Unifié avec le FM-1 (patch 0019, page MIX) : VOICE = bus voix unique (engine 0 = LEAD,
+ * 1..4 = BASSE), SIREN = alias niveau/mute de la sirène (voie propre pré/post-FX). */
+enum { ZTEK_STRIP_VOICE = 0, ZTEK_STRIP_DRUMS, ZTEK_STRIP_LOOP, ZTEK_STRIP_SIREN, ZTEK_NSTRIP };
 enum { ZTEK_MIX_CUT, ZTEK_MIX_FMODE, ZTEK_MIX_VOL, ZTEK_MIX_PAN, ZTEK_MIX_MUT, ZTEK_MIX_SOLO,
        ZTEK_MIX_LDR, ZTEK_MIX_AUX_POW, ZTEK_MIX_AUX_LOOP,
        ZTEK_MIX_AUX1, ZTEK_MIX_AUX2, ZTEK_MIX_AUX3, ZTEK_MIX_AUX4, ZTEK_MIX_N };
@@ -217,7 +219,7 @@ enum { ZTEK_MIXM_GAIN, ZTEK_MIXM_AUX1, ZTEK_MIXM_AUX2, ZTEK_MIXM_N };   /* maste
 #define ZT_NPARTS 3
 #define ZT_PSLOTS 16
 typedef struct {
-    uint32_t magic;                  /* 'ZTP1' when used */
+    uint32_t magic;                  /* 'ZTP2' when used ('ZTP1' accepted on import, remapped) */
     int32_t part, slot;
     char name[16];
     int engine;
@@ -259,14 +261,15 @@ int  ztek_preset_import(ztek_t *z, int part, int slot, const uint8_t *buf, int l
 void ztek_mix_set_vol(ztek_t *z, int slot, float v);      /* ML_SP_VOL */
 void ztek_mix_set_aux(ztek_t *z, int slot, int on);       /* ML_SP_FX : slot -> PoW! */
 
-/* ---- table de mixage principale : 4 tranches BASSE/LEAD/DRUMS/LOOP --------------------
+/* ---- table de mixage principale : 4 tranches VOICE/DRUMS/LOOP/SIREN --------------------
  * Par tranche : filtre traversant en tête (pré-fader : 0 LP, 1 neutre, 2 HP + cutoff),
  * puis PAN (pré-fader), VOL, MUT/SOLO, départs auxiliaires post-fader
  * (P->PoW!, L->Loop, AUX1..4 libres ; la tranche LOOP n'a pas de départ Loop).
- * LDR = choke général de la tranche : BASSE ON = une note de basse coupe le lead (at_panic),
- * LEAD ON = une note de lead coupe la basse (bass_panic), DRUMS/LOOP ON = mode leader/hybride
- * des chokes de séquenceurs (défaut ON), OFF = Koala mutuel. Default OFF sur BASSE/LEAD.
- * BASSE et LEAD partagent le bus voix physique (engine 0 = LEAD, 1..4 = BASSE). */
+ * LDR = choke général de la tranche : VOICE ON = une note jouée coupe l'autre moteur voix
+ * (at_panic/bass_panic), DRUMS/LOOP ON = mode leader/hybride des chokes de séquenceurs
+ * (défaut ON), OFF = Koala mutuel. Default OFF sur VOICE.
+ * VOICE = bus voix physique unique (engine 0 = LEAD, 1..4 = BASSE) ; SIREN n'est pas dans la
+ * table (src NULL) : sa tranche ne fait que VOL (alias siren_lvl) et MUT/SOLO (gate du rendu). */
 void  ztek_mix_set_strip(ztek_t *z, int strip, int param, float v);
 float ztek_mix_get_strip(const ztek_t *z, int strip, int param);
 void  ztek_mix_set_master(ztek_t *z, int param, float v);

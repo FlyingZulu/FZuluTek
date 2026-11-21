@@ -467,11 +467,11 @@ object ZtekAudio {
     private external fun nativeMixSetAux(handle: Long, slot: Int, on: Int)
     private external fun nativeMixSetGain(handle: Long, g: Float)
     private external fun nativeMixGetGain(handle: Long): Float
-    // table de mixage 4 tranches BASSE/LEAD/DRUMS/LOOP
-    const val STRIP_BASSE = 0
-    const val STRIP_LEAD = 1
-    const val STRIP_DRUMS = 2
-    const val STRIP_LOOP = 3
+    // table de mixage 4 tranches VOICE/DRUMS/LOOP/SIREN (unifié FM-1, patch 0019)
+    const val STRIP_VOICE = 0
+    const val STRIP_DRUMS = 1
+    const val STRIP_LOOP = 2
+    const val STRIP_SIREN = 3
     const val MIX_CUT = 0; const val MIX_FMODE = 1; const val MIX_VOL = 2; const val MIX_PAN = 3
     const val MIX_MUT = 4; const val MIX_SOLO = 5; const val MIX_LDR = 6
     const val MIX_AUX_POW = 7; const val MIX_AUX_LOOP = 8
@@ -480,7 +480,7 @@ object ZtekAudio {
     const val MIXM_GAIN = 0; const val MIXM_AUX1 = 1; const val MIXM_AUX2 = 2
     val MIX_PAR_NAMES = arrayOf("CUT", "FILT", "VOL", "PAN", "MUT", "SOLO", "LDR",
         "P>POW", "L>LOOP", "AUX1", "AUX2", "AUX3", "AUX4")
-    val STRIP_NAMES = arrayOf("BASSE", "LEAD", "DRUMS", "LOOP")
+    val STRIP_NAMES = arrayOf("VOICE", "DRUMS", "LOOP", "SIREN")
     fun mixSetStrip(strip: Int, param: Int, v: Float) { if (handle != 0L) nativeMixSetStrip(handle, strip, param, v) }
     fun mixGetStrip(strip: Int, param: Int): Float = if (handle != 0L) nativeMixGetStrip(handle, strip, param) else 0f
     fun mixSetMaster(param: Int, v: Float) { if (handle != 0L) nativeMixSetMaster(handle, param, v) }
