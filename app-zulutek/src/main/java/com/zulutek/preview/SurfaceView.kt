@@ -169,7 +169,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         val kbH = 0.26f * H
         val kbTop = H - p - kbH
         val topH = kbTop - p
-        val lw = 0.14f * W      // disposition d'origine : colonne etroite, 4 knobs empiles
+        val lw = 0.20f * W      // comme sur FM-1 : MASTER SELECT PRESETS ALGORITHM en 2x2 + OCT dessous
         val rw = 0.26f * W      // cote droit optimise : place liberee pour le LCD
         val gp = 0.012f * W
         val cx0 = p + lw + gp
@@ -184,17 +184,23 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         bezelR[0] = bx; bezelR[1] = by; bezelR[2] = bs; bezelR[3] = frame
         lcdL = bx + frame; lcdT = by + frame; lcdS = bs - 2f * frame
         brandCx = bx + bs / 2f; brandCy = by + bs + brandH * 0.8f
-        // colonne gauche (origine FM-1) : MASTER SELECT PRESETS ALGORITHM empiles en colonne
-        val r1 = min(lw * 0.36f, topH * 0.062f)
-        val kcx = p + lw / 2f
-        pot[0] = kcx; pot[1] = p + topH * 0.115f; pot[2] = r1
-        enc[0][0] = kcx; enc[0][1] = p + topH * 0.31f; enc[0][2] = r1    // SELECT
-        enc[1][0] = kcx; enc[1][1] = p + topH * 0.505f; enc[1][2] = r1   // PRESETS
-        enc[2][0] = kcx; enc[2][1] = p + topH * 0.70f; enc[2][2] = r1    // ALGORITHM
-        for (i in 0..2) { encSilkL[i][0] = enc[i][0]; encSilkL[i][1] = enc[i][1] - r1 - 6f * ts }
-        val otY = p + topH * 0.80f
-        val otH = topH * 0.17f
-        octTray[0] = p + lw * 0.05f; octTray[1] = otY; octTray[2] = lw * 0.90f; octTray[3] = otH
+        // colonne gauche comme sur le FM-1 (panel.rs) : 2x2 MASTER SELECT PRESETS ALGORITHM
+        // (centres a 23 % / 77 % du plateau, lignes a 26 % / 58 % de la zone haute) + OCT dessous
+        val trayL = p + lw * 0.05f
+        val trayW = lw * 0.90f
+        val r1 = min(trayW * 0.225f, topH * 0.085f)
+        val kx1 = trayL + trayW * 0.23f
+        val kx2 = trayL + trayW * 0.77f
+        val ky1 = p + topH * 0.26f
+        val ky2 = p + topH * 0.58f
+        pot[0] = kx1; pot[1] = ky1; pot[2] = r1
+        enc[0][0] = kx2; enc[0][1] = ky1; enc[0][2] = r1    // SELECT
+        enc[1][0] = kx1; enc[1][1] = ky2; enc[1][2] = r1    // PRESETS
+        enc[2][0] = kx2; enc[2][1] = ky2; enc[2][2] = r1    // ALGORITHM
+        for (i in 0..2) { encSilkL[i][0] = enc[i][0]; encSilkL[i][1] = enc[i][1] - r1 - 8f * ts }
+        val otY = p + topH * 0.74f
+        val otH = topH * 0.115f
+        octTray[0] = trayL; octTray[1] = otY; octTray[2] = trayW; octTray[3] = otH
         val obW = (octTray[2] - otH * 0.4f) / 2f
         btn[0][0] = octTray[0] + otH * 0.2f; btn[0][1] = otY + otH * 0.18f
         btn[0][2] = obW; btn[0][3] = otH * 0.64f
