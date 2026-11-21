@@ -1,0 +1,26 @@
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 7782dce..3cdb120 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -1581,8 +1581,8 @@ static void preset_say(int i, const char *what)
+ static void preset_save(int slot, const char *name)
+ {
+     int i, bank, ok;
+-    for (i = 0; i < 15; i++)
+-        presets[slot].name[i] = name[i];
++    for (i = 0; i < (int)sizeof presets[slot].name; i++)   /* patch 0016: name[8] depuis 0010, ne plus lire name[8..14] */
++        presets[slot].name[i] = (i < 15) ? name[i] : 0;
+     presets[slot].s = set;
+     presets[slot].used = 1;
+     zsp_mod_save_part(zsp_preset_part(slot));   /* patch 0008: l'état de modulation courant suit la partie du preset */
+@@ -1612,8 +1612,8 @@ static void save_slot_to(int slot)             /* the slot's own name follows, u
+     if (ui.save_named)
+         return;
+     if (presets[slot].used)
+-        for (i = 0; i < 15; i++)
+-            ui.save_name[i] = presets[slot].name[i];
++        for (i = 0; i < 15; i++)                                /* patch 0016: presets[].name est name[8] depuis 0010 */
++            ui.save_name[i] = (i < (int)sizeof presets[slot].name) ? presets[slot].name[i] : 0;
+     else
+         save_new_name();
+ }
