@@ -62,23 +62,75 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         const val PW = 1280f
         const val PH = 820f
 
-        /* DA Zulu (Flying Zulu) : fond noir charte, bonbons/pills turquoise fluo */
-        const val ROOM      = 0xFF090C10
-        const val BODY_TOP  = 0xFF151920
-        const val BODY_BOT  = 0xFF0E1116
-        const val TRAY      = 0xFF1B222B
-        const val SILK_INK  = 0xFF9FE0D6
-        const val BRAND_INK = 0xFFFF2DA0
-        const val BTN_TOP   = 0xFF00FFE0
-        const val BTN_BOT   = 0xFF00A692
-        const val BTN_INK   = 0xFF09120F
-        const val KEY_TOP   = 0xFF00E8D0
-        const val KEY_BOT   = 0xFF00948A
+        /* Deux palettes (Flying Zulu) :
+         * DA ZULU : fond noir charte, bonbons/pills turquoise fluo, marque rose fluo.
+         * MAISON : le FM-1 custom maison peint (photo du 21/11) : face vert fluo, plateau
+         * bleu vif, capuchons orange, pills bleu profond, marque rouge sang.
+         * Couleurs mutables, applySkin() bascule via OPTIONS > SKIN (ligne SKIN). */
+        val ROOM_DA     = 0xFF090C10
+        val BODY_TOP_DA = 0xFF151920
+        val BODY_BOT_DA = 0xFF0E1116
+        val TRAY_DA     = 0xFF1B222B
+        val SILK_INK_DA = 0xFF9FE0D6
+        val BRAND_INK_DA = 0xFFFF2DA0
+        val BTN_TOP_DA  = 0xFF00FFE0
+        val BTN_BOT_DA  = 0xFF00A692
+        val BTN_INK_DA  = 0xFF09120F
+        val KEY_TOP_DA  = 0xFF00E8D0
+        val KEY_BOT_DA  = 0xFF00948A
+        val SKIRT_DA    = 0xFF3A3D43
+        val SKIRT_HI_DA = 0xFF6D7178
+        val POINTER_DA  = 0xFFEEEAE2
+        val RIDGE_DA    = 0xFF7BD6C5
+        val ROOM_M      = 0xFF0B100A
+        val BODY_TOP_M  = 0xFF00D90C
+        val BODY_BOT_M  = 0xFF039004
+        val TRAY_M      = 0xFF0A62D8
+        val SILK_INK_M  = 0xFFECFDF0
+        val BRAND_INK_M = 0xFFF90910
+        val BTN_TOP_M   = 0xFFFC7A03
+        val BTN_BOT_M   = 0xFFD85700
+        val BTN_INK_M   = 0xFF301202
+        val KEY_TOP_M   = 0xFF2F8CFF
+        val KEY_BOT_M   = 0xFF0A48A8
+        val SKIRT_M     = 0xFF145214
+        val SKIRT_HI_M  = 0xFF2E7D2A
+        val POINTER_M   = 0xFFF6FFF8
+        val RIDGE_M     = 0xFFDEF2FF
         const val AMBER_LED = 0xFFF2A33A
         const val GREEN_LED = 0xFF62D36E
-        const val SKIRT     = 0xFF3A3D43
-        const val SKIRT_HI  = 0xFF6D7178
-        const val POINTER   = 0xFFEEEAE2
+
+        var ROOM = ROOM_DA
+        var BODY_TOP = BODY_TOP_DA
+        var BODY_BOT = BODY_BOT_DA
+        var TRAY = TRAY_DA
+        var SILK_INK = SILK_INK_DA
+        var BRAND_INK = BRAND_INK_DA
+        var BTN_TOP = BTN_TOP_DA
+        var BTN_BOT = BTN_BOT_DA
+        var BTN_INK = BTN_INK_DA
+        var KEY_TOP = KEY_TOP_DA
+        var KEY_BOT = KEY_BOT_DA
+        var SKIRT = SKIRT_DA
+        var SKIRT_HI = SKIRT_HI_DA
+        var POINTER = POINTER_DA
+        var RIDGE = RIDGE_DA
+
+        fun applySkin(maison: Boolean) {
+            if (maison) {
+                ROOM = ROOM_M; BODY_TOP = BODY_TOP_M; BODY_BOT = BODY_BOT_M; TRAY = TRAY_M
+                SILK_INK = SILK_INK_M; BRAND_INK = BRAND_INK_M
+                BTN_TOP = BTN_TOP_M; BTN_BOT = BTN_BOT_M; BTN_INK = BTN_INK_M
+                KEY_TOP = KEY_TOP_M; KEY_BOT = KEY_BOT_M
+                SKIRT = SKIRT_M; SKIRT_HI = SKIRT_HI_M; POINTER = POINTER_M; RIDGE = RIDGE_M
+            } else {
+                ROOM = ROOM_DA; BODY_TOP = BODY_TOP_DA; BODY_BOT = BODY_BOT_DA; TRAY = TRAY_DA
+                SILK_INK = SILK_INK_DA; BRAND_INK = BRAND_INK_DA
+                BTN_TOP = BTN_TOP_DA; BTN_BOT = BTN_BOT_DA; BTN_INK = BTN_INK_DA
+                KEY_TOP = KEY_TOP_DA; KEY_BOT = KEY_BOT_DA
+                SKIRT = SKIRT_DA; SKIRT_HI = SKIRT_HI_DA; POINTER = POINTER_DA; RIDGE = RIDGE_DA
+            }
+        }
 
         /* geometry, verbatim from panel.rs */
         val ENCS = arrayOf(          // (cx, cy, r) label handled separately
@@ -190,6 +242,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
 
     override fun onDraw(c: Canvas) {
         super.onDraw(c)
+        applySkin(st.skinMaison)   // OPTIONS > SKIN : DA ZULU ou MAISON (le FM-1 custom maison)
         c.drawColor(ROOM)
         val s = sc()
         c.save()
@@ -262,7 +315,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             rrect(c, x + 1f, 680f + 4f, KW, 106f, KW / 2f, 0xFF1A1A1C.toInt())              // shadow
             rrect(c, x, 680f + off, KW, 106f, KW / 2f, mix(KEY_TOP, AMBER_LED, heat), mix(KEY_BOT, AMBER_LED, heat * 0.8f))
             rrect(c, x + KW / 2f - 2.5f, 680f + 18f + off, 5f, 106f - 36f, 2.5f,
-                if (heat > 0f) 0xFFEFE2B0 else 0xFF7BD6C5)
+                if (heat > 0f) 0xFFEFE2B0 else RIDGE)
         }
         for (bi in BLACK_NOTES.indices) {
             val note = BLACK_NOTES[bi]
@@ -273,7 +326,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             rrect(c, x + 1f, 574f + 4f, KW, 94f, KW / 2f, 0xFF1A1A1C.toInt())
             rrect(c, x, 574f + off, KW, 94f, KW / 2f, mix(KEY_TOP, AMBER_LED, heat), mix(KEY_BOT, AMBER_LED, heat * 0.8f))
             rrect(c, x + KW / 2f - 2.5f, 574f + 18f + off, 5f, 94f - 36f, 2.5f,
-                if (heat > 0f) 0xFFEFE2B0.toInt() else 0xFF7BD6C5.toInt())
+                if (heat > 0f) 0xFFEFE2B0.toInt() else RIDGE)
         }
         c.restore()
     }
