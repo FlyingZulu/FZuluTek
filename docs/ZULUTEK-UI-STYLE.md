@@ -60,10 +60,13 @@ modules dans la liste IN, et toutes les mentions de câbles. Les couleurs :
 
 ## Intro (boot, ~1,9 s)
 
-**Remix Ghetto Blaster × Nyan Cat** dans la même charte : le corps du walkman est une
-pop-tart rose (croûte + sprinkles), la platine cassette est devenue le visage du chat
-(yeux, joues roses, sourire, moustaches), oreilles, poignée, antenne, deux HP, traînée
-arc-en-ciel étoilée. Line-art pixel art fin + accents **rose fluo / jaune fluo / turquoise**.
+**Remix Hello Kitty × Nyan Cat × Ghetto Blaster (v2)** dans la même charte : le corps du
+walkman est une pop-tart (croûte + sprinkles), la platine cassette recentrée est le visage
+du chat où **LES DEUX HP GÉANTS SONT LES YEUX** (rondelle claire `rgb(178,184,198)` +
+membrane `rgb(116,122,140)` + cœur blanc + reflets kawaii), truffe jaune Hello Kitty,
+joues roses, sourire, moustaches au niveau de la truffe, oreilles de chat arrondies,
+poignée, antenne, bouton + LED, traînée arc-en-ciel étoilée, angles du blaster arrondis.
+Line-art pixel art fin + accents **rose fluo / jaune fluo / turquoise**.
 Le prompt pour IA générative vit dans `docs/PROMPT-BOOT-IA.md`, l'outil de conversion
 image → LCD (240×240, 1 bit + accents) dans `tools/lcd_image.py`.
 
@@ -83,10 +86,12 @@ pour les états** (thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
   (gris atténué, police mono). Aucun crédit permanent dans l'app.
 - Mode VHS : scanlines **uniquement sur le noir** (blend LIGHTEN, gris `argb(255,24,24,28)`,
   lignes 1 px tous les 4 px à partir de y = 2), identique ZuluTek ; ON/OFF global.
-- Nyan Cat (`NyanView`) : **le** remix Ghetto Blaster × Nyan Cat officiel, identique strict
-  au `drawCat` de FZuluTek (pop-tart croûte + sprinkles, visage de chat sur la platine
-  cassette, oreilles, poignée, antenne, 2 HP, traînée arc-en-ciel 6 bandes, 4 étoiles) —
-  aucun autre chat, aucune variante.
+- Nyan Cat (`NyanView`) : **le** remix officiel **v2**, géométrie strictement identique au
+  `drawCat` de FZuluTek (yeux = HP XXL avec rondelle claire, cœur blanc + reflets kawaii,
+  truffe Hello Kitty, moustaches au niveau du nez, joues, sourire, oreilles arrondies,
+  angles arrondis, bouton + LED, traînée arc-en-ciel 6 bandes, 4 étoiles) ; blaster **menthe
+  ZK** `rgb(175,255,240)` / croûte `rgb(46,210,180)`, comme l'icône — aucun autre chat,
+  aucune variante.
 ### Icônes des apps : un dessin, des initiales
 
 Chaque app Zulu garde **la même icône** (le remix officiel généré par `tools/make_icon.py`,
@@ -98,6 +103,10 @@ apps (imperceptible seule, repérable côte à côte) :
 - **ZT** (ZuluTek) — liseré rose fluo, fond `rgb(10,10,16)`
 - **ZK** (Zulu Kontrol) — liseré turquoise fluo, fond `rgb(9,12,16)`
 - **ZD** (Drums) — liseré jaune fluo
+
+**Couleur du ghetto blaster par app** : le dessin reste identique, seule la teinte du corps
+varie — **ZT** rose `rgb(255,158,222)` / croûte `rgb(226,74,168)` ; **ZK** menthe
+`rgb(175,255,240)` / croûte `rgb(46,210,180)` ; **ZD** (Drums) : tambour, pas de blaster.
 
 Toute nouvelle app suit le même schéma : mêmes cotes, initiales + accent dédiés. Le splash
 reste sans badge : le crédit « Flying Zulu » est au bas de l'écran.
@@ -124,8 +133,8 @@ reste sans badge : le crédit « Flying Zulu » est au bas de l'écran.
   style console portable 16 bits (Game Gear) — pas le gros pixel Game Boy : grille interne **240×240**
   (comme l'écran du FM-1), redimensionnement **au plus proche voisin** (pixels nets, jamais de lissage).
 - Générateur : `tools/make_icon.py` (pur Python, PNG écrits en zlib) → `mipmap-*/ic_launcher.png`
-  + `drawable-nodpi/splash_boombox.png` (le remix Ghetto Blaster × Nyan Cat). Splash ~1,9 s :
-  boombox-pop-tart rose (sprinkles), visage de chat sur la platine, traînée arc-en-ciel
-  étoilée, tap = passer.
+  + `drawable-nodpi/splash_boombox.png` (le remix Hello Kitty × Nyan Cat × Ghetto Blaster v2). Splash ~1,9 s :
+  boombox-pop-tart (couleur du blaster par app), visage de chat sur la platine où les yeux
+  sont les haut-parleurs, traînée arc-en-ciel étoilée, tap = passer.
 - Côté LCD 240×240 du FM-1 : mêmes règles, dessin direct en pixels (RGB565, ST7789) ; voir
   `docs/FM1-RESSOURCES.md` (émulateur fm1-emu, miroir d'écran fm1-projector, police pixel 3x de fm1-sampler).
