@@ -157,6 +157,7 @@ class LcdState {
     var viewMode = 0                                // OPTIONS > VUE (APK only) : 0 PLEIN, 1 CLAV, 2 AUTO
     var viewCompact = false                         // vue CLAV résolue (PLEIN/CLAV/AUTO + link up)
     var luxeOn = false                              // OPTIONS > LUXE ON (APK only)
+    var skinMaison = false                          // OPTIONS > SKIN = MAISON (APK only) : facade du FM-1 custom maison
     var monkeyUntil = 0L                            // pop singe 400 ms à la connexion link (VUE=AUTO)
     var optRow = 0                                  // page OPTIONS (16) : ligne sélectionnée (SEL)
     var mixStrip = 0                                // page MIX (11) : tranche sélectionnée (0..3, 4=master)
@@ -1288,16 +1289,17 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         // ---- page OPTIONS (16) : liste — SEL=navigue, ALG=valeur live, REC/tout bouton=quitte, Shift=reset ----
         if (st.page == 16) {
             title(c, 6f, 15f, "OPTIONS", FLUO_TURQ)
-            val names = arrayOf("ECO", "LABELS", "VUE", "LUXE")
+            val names = arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN")
             val vals = arrayOf(
                 if (st.ecoOn) "ON" else "OFF",
                 if (st.labelsZulu) "ZULU" else "FM1",
                 arrayOf("PLEIN", "CLAV", "AUTO")[st.viewMode.coerceIn(0, 2)],
-                if (st.luxeOn) "ON" else "OFF")
-            val apkOnly = arrayOf(false, true, true, true)
-            for (r in 0..3) {
-                val y = 48f + r * 32f
-                val sel = r == st.optRow.coerceIn(0, 3)
+                if (st.luxeOn) "ON" else "OFF",
+                if (st.skinMaison) "MAISON" else "DA ZULU")
+            val apkOnly = arrayOf(false, true, true, true, true)
+            for (r in 0..4) {
+                val y = 44f + r * 30f
+                val sel = r == st.optRow.coerceIn(0, 4)
                 text(c, 6f, y, (if (sel) ">" else " ") + " " + names[r], if (sel) FLUO_YEL else INK, 10f)
                 text(c, 96f, y, vals[r], if (sel) FLUO_YEL else INK, 10f)
                 if (apkOnly[r]) text(c, 156f, y, "APK", DIM, 8f)
