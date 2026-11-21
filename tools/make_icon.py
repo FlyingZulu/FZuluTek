@@ -220,11 +220,14 @@ for name, s in [("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xx
     print("wrote mipmap-%s/ic_launcher.png (%d px)" % (name, s))
 
 
-# --- TITRE D'INTRO (splash) : pixel art condensé à empattements, façon affiche Indiana
-# Jones remixée Zulu Cat : lettres JAUNE FLUO rgb(255,238,0) à liseré noir,
-# ombre TURQUOISE rgb(0,255,224) en bas-droite, arches douces vers le bas
-# (les lettres des extrémités descendent), sous le boombox. Voir docs/ZULUTEK-UI-STYLE.md.
-TITLE = "ZULUTEK"
+# --- TITRE D'INTRO (splash) : ÉTIQUETTE COMPACTE façon logo Game Boy remixée Zulu
+# Cat : DEUX lignes pixel art 5x9 CONDENSÉES À EMPATTEMENTS, JUSTIFIÉES à la même
+# largeur et SERRÉES pour former UNE étiquette compacte, plus petite que le logo,
+# posée en sticker sous le boombox — « ZULU » sur « TEK ». Lettres JAUNE FLUO
+# rgb(255,238,0) à liseré noir fin, ombre TURQUOISE rgb(0,255,224) en bas-droite,
+# légère arche sur la 1re ligne. Côté Zulu Kontrol, l'IntroView dessine la même
+# étiquette (« ZULU » sur « KONTROL »). Voir docs/ZULUTEK-UI-STYLE.md.
+TITLE_LINES = ("ZULU", "TEK")   # splash -> res de app-zulutek (aperçu téléphone) dans ce dépôt
 TITLE_GLYPHS = {
     "Z": ("#####", "....#", "...#.", "..#..", ".#...", "#....", "#....", "#....", "#####"),
     "U": ("#...#", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."),
@@ -233,50 +236,64 @@ TITLE_GLYPHS = {
     "E": ("#####", "#....", "#....", "####.", "#....", "#....", "####.", "#....", "#####"),
     "K": ("#..##", "#.#..", "##...", "##...", "#.#..", "#..#.", "#..#.", "#..#.", "#..#."),
     "O": (".###.", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."),
-    "N": ("#...#", "##..#", "##..#", "#.#.#", "#.#.#", "#..##", "#..##", "#...#", "#...#"),
+    "N": ("#...#", "##..#", "##..#", "#.#.#", "#.#.#", "#..##", "#..##", "#...", "#...#"),
     "R": ("####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#", "#...#", "#...#"),
 }
 
-def draw_title(cv, name):
-    """Titre façon affiche Indiana Jones remixé chat : jaune fluo, liseré noir,
-    ombre turquoise, arches vers le bas. Pixel art 5x9, centré."""
+def draw_title(cv, top, bottom):
+    """ÉTIQUETTE COMPACTE façon logo Game Boy : deux lignes pixel art 5x9 à EMPATTEMENTS,
+    JUSTIFIÉES à la même largeur (la 2e ligne adapte la taille de ses lettres), SERRÉES
+    en un seul bloc. 1re ligne en légère arche ; jaune fluo + liseré noir fin +
+    ombre turquoise en bas-droite (échelles propres à chaque ligne)."""
     U = (255, 238, 0, 255)      # jaune fluo (LU)
     Tq = (0, 255, 224, 255)     # turquoise (complémentaire)
     u = cv.s / 240.0
-    n = len(name)
-    units = n * 5 + (n - 1)
-    px = min(3.4 * u, 224.0 * u / units)
-    base_y = 204.0 * u
-    cx = (240.0 * u - units * px) / 2.0
-    c = (n - 1) / 2.0
-    for i, ch in enumerate(name):
-        g = TITLE_GLYPHS[ch]
-        x = cx + i * 6 * px
-        dip = 5.0 * u * ((i - c) / max(c, 1.0)) ** 2
-        y = base_y + dip
-        # ombre turquoise (bas-droite), liseré noir, remplissage
-        for off in ((2.4 * u, 2.4 * u, Tq),):
-            for ry in range(9):
-                for rx in range(5):
-                    if g[ry][rx] == "#":
-                        cv.rect(x + rx * px + off[0], y + ry * px + off[1],
-                                x + (rx + 1) * px + off[0] + 1, y + (ry + 1) * px + off[1] + 1, off[2])
-        o = 1.4 * u
-        for dx, dy in ((-o, 0), (o, 0), (0, -o), (0, o), (-o, -o), (o, -o), (-o, o), (o, o)):
+
+    def units(s):
+        return len(s) * 5 + (len(s) - 1)
+
+    px_t = min(1.6 * u, 36.0 * u / units(top))    # étiquette compacte : 36u de large
+    px_b = px_t * units(top) / units(bottom)      # justification : même largeur
+    gap = 1.0 * u                                 # lignes serrées = un seul ensemble
+    y_t = 204.0 * u
+    y_b = y_t + 9.0 * px_t + gap
+    x0 = (240.0 * u - units(top) * px_t) / 2.0
+    # géométrie : (glyphe, x, y de base, taille du pixel) ; arche légère sur la 1re ligne
+    letters = []
+    for word, px, y, dip_n in ((top, px_t, y_t, 2.2 * u), (bottom, px_b, y_b, 0.0)):
+        c = (len(word) - 1) / 2.0
+        for i, ch in enumerate(word):
+            dip = dip_n * ((i - c) / max(c, 1.0)) ** 2
+            letters.append((TITLE_GLYPHS[ch], x0 + i * 6.0 * px, y + dip, px))
+    # ombre turquoise (bas-droite)
+    for g, x, y, px in letters:
+        sh = 0.8 * px
+        for ry in range(9):
+            for rx in range(5):
+                if g[ry][rx] == "#":
+                    cv.rect(x + rx * px + sh, y + ry * px + sh,
+                            x + (rx + 1) * px + sh + 0.6, y + (ry + 1) * px + sh + 0.6, Tq)
+    # liseré noir fin (8 passes, à l'échelle de chaque ligne)
+    for dxs, dys in ((-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)):
+        for g, x, y, px in letters:
+            o = 0.4 * px
+            dx, dy = dxs * o, dys * o
             for ry in range(9):
                 for rx in range(5):
                     if g[ry][rx] == "#":
                         cv.rect(x + rx * px + dx, y + ry * px + dy,
-                                x + (rx + 1) * px + dx + 1, y + (ry + 1) * px + dy + 1, DARK)
+                                x + (rx + 1) * px + dx + 0.6, y + (ry + 1) * px + dy + 0.6, DARK)
+    # remplissage jaune fluo
+    for g, x, y, px in letters:
         for ry in range(9):
             for rx in range(5):
                 if g[ry][rx] == "#":
                     cv.rect(x + rx * px, y + ry * px,
-                            x + (rx + 1) * px, y + (ry + 1) * px, U)
+                            x + (rx + 1) * px + 0.6, y + (ry + 1) * px + 0.6, U)
 
 splash = Px(240)
 draw(splash, bg=False)
-draw_title(splash, TITLE)
+draw_title(splash, *TITLE_LINES)
 px = splash.nearest(480)
 write_png(os.path.join(ROOT, "drawable-nodpi", "splash_boombox.png"), 480, 480, px)
 print("wrote drawable-nodpi/splash_boombox.png (480 px, art 240x240)")
