@@ -7,7 +7,7 @@ Firmware ATEK303 personnalisé (dérivé GPL-3.0 d'Animatek — crédits : Anima
 code publié en GPL-3.0 + crédits Animatek, nouvelle clé de signature générée (l'actuelle
 reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
 
-## État des branches (maj 2026-11-20 ~20:00Z) — PR #1..#9 + #13 MERGÉES dans `main` (CI verte), PR #10/#11/#12/#14/#15/#16 ouvertes
+## État des branches (maj 2026-11-21) — `main` = `ecdb43b` (PR #35 spec mixeur 4 tranches mergée, CI verte run 44879057251) ; PR #36 ouverte (implémentation APK), drafts #32/#33/#34 côté équipe A
 
 - **Mergées dans main** (ordre : #3 → #9 → #5 → #2 → #4 → #6 → #7 → #8 puis **#1** `3ca9446` par la session B — baie v3 hiérarchique + DRUMS + choke MONO/POLY + OPTIONS(ECO/LDR) + mixeur 4 tranches + page DRUMS, CI verte run 44722534300 ; `gh pr merge` bloqué par le proxy → merges via `git merge --no-ff` + `git push origin main`, branches conservées) :
   - **PR #3** `vibe/zulutek-seq-plus-c9ef18` — pack SEQ+ APK (modulation 8/8, ASSIGN typé LUDIQUE, presets, ARP page 13, MACRO page 14)
@@ -28,6 +28,8 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
   - **PR #11** `vibe/fm1-patch-choke-eco-c9ef18` (autre session) — patch firmware **0009-choke-eco**
   - **PR #12** `vibe/fm1-patch-link-c9ef18` — patch firmware **0010-link** : liaison ZTF côté FM-1 (companion 0x60/61/62, fichiers ZSMP/ZLUP/ZMAC, SysEx `F0 7D 'Z' 'T' …`, `usb_audio_out` + hook `app_usb_in`) — CI verte run 44754438124
 - ⚠️ la série de patches firmware **0001-0010 n'a jamais été buildée avec la toolchain JieLi** ni testée dans fm1-emu (`docs/FM1-EMULATEUR.md`) — à faire **avant tout flash**. Ordre des patches : 0001-0008 → 0009-choke (#11) → 0010-link (#12).
+- **PR #35** `vibe/zulutek-mix-siren-spec-7f3a21` MERGÉE (`ecdb43b`) — doc spec **mixeur 4 tranches unifié APK/FM-1 (VOICE/DRUMS/LOOP/SIREN)** : `docs/ZULUTEK-MIX-SIREN.md`.
+- **PR #36** `vibe/zulutek-mix-siren-apk-1f7cfe` (équipe B, ouverte) — implémentation APK de la spec #35 : strips `ZTEK_STRIP_VOICE/DRUMS/LOOP/SIREN` (`ZTEK_NSTRIP`=4, baie inchangée), VOICE = bus voix unique, tranche SIREN vol↔`siren_lvl`/mute↔siren off (aucun nouveau param ZTF), migration presets magic `ZTP1`→`ZTP2` + remap `strip_par` (sizeof POD inchangé 1284 o), `STRIP_NAMES` Kotlin, doc `docs/ZULUTEK.md`. Patch 0011 FM-1 reste à écrire côté équipe A après le régime SRAM (PR #34).
 - 🗺️ **Carte de la flash 1 MiB (zones interdites en écriture)** : `docs/FM1-FLASHMAP.md` — boot head `0x0..0x3FFF` et `key_mac 0xFF000` jamais écrits, zone app `0x4000..0x97000` réservée au loader OTA, VM/BTIF `0xE7000..0xE9FFF` interdits, nos fichiers ZTF validés dans `0xB0000..0xD3FFF`. Voir aussi `docs/FM1-HARDWARE.md` (FM-1 rev octobre 2026 = flash UC25HQ80 JEDEC `B3 60 14`, unbrick par `WL82 UBOOT1.00` USB ou dongle Seeed XIAO RP2040).
 
 <details><summary>Détail des PR mergées (archive)</summary>
