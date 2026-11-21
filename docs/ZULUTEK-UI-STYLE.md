@@ -4,8 +4,8 @@ successfully downloaded text file (SHA: de0902c9eb79242cf0eb10eb7f7aebeae81fb3cc
 L'écran du FM-1 est **240×240**, monochrome avec accents fluo. L'APK `app-zulutek` (LcdView)
 imite cet écran à l'identique : **mêmes règles, mêmes couleurs, mêmes animations** côté APK
 et côté firmware (patch `animatek/FM1-Animatek`). Le compagnon tablette **Zulu Kontrol**
-(`FlyingZulu/FZulu-Control`, dépôt privé) applique **la même charte à l'identique strict** (un seul design pour tout
-l'écosystème Zulu, comme iOS sur iPhone et iPad) — voir la section « Zulu Kontrol » plus bas.
+(`FlyingZulu/FZulu-Control`, dépôt privé) applique **la même charte à l'identique strict** — un seul design pour tout
+l'écosystème Zulu, comme iOS sur iPhone et iPad (section « Zulu Kontrol » plus bas).
 
 ## Palette (constantes dans `LcdView.companion`)
 
@@ -73,12 +73,10 @@ l'écran, centré, gris atténué, police mono (comme un générique de fin de f
 ## Zulu Kontrol (compagnon tablette — FlyingZulu/FZulu-Control)
 
 L'app tablette **Zulu Kontrol** (console Vankyo, module `zkontrol`, package `com.zulukontrol`,
-label **ZKontrol**) applique **la même charte, unifiée** : fond sombre, encre mono, accents
-fluo ZU/LU/turquoise/REC/ambre **uniquement pour les états** (thème `ZcDark`/`ZcTheme`,
-`Theme.kt`) — un seul design pour tout
-l'écosystème Zulu (comme iOS sur iPhone et iPad) : mêmes couleurs, mêmes durées, même dessin.
-Fond sombre, encre mono, accents fluo ZU/LU/turquoise/REC/ambre **uniquement pour les états**
-(thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
+label **ZKontrol**) applique **la même charte à l'identique strict** — un seul design
+pour tout l'écosystème Zulu (comme iOS sur iPhone et iPad) : mêmes couleurs, mêmes durées,
+même dessin. Fond sombre, encre mono, accents fluo ZU/LU/turquoise/REC/ambre **uniquement
+pour les états** (thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
 
 - Intro **« Zulu Kontrol »** ~2 s, split RGB ; même pixel art fin que le boot ZuluTek.
 - Crédit **« Flying Zulu »** : petit, **en bas, centré, dans le splash** — identique ZuluTek
