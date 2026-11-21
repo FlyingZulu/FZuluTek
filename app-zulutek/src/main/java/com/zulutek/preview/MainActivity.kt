@@ -25,6 +25,7 @@ import kotlin.math.roundToInt
 class MainActivity : Activity(), SurfaceListener {
 
     private val st = LcdState()
+    private var drumOnUi = true     // boite a rythme ON au demarrage (kick 4OTF, patch APK 0023)
     private lateinit var lcd: LcdView
     private lateinit var surface: SurfaceView
     private lateinit var rootLayout: android.widget.FrameLayout
@@ -320,10 +321,10 @@ class MainActivity : Activity(), SurfaceListener {
         return super.dispatchTouchEvent(ev)
     }
 
-        /* jeu tactile (Flying Zulu) : pas de vue verticale, on verrouille paysage, facade FM-1 */
-        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        /* jeu tactile (Flying Zulu) : pas de vue verticale, on verrouille paysage, facade FM-1 */
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         ZtekAudio.start()
         ZtekAudio.initPrefs(this)
         // OPTIONS persistées (OBJ_OPTIONS côté FM-1) : ECO uniquement
@@ -1205,4 +1206,3 @@ class MainActivity : Activity(), SurfaceListener {
             }
             lcd.invalidate()
             return
-        }
