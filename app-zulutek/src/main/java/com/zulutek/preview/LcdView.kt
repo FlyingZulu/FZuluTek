@@ -1041,8 +1041,9 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                     if (cur && blink) FLUO_PINK else if (edit) FLUO_TURQ else if (on) FLUO_YEL else DIM)
                 if (on) text(c, x0 + 9f, y0 + 16f, "•", if (cur && blink) FLUO_PINK else INK, 10f)
             }
-            text(c, 6f, 178f, "SEL=pad PRE=niv ALG=step K1=step K2=swing K3=clear K4=rand PLAY=hit", DIM, 8f)
-            text(c, 6f, 192f, "MONO=noire9 choke · POLY=noire10 leader · REC/long-ERS=quitte", DIM, 8f)
+            text(c, 6f, 182f, "SEL=pad PRE=niv ALG=step K1=step K2=swing", DIM, 8f)
+            text(c, 6f, 196f, "K3=clear K4=rand PLAY=hit", DIM, 8f)
+            text(c, 6f, 210f, "noire9:choke noire10:leader REC/ERS:quitte", DIM, 8f)
             if (st.chokeWin) {
                 val cp = st.chokePad.coerceIn(0, ZtekAudio.DR_NPADS - 1)
                 box(c, 34f, 84f, 206f, 156f, FLUO_YEL)
