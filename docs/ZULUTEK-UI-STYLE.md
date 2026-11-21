@@ -214,3 +214,9 @@ pills chauffent à l'ambre selon slot/rec/sélection. La sérigraphie des encode
 statique (SELECT/PRESETS/ALGORITHM/KNOB1..4) et le relabel dynamique s'affiche dessous.
 Le dispatch reste par index SurfaceListener (l'ordre matrice machine est converti).
 La façade suit le style MATÉRIEL ; le LCD garde la charte noir/encre/fluo inchangée.
+
+**Aménagement DA Zulu (21/11, Flying Zulu)** : la façade garde la disposition Felucca mais
+porte la charte Zulu, pas le thème menthe de la machine : fond et pièce noirs rgb(9,12,16),
+sérigraphie menthe pâle rgb(159,224,214), bonbons et pills turquoise fluo
+rgb(0,255,224)/rgb(0,166,146) à encre noire, marque « ZULUTEK » rose fluo rgb(255,45,160)
+en bas de façade. Les états (ambre, vert PLAY, chaleur des pills) restent ceux de la charte.
