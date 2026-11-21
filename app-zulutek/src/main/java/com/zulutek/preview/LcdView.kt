@@ -380,9 +380,12 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
     private fun popColor(i: Int, base: Int): Int =
         if (st.popUntil[i] > System.currentTimeMillis()) FLUO_TURQ else base
 
-    /* v3 vue étendue : échelle = min(w/W, h/H) + centrage quand st.wide (plein écran) */
-    fun scaleF() = if (st.wide) minOf(width.toFloat() / W, height.toFloat() / H) else width.toFloat() / W
-    fun transX() = if (st.wide) (width / scaleF() - W) / 2f else 0f
+    /* v3 vue étendue : échelle = min(w/W, h/H) + centrage quand st.wide (plein écran).
+     * Paysage (FM-1 = objet horizontal, comme fm1-emu sur téléphone) : on ajuste par la
+     * hauteur et on centre horizontalement ; portrait inchangé. */
+    private fun land() = width > height
+    fun scaleF() = if (st.wide || land()) minOf(width.toFloat() / W, height.toFloat() / H) else width.toFloat() / W
+    fun transX() = if (st.wide || land()) (width / scaleF() - W) / 2f else 0f
     fun transY() = if (st.wide) (height / scaleF() - H) / 2f else 0f
 
     override fun onDraw(c: Canvas) {

@@ -436,6 +436,14 @@ class MainActivity : Activity(), SurfaceListener {
         super.onDestroy()
     }
 
+    /* rotation : configChanges déclaré dans le manifeste -> pas de recréation de l'activité
+     * (le moteur audio ZtekAudio continue), on redit juste les vues */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        lcd.invalidate()
+        surface.invalidate()
+    }
+
     // ---- page LINK (17) : liaison ZTF APK <-> FM-1 ------------------------------
 
     private val encDefault = arrayOf("SEL", "PRE", "ALG", "K1", "K2", "K3", "K4")
