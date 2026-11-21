@@ -1,0 +1,235 @@
+diff --git a/atek303/app/dsp/fx.c b/atek303/app/dsp/fx.c
+@@ -1,7 +1,7 @@
+ /* SPDX-License-Identifier: GPL-3.0-or-later
+  * Copyright (C) 2026 Javier (Animatek)
+  *
+- * ATEK303's effects: drive, chorus / flanger, ping-pong delay, plate reverb. See fx.h. */
++ * ATEK303's effects: drive, chorus / flanger, ping-pong delay, a Freeverb reverb. See fx.h. */
+ #include "fx.h"
+ #include "fastmath.h"
+ 
+@@ -155,17 +155,24 @@
+ }
+ 
+ /* ------------------------------------------------------------------- reverb --- */
+-/* Dattorro's plate, his lengths (at 29761 Hz) scaled to 44.1 kHz */
+-#define RS(n) ((uint32_t)((float)(n) * 1.48181f + 0.5f))
+-enum { R_PRE, R_IN1, R_IN2, R_IN3, R_IN4, R_IN5, R_IN6, R_AP1L, R_D1L, R_AP2L, R_D2L, R_AP1R, R_D1R, R_AP2R, R_D2R, R_NLINES };
++/* Freeverb (the Dreampoint schroeder, Jezar's public-domain classic): 8 combs in parallel
++ * darkened by DAMP, into 4 allpasses, twice — the right bank's lines 23 samples longer —
++ * plus the pre-delay. Patch 0024: the Dattorro plate and its modulated tank gave way to this:
++ * no interpolation in the loop at all, fixed-length reads, and ~27.7k of .pool instead of
++ * ~37.1k: the FM-1's audio block breathes. */
++#define RV_COMBS 8
++#define RV_APS 4
++#define RV_SPREAD 23u                          /* the right bank's extra samples (stereo width) */
+ #define PRE_MAX 2205u                          /* 50 ms */
+-#define EXC 48u                                /* the tank modulation's excursion, in samples (Black Hole swirl) */
++enum { R_PRE = 0,                              /* pre-delay, left combs/allpasses, then right */
++       R_CL = 1, R_AL = 1 + RV_COMBS, R_CR = 1 + RV_COMBS + RV_APS,
++       R_AR = 1 + 2 * RV_COMBS + RV_APS, R_NLINES = 1 + 2 * (RV_COMBS + RV_APS) };
+ static uint32_t r_len[R_NLINES], r_off[R_NLINES], r_pos[R_NLINES];
+-#define RV_N (PRE_MAX + 35200u)              /* the lines below add up to ~37123 */
++#define RV_N (PRE_MAX + 28000u)              /* the lines below add up to 27655 */
+ #if !defined(PLAT_HOST) && !defined(FX_RV_Q)
+-#define FX_RV_Q 16384                         /* patch 0020: plate reverb in 16 bits on the FM-1 (the author's smaller-build option) : -74 Ko of .pool */
++#define FX_RV_Q 16384                         /* patch 0020: the reverb's lines in 16 bits on the FM-1 (the author's smaller-build option) : the .pool shrinks to ~59 Ko, ~-15 Ko more since 0024's Freeverb replaced the plate */
+ #endif
+-#ifdef FX_RV_Q                                 /* the plate's lines in 16 bits, FX_RV_Q a unit (a smaller build) */
++#ifdef FX_RV_Q                                 /* the reverb's lines in 16 bits, FX_RV_Q a unit (a smaller build) */
+ typedef int16_t rv_t;
+ static inline float rv_ld(rv_t v) { return (float)v * (1.0f / (float)FX_RV_Q); }
+ static inline rv_t rv_st(float x)
+@@ -181,7 +188,7 @@
+ static rv_t rv_buf[RV_N] FX_POOL;
+ static uint8_t rv_ok;
+ static struct {
+-    float bw, lp_l, lp_r, damp_c, decay, fb_l, fb_r, ph;
++    float decay, damp, fs[2][RV_COMBS];     /* the combs' feedback, their low-pass, its state */
+ } rv;
+ static inline rv_t *rline(int k) { return &rv_buf[r_off[k]]; }
+ static inline float rtap(int k, uint32_t d)   /* the sample written d ago */
+@@ -195,37 +202,46 @@
+     if (++r_pos[k] >= r_len[k])
+         r_pos[k] = 0;
+ }
+-static inline float rap(int k, float x, float g)   /* Schroeder allpass on line k, full length */
+-{
+-    float d = rv_ld(rline(k)[r_pos[k]]), v = x - g * d;   /* (the oldest sample: written len ago) */
+-    rput(k, flush(v));
+-    return d + g * v;
+-}
+-static inline float rap_mod(int k, float x, float g, float delay)   /* the tank's modulated allpass */
+-{
+-    uint32_t n = r_len[k];
+-    float pos = (float)r_pos[k] - delay, f, d, v;
+-    int32_t i;
+-    while (pos < 0.0f)
+-        pos += (float)n;
+-    i = (int32_t)pos;
+-    f = pos - (float)i;
+-    d = rv_ld(rline(k)[(uint32_t)i % n]) * (1.0f - f) + rv_ld(rline(k)[(uint32_t)(i + 1) % n]) * f;
+-    v = x - g * d;
+-    rput(k, flush(v));
+-    return d + g * v;
++/* one bank: the 8 combs (input in, DAMP darkening their feedback) summed, then the 4 allpasses.
++ * ch 0 = left, 1 = the same lines + RV_SPREAD samples (Freeverb's stereo spread) */
++static inline float rv_side(float in, int ch)
++{
++    int c0 = ch ? R_CR : R_CL, a0 = ch ? R_AR : R_AL, k;
++    float y = 0.0f;
++    for (k = 0; k < RV_COMBS; k++) {
++        int c = c0 + k;
++        float d = rtap(c, r_len[c]);              /* the oldest sample in the comb */
++        rv.fs[ch][k] += rv.damp * (d - rv.fs[ch][k]);
++        rput(c, in + rv.fs[ch][k] * rv.decay);
++        y += d;
++    }
++    y *= (1.0f / 32.0f);                          /* Freeverb's tame: the combs sum */
++    for (k = 0; k < RV_APS; k++) {
++        int a = a0 + k;
++        float d = rtap(a, r_len[a]), v = y - 0.5f * d;
++        rput(a, v);
++        y = d + 0.5f * v;
++    }
++    return y;
+ }
+ static void reverb_init(void)
+ {
+-    static const uint32_t L[R_NLINES] = {PRE_MAX, 142, 107, 379, 277, 556, 441, 672, 4453, 1800, 3720, 908, 4217, 2656, 3163};
++    static const uint32_t C[RV_COMBS] = {1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617};
++    static const uint32_t A[RV_APS] = {556, 441, 341, 225};
+     uint32_t off = 0;
+     int k;
+     for (k = 0; k < R_NLINES; k++) {
+-        r_len[k] = k == R_PRE ? PRE_MAX : RS(L[k]) + (k == R_AP1L || k == R_AP1R ? EXC + 2u : 0u);
++        r_len[k] = k == R_PRE ? PRE_MAX
++            : k < (int)R_AL ? C[k - 1] + 0u
++            : k < (int)R_CR ? A[k - (int)R_AL] + 0u
++            : k < (int)R_AR ? C[k - (int)R_CR] + RV_SPREAD
++            : A[k - (int)R_AR] + RV_SPREAD;
+         r_off[k] = off;
+         r_pos[k] = 0;
+         off += r_len[k];
+     }
++    for (k = 0; k < RV_COMBS; k++)               /* the combs' low-pass state at zero */
++        rv.fs[0][k] = rv.fs[1][k] = 0.0f;
+     rv_ok = off <= RV_N;                      /* (never false with these lengths: a guard for edits) */
+ }
+ 
+@@ -448,7 +464,6 @@
+     dr.x1 = 0.0f;
+     dl.len = fx_delay_seconds() * sr;
+     dl.rng = 0x2545F491u;
+-    rv.bw = 0.9995f;
+     pn.on = 0;
+     pn.type = 0;
+     pn.w = 0;
+@@ -486,8 +501,8 @@
+     float base = mtype ? 0.0006f * sr : 0.007f * sr;
+     float depth = (mtype ? 0.004f : 0.004f) * sr * par[FX_MOD_DEPTH];
+     float mfb = mtype ? 0.6f : 0.0f;
+-    float decay = 0.30f + 0.695f * par[FX_REV_DECAY];        /* up to 0.995: Black Hole long tails, never endless */
+-    float damp = onepole_c(700.0f * fm_exp2f(4.0f * (1.0f - par[FX_REV_DAMP])));   /* 700 Hz .. 11 kHz, darker */
++    rv.decay = 0.30f + 0.695f * par[FX_REV_DECAY];       /* the combs' feedback, 0.30..0.995: Freeverb long tails, never endless */
++    rv.damp = 0.40f * par[FX_REV_DAMP];                  /* the combs' low-pass, Freeverb's scaledamp clampé : 0..0.4 */
+     uint32_t pre = (uint32_t)(par[FX_REV_PRE] * (float)(PRE_MAX - 1u));
+     if (fx_eco && pre > PRE_MAX / 2u) pre = PRE_MAX / 2u;   /* eco: pre-delay max réduit de moitié */
+     dr.gain_s = 1.0f + (dtype == 3 ? 120.0f : dtype == 2 ? 60.0f : dtype == 4 ? 3.0f : 12.0f) * par[FX_DRIVE] * par[FX_DRIVE];
+@@ -560,52 +575,13 @@
+             l += dmix * a;
+             r += dmix * b;
+         }
+-        /* REVERB */
++        /* REVERB (Freeverb): pre-delay, then a comb bank per side */
+         if (rmix > 0.0f && rv_ok) {
+-            float t, xl, xr, ex, yl = 0.0f, yr = 0.0f;
++            float t;
+             rput(R_PRE, 0.5f * (l + r));
+             t = rtap(R_PRE, pre + 1u);
+-            rv.lp_l += rv.bw * (t - rv.lp_l);          /* bandwidth */
+-            t = rv.lp_l;
+-            t = rap(R_IN1, t, 0.75f);
+-            t = rap(R_IN2, t, 0.75f);
+-            t = rap(R_IN3, t, 0.625f);
+-            t = rap(R_IN4, t, 0.625f);
+-            t = rap(R_IN5, t, 0.5f);                /* extra diffusion, Black Hole style */
+-            t = rap(R_IN6, t, 0.5f);
+-            if (fx_eco) {
+-                ex = (float)EXC * 0.5f;                /* eco: swirl de la tank off */
+-            } else {
+-                ex = (float)EXC * 0.5f * (1.0f + fm_sin_turns(rv.ph));
+-                rv.ph += 2.5f / sr;                    /* 2.5 Hz swirl */
+-                if (rv.ph >= 1.0f)
+-                    rv.ph -= 1.0f;
+-            }
+-            /* left half of the tank */
+-            xl = rap_mod(R_AP1L, t + decay * rv.fb_r, -0.70f, (float)RS(672) + ex);
+-            rput(R_D1L, xl);
+-            xl = rtap(R_D1L, r_len[R_D1L]);
+-            rv.lp_r += damp * (xl - rv.lp_r);          /* damping */
+-            xl = flush(rv.lp_r) * decay;
+-            xl = rap(R_AP2L, xl, 0.50f);
+-            rput(R_D2L, xl);
+-            /* right half */
+-            xr = rap_mod(R_AP1R, t + decay * rv.fb_l, -0.70f, (float)RS(908) + ((float)EXC - ex));
+-            rput(R_D1R, xr);
+-            xr = rtap(R_D1R, r_len[R_D1R]);
+-            rv.damp_c += damp * (xr - rv.damp_c);
+-            xr = flush(rv.damp_c) * decay;
+-            xr = rap(R_AP2R, xr, 0.50f);
+-            rput(R_D2R, xr);
+-            rv.fb_l = rtap(R_D2L, r_len[R_D2L]);
+-            rv.fb_r = rtap(R_D2R, r_len[R_D2R]);
+-            /* the output taps (Dattorro's table) */
+-            yl = rtap(R_D1R, RS(266)) + rtap(R_D1R, RS(2974)) - rtap(R_AP2R, RS(1913)) + rtap(R_D2R, RS(1996))
+-                 - rtap(R_D1L, RS(1990)) - rtap(R_AP2L, RS(187)) - rtap(R_D2L, RS(1066));
+-            yr = rtap(R_D1L, RS(353)) + rtap(R_D1L, RS(3627)) - rtap(R_AP2L, RS(1228)) + rtap(R_D2L, RS(2673))
+-                 - rtap(R_D1R, RS(2111)) - rtap(R_AP2R, RS(335)) - rtap(R_D2R, RS(121));
+-            l += rmix * 0.5f * yl;
+-            r += rmix * 0.5f * yr;
++            l += rmix * 0.5f * rv_side(t, 0);
++            r += rmix * 0.5f * rv_side(t, 1);
+         }
+         /* PUNCH-IN (PoW!): the ring always records; while a slot is held its effect is in, mixed by K4 */
+         {
+diff --git a/atek303/app/dsp/fx.h b/atek303/app/dsp/fx.h
+@@ -13,8 +13,9 @@
+  *   DELAY   ping-pong bucket-brigade (BBD): TIME is free, 10..~600 ms, not synced to the tempo; the
+  *           delay steps in 4096 "stages" like an MN3005 and the clock hisses a little; each repeat
+  *           darker (a low-pass in the loop) and without mud (a high-pass); TIME glides like tape.
+- *   REVERB  Dattorro's plate (J. Dattorro, "Effect Design Part 1", JAES 1997), with its modulated
+- *           tank and a pre-delay.
++ *   REVERB  Freeverb (Jezar's schroeder, public domain): 8 combs darkened by DAMP into 4 allpasses
++ *           per side, the right bank's lines 23 samples longer, and a pre-delay. Patch 0024: less
++ *           CPU and .pool than the Dattorro plate it replaces, same knobs (DECAY/DAMP/PRE/MIX).
+  *
+  * All of it single precision, no libm (fastmath.h). The buffers live in the device's .pool RAM.
+  * fx_process() runs in the audio interrupt; fx_set() and fx_tempo() between blocks. */
+@@ -51,7 +52,7 @@
+ void fx_init(float sr);
+ void fx_set(int param, float value);   /* knobs 0..1; the types as their index */
+ float fx_get(int param);               /* readback (UI) — appended, saved ids do not move */
+-void fx_set_eco(int on);               /* MODE ECO: crush 96+tanh en entrée, BBD mono, swirl off, pre-delay /2 */
++void fx_set_eco(int on);               /* MODE ECO: crush 96+tanh en entrée, BBD mono, pre-delay max /2 */
+ int  fx_get_eco(void);
+ void fx_tempo(float sixteenth_s);      /* kept for the API; the delay is free now, no sync */
+ float fx_dly_ms(float t01);            /* BBD TIME 0..1 -> free ms, 10..~600 */
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+@@ -34,7 +34,7 @@
+  *                     6 CHORUS  TYPE (CHORUS, FLANGER), RATE, DEPTH, MIX
+  *                     7 DRIVE   TYPE (OFF, OVERDRIVE, RAT, FUZZ), DRIVE, TONE, LEVEL
+  *                     (the pages' order; the sound goes drive -> chorus -> delay -> reverb)
+- *                     8 REVERB  DECAY, DAMP, PRE-DELAY, MIX (Dattorro's plate)
++ *                     8 REVERB  DECAY, DAMP, PRE-DELAY, MIX (Freeverb, patch 0024)
+  *   FX              jumps to the effect pages (again: the next one)
+  *   SAVE            the SAVE screen: a PRESET is everything (pattern, voice, effects, tempo, scale, root).
+  *                   It opens on the preset loaded (the list's cursor, or the first empty slot); PRESETS picks
+diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+@@ -23,5 +23,5 @@
+ licence = "GPL-3.0-or-later"
+ credits = "Built on fm1-base (Charles Vestal) and felucca-bsp (Hügelton Instruments). The voice is ATEK303 by Animatek, on Open303 by Robin Schmidt."
+ author = "Animatek"
+-description = "ATEK303 turns the M-VAVE FM-1 into an acid machine: the ATEK303 engine from VCV Rack (Open303 with a diode ladder and a modelled oscillator) and its acid pattern generator. Press PLAY and a line plays; generate, mutate and undo patterns, edit steps in a piano roll, add drive, chorus, synced delay and plate reverb. 14 oscillators on WAVE (saw, square and layered combinations), 64 steps, 12 factory presets in 32 slots, OPTIONS (colour, MIDI, fine tuning), MIDI in, out and clock."
++description = "ATEK303 turns the M-VAVE FM-1 into an acid machine: the ATEK303 engine from VCV Rack (Open303 with a diode ladder and a modelled oscillator) and its acid pattern generator. Press PLAY and a line plays; generate, mutate and undo patterns, edit steps in a piano roll, add drive, chorus, synced delay and a Freeverb reverb. 14 oscillators on WAVE (saw, square and layered combinations), 64 steps, 12 factory presets in 32 slots, OPTIONS (colour, MIDI, fine tuning), MIDI in, out and clock."
+ tags = ["synth", "sequencer"]
