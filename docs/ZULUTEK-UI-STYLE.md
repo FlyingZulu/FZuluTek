@@ -87,6 +87,20 @@ pour les états** (thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
   au `drawCat` de FZuluTek (pop-tart croûte + sprinkles, visage de chat sur la platine
   cassette, oreilles, poignée, antenne, 2 HP, traînée arc-en-ciel 6 bandes, 4 étoiles) —
   aucun autre chat, aucune variante.
+### Icônes des apps : un dessin, des initiales
+
+Chaque app Zulu garde **la même icône** (le remix officiel généré par `tools/make_icon.py`,
+strictement identique dans tous les dépôts), **plus un petit cartouche d'initiales** en bas
+à droite (pixel art blanc sur fond sombre, liseré à la couleur d'accent de l'app), pour ne
+pas confondre les apps sur l'écran d'accueil. La teinte du fond varie très légèrement entre
+apps (imperceptible seule, repérable côte à côte) :
+
+- **ZT** (ZuluTek) — liseré rose fluo, fond `rgb(10,10,16)`
+- **ZK** (Zulu Kontrol) — liseré turquoise fluo, fond `rgb(9,12,16)`
+- **ZD** (Drums) — liseré jaune fluo
+
+Toute nouvelle app suit le même schéma : mêmes cotes, initiales + accent dédiés. Le splash
+reste sans badge : le crédit « Flying Zulu » est au bas de l'écran.
 - Veille : 30 s sans toucher → Nyan en grand écran qui se balade ; gyro armé = le chat glisse
   selon le tilt (niveau à bulle). Désactivable.
 - Prompt pour UI designer externe : `docs/PROMPT-UI-ZKONTROL.md` (FZulu-Control), dérivé de
