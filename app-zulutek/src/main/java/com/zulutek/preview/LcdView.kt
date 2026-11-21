@@ -5,7 +5,8 @@
  * docs/ZULUTEK-UI-STYLE.md: black background, white MONOSPACE ink, fluo accents only for
  * important states (ZU pink / LU yellow witnesses, windows turquoise, REC red blinking,
  * warnings amber). Display only — all interaction goes through the cloned surface
- * (SurfaceView). Drawn in logical 240x240 coordinates, scaled to the view. */
+ * (SurfaceView). Rendered into a real 240x240 framebuffer, quantized RGB565 like the
+ * physical ST7789 panel, then upscaled nearest-neighbor (per docs/ZULUTEK-UI-STYLE.md). */
 package com.zulutek.preview
 
 import android.content.Context
@@ -629,13 +630,54 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
     fun transX() = if (st.wide || land()) (width / scaleF() - W) / 2f else 0f
     fun transY() = if (st.wide) (height / scaleF() - H) / 2f else 0f
 
-    override fun onDraw(c: Canvas) {
-        super.onDraw(c)
+    /* Rendu fidèle au matériel FM-1 (charte DA Zulu, façon simulateur fm1-emu) : toute l'UI
+     * est dessinée dans un vrai framebuffer 240×240 — la résolution native de l'écran
+     * ST7789 du FM-1 — puis quantifiée en RGB565 (le format réel du panneau : banding fin
+     * sur les fluos, exactement comme sur le matériel) et agrandie au plus proche voisin,
+     * avec la trame discrète des interstices entre pixelsphysiques. */
+    private val fb = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
+    private val fbC = Canvas(fb)
+    private val fbBuf = IntArray(W * H)
+    private val blitPaint = Paint().apply { isFilterBitmap = false }  // nearest : pixels nets
+    private val gridPaint = Paint().apply { color = Color.argb(26, 0, 0, 0) }  // interstices
+    private val fbRect = RectF()
+
+    /* quantifie le framebuffer en RGB565 puis le blit à l'échelle du panneau, au plus
+     * proche voisin ; trame physique uniquement quand les pixels sont assez gros. */
+    private fun blitTo(screen: Canvas, s: Float) {
+        fb.getPixels(fbBuf, 0, W, 0, 0, W, H)
+        for (i in fbBuf.indices) {
+            val p = fbBuf[i]
+            fbBuf[i] = (p and -0x10000) or (p and 0x00F80000) or (p and 0x0000FC00) or (p and 0xF8)
+        }
+        fb.setPixels(fbBuf, 0, W, 0, 0, W, H)
+        val left = transX() * s
+        val top = transY() * s
+        fbRect.set(left, top, left + W * s, top + H * s)
+        screen.drawBitmap(fb, null, fbRect, blitPaint)
+        if (s >= 3f) {
+            val right = left + W * s
+            val bottom = top + H * s
+            var i = 1
+            while (i < W) {
+                val x = left + i * s
+                screen.drawRect(x - 0.4f, top, x + 0.4f, bottom, gridPaint)
+                val y = top + i * s
+                screen.drawRect(left, y - 0.4f, right, y + 0.4f, gridPaint)
+                i++
+            }
+        }
+    }
+
+    override fun onDraw(screen: Canvas) {
+        super.onDraw(screen)
         val s = scaleF()
+        screen.drawColor(BG)
+        val c = fbC
         c.drawColor(BG)
         c.save()
-        c.translate(transX(), transY())
-        c.scale(s, s)
+        c.translate(0f, 0f)
+        c.scale(1f, 1f)
 
         val now = System.currentTimeMillis()
         val blink = if (st.ecoOn) true else (now / 260) % 2 == 0L
@@ -646,6 +688,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         if (now < st.flashUntil) {
             c.drawColor(INK)
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -710,6 +753,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             }
             if (now < st.coucouUntil) drawCat(c, W / 2f, H / 2f, 1.6f)   // coucou au réveil
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -748,6 +792,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             text(c, 8f, 210f, "REC: PRESET  PLAY: touche blanche / PLAY", DIM, 8f)
             text(c, 8f, 226f, "long-SEQ = fermer la page", DIM, 8f)
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -786,6 +831,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                     text(c, 44f, 152f, "tap=+C$g  re-tap=LDR", DIM, 8f)
                 }
                 c.restore()
+                blitTo(screen, s)
                 return
             }
             title(c, 6f, 15f, "LOOP ${st.selSlot + 1}", FLUO_TURQ)
@@ -802,6 +848,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             }
             text(c, 6f, 232f, "REC=arm/stop ERS=erase DLY=len REV=mode SCL=CHK long-REC=quitte", DIM, 8f)
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -830,6 +877,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 DIM, 8f)
             text(c, 6f, 214f, "long-DRV/MUT = quitter", DIM, 8f)
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -849,6 +897,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             text(c, 6f, 216f, "SEL=Xtarget PRE=Ytarget ALG=swap  dbl-tap=hold/mom", DIM, 8f)
             text(c, 6f, 230f, "long-GEN = quitter", DIM, 8f)
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -870,6 +919,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             text(c, 6f, 224f, "SEL=ON/OFF  ALG=type(4)  K1=RATE K2=DEPTH K3=FB K4=MIX", DIM, 8f)
             text(c, 6f, 236f, "clavier chromatique  ALG=retour pedalboard  REC=quitte", DIM, 8f)
             c.restore()
+            blitTo(screen, s)
             return
         }
         if (st.page == 5) {   // vue PEDALBOARD
@@ -945,6 +995,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 text(c, 6f, 226f, "ALG=effet  K1..K3=réglages  PRE=p3  K4=dry/wet  REC=retour", DIM, 8f)
             }
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -1001,6 +1052,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 text(c, 44f, 152f, "tap=+C${st.drumChoke[cp]}  POLY+pad=LDR", DIM, 8f)
             }
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -1099,6 +1151,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 text(c, 30f, 162f, "K1=type K2=a K3=b K4=mix  REC=ferme", INK, 8f)
             }
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -1205,6 +1258,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 }
             }
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -1227,6 +1281,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             }
             text(c, 6f, 232f, "SEL=banc  appui PRE=quitte  DLY=cycle", DIM, 8f)
             c.restore()
+            blitTo(screen, s)
             return
         }
         // ---- page OPTIONS (16) : liste — SEL=navigue, ALG=valeur live, REC/tout bouton=quitte, Shift=reset ----
@@ -1248,6 +1303,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             }
             text(c, 6f, 232f, "SEL=nav ALG=valeur REC=quitte Shift=reset", DIM, 8f)
             c.restore()
+            blitTo(screen, s)
             return
         }
 
@@ -1473,5 +1529,6 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             text(c, 6f, 92f, st.hintMsg, FLUO_TURQ, 9f)
         }
         c.restore()
+        blitTo(screen, s)
     }
 }
