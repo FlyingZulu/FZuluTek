@@ -17,36 +17,66 @@ et côté firmware (patch `animatek/FM1-Animatek`).
 | avertissements (boucle, état) | ambre `argb(255,255,200,60)` |
 | atténué | gris |
 
+La baie de patch ajoute sa propre gamme de couleurs par module (voir plus bas).
+
 ## Règles
 
 - **Fond noir, encre blanche**, texte mono ; les accents fluo servent **uniquement** aux états
   importants (témoins ZU/LU, REC, cadres de fenêtres, icônes de mode).
-- **Toute fenêtre / icône qui apparaît** (caméra snap, logo REC, caméra ciné REC+GLO, pop de
-  paramètre, singe à la connexion, animation d'intro) : **apparition plein cadre puis
-  rétrécissement sur 400 ms** après un bref maintien (ex. 1,2–1,6 s) — même esprit partout.
+- **Toute fenêtre / icône qui apparaît** (caméra snap, logo REC, proc REC+GLO, singe à la
+  connexion, animation d'intro) : **apparition plein cadre puis rétrécissement sur 400 ms**
+  après un bref maintien (1,2–1,6 s) — même esprit partout. Tap du pad pendant une capture :
+  rétrécissement immédiat, toujours 400 ms.
 - **Panneau pop d'un paramètre touché** : cadre turquoise fluo, **valeur en grand au centre**
-  (prioritaire), nom du contrôle + paramètre au-dessus en atténué, état en dessous en ambre
-  (S = détaché d'un snap, L = piloté par LFO, E = ENV/EF, X = LOG/N1) + message en cours.
+  (prioritaire), nom du contrôle au-dessus en atténué, état en dessous en ambre
+  (S = snap armé, L = page LFO, E = page ENV ; côté firmware : X = LOG/N1) + message en cours.
   Si le contrôle sert à la **navigation** (SELECT), c'est la **cible** qui s'affiche au centre
   (PAGE x / SLOT n / OPT … / LEN xB / STEP n) à la place du pourcentage.
+  Implémentation APK : `MainActivity.popPanelInfo()` remplit `LcdState.popVal/popState`,
+  `LcdView.onDraw` dessine le panneau (durée = le pop du widget, 1,2 s).
 - **Procédures armées** : les boutons déclencheurs clignotent (260 ms) jusqu'à fermeture.
-  Rappel lock clavier MIDI : HOME clignote toutes les 20 s.
+  Rappel lock clavier MIDI : après **20 s de silence clavier**, HOME pulse une fois
+  (260 ms, turquoise) toutes les 20 s, jusqu'à la prochaine note.
 - Icônes en **line-art** 1,6–2 px (caméra, caméra ciné, micro barré, cadenas, boucle 🔁, singe).
-- Option VHS : scanlines légères **uniquement sur le noir**, jamais sur le flash inversé.
-- Flash (snap pris) : inversion blanc/noir le temps du flash.
+- Option VHS (OPTIONS > LUXE) : scanlines légères **uniquement sur le noir**, jamais sur le
+  flash inversé. Côté APK : trame dessinée en blend LIGHTEN avec un gris très sombre
+  (`scanPaint`) — seul le noir s'éclaircit, l'encre blanche et les accents restent intacts.
+- Flash (snap pris) : inversion blanc/noir le temps du flash (120 ms).
 
-## Intro (boot, ~2 s)
+## Baie de patch : une couleur par module
 
-Ghetto blaster cyberpunk + « ZuluTek » dans la même charte : line-art blanc, accents
-**rose fluo / jaune fluo / turquoise** (ZU/LU + turquoise), apparition pop puis fondu.
+Chaque module de la baie possède **sa propre couleur stable** (`LcdState.patchCableColors`,
+12 teintes) : les sources prennent leur couleur par `cableColor()` (index source), les
+modules entrants par `modColor()` (décalage +8 pour ne pas recouper les sources).
+Usages : cadres des boîtes de la vue 0 (si câbles présents), noms des boîtes, en-têtes de
+modules dans la liste IN, et toutes les mentions de câbles. Les couleurs :
+
+`rgb(255,45,160)` · `rgb(255,238,0)` · `rgb(0,255,224)` · `rgb(255,60,60)` ·
+`rgb(255,160,40)` · `rgb(150,80,255)` · `rgb(60,220,90)` · `rgb(60,160,255)` ·
+`rgb(255,120,200)` · `rgb(120,200,255)` · `rgb(220,255,120)` · `rgb(255,200,90)`
+
+## Intro (boot, ~1,9 s)
+
+**Remix Ghetto Blaster × Nyan Cat** dans la même charte : le corps du walkman est une
+pop-tart rose (croûte + sprinkles), la platine cassette est devenue le visage du chat
+(yeux, joues roses, sourire, moustaches), oreilles, poignée, antenne, deux HP, traînée
+arc-en-ciel étoilée. Line-art pixel art fin + accents **rose fluo / jaune fluo / turquoise**.
 Le prompt pour IA générative vit dans `docs/PROMPT-BOOT-IA.md`, l'outil de conversion
 image → LCD (240×240, 1 bit + accents) dans `tools/lcd_image.py`.
+
+**Crédit** : pendant le splash, un petit **« Flying Zulu »** s'affiche tout en bas de
+l'écran, centré, gris atténué, police mono (comme un générique de fin de film).
 
 ## Fichiers
 
 - `app-zulutek/.../LcdView.kt` — palette (`FLUO_PINK/YEL/TURQ`, `REC_RED`, `AMBER`) + toutes les
-  animations (pop paramètre, icônes, singe, intro).
-- `docs/PROMPT-BOOT-IA.md`, `tools/lcd_image.py` — génération d'images conformes à cette charte.
+  animations (panneau pop paramètre, icônes, singe, scanlines VHS, caméra 400 ms,
+  couleurs par module de la baie).
+- `app-zulutek/.../MainActivity.kt` — `popPanelInfo()` : valeur/cible du panneau pop.
+- `app-zulutek/.../SurfaceView.kt` — rappel HOME 20 s (pulse turquoise 260 ms).
+- `app-zulutek/.../SplashActivity.kt` — splash ~1,9 s + crédit « Flying Zulu » en bas.
+- `docs/PROMPT-BOOT-IA.md`, `tools/lcd_image.py`, `tools/make_icon.py` — génération d'images
+  conformes à cette charte.
 - Le patch firmware reprend les mêmes constantes et les mêmes durées d'animation.
 
 ## Pixel art (DA visuels embarqués)
@@ -55,8 +85,8 @@ image → LCD (240×240, 1 bit + accents) dans `tools/lcd_image.py`.
   style console portable 16 bits (Game Gear) — pas le gros pixel Game Boy : grille interne **240×240**
   (comme l'écran du FM-1), redimensionnement **au plus proche voisin** (pixels nets, jamais de lissage).
 - Générateur : `tools/make_icon.py` (pur Python, PNG écrits en zlib) → `mipmap-*/ic_launcher.png`
-  + `drawable-nodpi/splash_boombox.png`. Splash ~1,9 s : ghetto blaster Nyan Cat (pop-tart rose, oreilles,
-  traînée arc-en-ciel) + « ZULUTEK » cyberpunk (dégradé rose→jaune, split RGB turquoise, glitch VHS),
-  tap = passer.
+  + `drawable-nodpi/splash_boombox.png` (le remix Ghetto Blaster × Nyan Cat). Splash ~1,9 s :
+  boombox-pop-tart rose (sprinkles), visage de chat sur la platine, traînée arc-en-ciel
+  étoilée, tap = passer.
 - Côté LCD 240×240 du FM-1 : mêmes règles, dessin direct en pixels (RGB565, ST7789) ; voir
   `docs/FM1-RESSOURCES.md` (émulateur fm1-emu, miroir d'écran fm1-projector, police pixel 3x de fm1-sampler).
