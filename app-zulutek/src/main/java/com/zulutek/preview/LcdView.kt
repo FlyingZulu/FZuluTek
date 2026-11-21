@@ -319,6 +319,85 @@ class LcdState {
     var wide = false                         // v3 « vue étendue » : la baie occupe tout l'écran du téléphone
 }
 
+/* PixFont : LA typo pixel 5x9 à EMPATTEMENTS de l'étiquette de titre (charte), étendue à
+ * tout l'alphabet — utilisée pour TOUS LES TITRES de pages/menus du LCD (identique strict
+ * au PixelFont.kt de Zulu Kontrol). Les accents sont pliés ; caractères inconnus -> '?'. */
+private object PixFont {
+    const val GW = 5
+    const val GH = 9
+    private val G: Map<Char, String> = mapOf(
+        'A' to "01110|10001|10001|11111|10001|10001|10001|10001|10001",
+        'B' to "11110|10001|10001|11110|10001|10001|10001|10001|11110",
+        'C' to "01110|10001|10000|10000|10000|10000|10000|10001|01110",
+        'D' to "11110|10001|10001|10001|10001|10001|10001|10001|11110",
+        'E' to "11111|10000|10000|11110|10000|10000|11110|10000|11111",
+        'F' to "11111|10000|10000|11110|10000|10000|10000|10000|10000",
+        'G' to "01111|10000|10000|10111|10001|10001|10001|10010|01101",
+        'H' to "10001|10001|10001|10001|11111|10001|10001|10001|10001",
+        'I' to "11111|00100|00100|00100|00100|00100|00100|00100|11111",
+        'J' to "00111|00010|00010|00010|00010|00010|10010|10010|01100",
+        'K' to "10011|10010|11000|11000|10010|10001|10001|10001|10001",
+        'L' to "10000|10000|10000|10000|10000|10000|10000|10000|11111",
+        'M' to "10001|11011|10101|10101|10001|10001|10001|10001|10001",
+        'N' to "10001|11001|11001|10101|10101|10011|10011|10001|10001",
+        'O' to "01110|10001|10001|10001|10001|10001|10001|10001|01110",
+        'P' to "11110|10001|10001|11110|10000|10000|10000|10000|10000",
+        'Q' to "01110|10001|10001|10001|10001|10001|10010|00101|00110",
+        'R' to "11110|10001|10001|11110|10100|10010|10001|10001|10001",
+        'S' to "01111|10000|10000|01110|00001|00001|00001|10001|01110",
+        'T' to "01111|00100|00100|00100|00100|00100|00100|00100|01111",
+        'U' to "10001|10001|10001|10001|10001|10001|10001|01010|00100",
+        'V' to "10001|10001|10001|10001|10001|10001|01010|01010|00100",
+        'W' to "10001|10001|10001|10101|10101|10101|11011|11011|10001",
+        'X' to "10001|10001|01010|00100|00100|01010|10001|10001|10001",
+        'Y' to "10001|10001|10001|01010|00100|00100|00100|00100|00100",
+        'Z' to "11111|00001|00010|00100|01000|10000|10000|10000|11111",
+        '0' to "01110|10001|10011|10101|11001|10001|10001|10001|01110",
+        '1' to "00100|01100|00100|00100|00100|00100|00100|00100|01110",
+        '2' to "01110|10001|00001|00010|00100|01000|10000|10001|11111",
+        '3' to "11110|00001|00001|00110|00001|00001|00001|10001|01110",
+        '4' to "00010|00110|01010|10010|11111|00010|00010|00010|00010",
+        '5' to "11111|10000|10000|11110|00001|00001|00001|10001|01110",
+        '6' to "01111|10000|10000|11110|10001|10001|10001|10001|01110",
+        '7' to "11111|00001|00010|00100|00100|01000|01000|01000|01000",
+        '8' to "01110|10001|10001|01110|10001|10001|10001|10001|01110",
+        '9' to "01110|10001|10001|10001|01111|00001|00001|00010|01100",
+        '?' to "01110|10001|00001|00010|00100|00100|00000|00000|00100",
+        '/' to "00001|00001|00010|00010|00100|01000|01000|10000|10000",
+        '-' to "00000|00000|00000|00000|11111|00000|00000|00000|00000",
+        '+' to "00000|00100|00100|11111|00100|00100|00000|00000|00000",
+        '.' to "00000|00000|00000|00000|00000|00000|00000|01100|01100",
+        ' ' to "00000|00000|00000|00000|00000|00000|00000|00000|00000")
+    private val P = G.mapValues { it.value.split('|') }
+    private fun fold(ch: Char): Char = when (ch) {
+        'É','È','Ê','Ë' -> 'E'
+        'À','Â','Ä' -> 'A'
+        'Ô','Ö' -> 'O'
+        'Û','Ù','Ü' -> 'U'
+        'Ç' -> 'C'
+        'Î','Ï' -> 'I'
+        else -> ch
+    }
+    fun units(s: String): Int = s.length * 5 + (s.length - 1)
+    fun draw(c: Canvas, s: String, cx: Float, cy: Float, px: Float, p: Paint) {
+        if (s.isEmpty() || px <= 0f) return
+        val w = units(s) * px
+        val x0 = cx - w / 2f
+        val y0 = cy - GH * px / 2f
+        var x = x0
+        for (ch in s) {
+            val g = P[fold(ch).uppercaseChar()] ?: P['?']!!
+            for (ry in 0 until GH) {
+                val r = g[ry]
+                for (rx in 0 until GW)
+                    if (r[rx] == '1')
+                        c.drawRect(x + rx * px, y0 + ry * px, x + (rx + 1) * px + 0.3f, y0 + (ry + 1) * px + 0.3f, p)
+            }
+            x += 6f * px
+        }
+    }
+}
+
 class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
     companion object {
@@ -520,6 +599,13 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
     }
 
 
+    /* Titre de page/menu en typo pixel étiquette (charte : PixFont partout sur les titres). */
+    private fun title(c: Canvas, x: Float, y: Float, s: String, color: Int) {
+        val px = 1.4f
+        mono.color = color
+        PixFont.draw(c, s, x + PixFont.units(s) * px / 2f, y - 6f, px, mono)
+    }
+
     private fun text(c: Canvas, x: Float, y: Float, s: String, color: Int, size: Float) {
         mono.color = color
         mono.textSize = size
@@ -629,7 +715,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         // ---- page SMP : waveform turquoise, marqueurs START/END jaunes, point REC rouge ----
         if (st.smpPage) {
-            text(c, 6f, 15f, "SMP", FLUO_TURQ, 12f)
+            title(c, 6f, 15f, "SMP", FLUO_TURQ)
             text(c, 60f, 15f, st.smpModeNames[st.smpMode], INK, 10f)
             if (st.smpRecOn && blink) {
                 mono.color = REC_RED
@@ -668,7 +754,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         // ---- page LOOP : édition du slot sélectionné (K1 PITCH K2 POS K3 MODE K4 MUT, PRE VOL, ALG SRC) ----
         if (st.page == 1) {
             if (st.loopView == 1) {   // sous-vue CHK : groupes de choke des 16 slots (style Koala)
-                text(c, 6f, 15f, "LOOP CHK", FLUO_TURQ, 12f)
+                title(c, 6f, 15f, "LOOP CHK", FLUO_TURQ)
                 text(c, 96f, 15f, if (st.loopLeader == 1) "LDR ON" else "LDR OFF",
                     if (st.loopLeader == 1) FLUO_YEL else DIM, 9f)
                 for (i in 0 until 16) {
@@ -702,7 +788,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 c.restore()
                 return
             }
-            text(c, 6f, 15f, "LOOP ${st.selSlot + 1}", FLUO_TURQ, 12f)
+            title(c, 6f, 15f, "LOOP ${st.selSlot + 1}", FLUO_TURQ)
             if (st.slotRec[st.selSlot] && blink) { mono.color = REC_RED; c.drawCircle(226f, 11f, 5f, mono) }
             val labels = arrayOf("PITCH", "POS", "MODE", "MUT", "SRC", "VOL")
             for (i in 0 until 6) {
@@ -722,7 +808,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         // ---- pages SNAP / KIT : 16 slots en 2x8 (8 ZU / 8 LU pour SNAP) ----
         if (st.page == 2 || st.page == 3) {
             val isSnap = st.page == 2
-            text(c, 6f, 15f, if (isSnap) "SNAP" else "KIT", if (isSnap) FLUO_PINK else AMBER, 12f)
+            title(c, 6f, 15f, if (isSnap) "SNAP" else "KIT", if (isSnap) FLUO_PINK else AMBER)
             text(c, 80f, 15f, if (isSnap) (if (st.snapSide == 0) "ZU" else "LU") else "kit global", DIM, 9f)
             if (st.snapArm) text(c, 130f, 15f, "CHOISIR PAD", FLUO_YEL, 9f)
             if (st.sirenOn) text(c, 200f, 15f, "SIREN", REC_RED, 9f)
@@ -749,7 +835,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         // ---- page XY (18) : pad sur le LCD (tactile côté APK), cibles X/Y ----
         if (st.page == 4) {
-            text(c, 6f, 15f, "XY", FLUO_TURQ, 12f)
+            title(c, 6f, 15f, "XY", FLUO_TURQ)
             text(c, 40f, 15f, "X>${st.xyTargetNames[0]}  Y>${st.xyTargetNames[1]}", INK, 10f)
             text(c, 200f, 15f, if (st.xyHold) "HOLD" else "MOM", if (st.xyHold) FLUO_YEL else DIM, 9f)
             box(c, 6f, 24f, 234f, 200f, DIM)
@@ -768,7 +854,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         // ---- menu FX (5, REC+FX) : vue 0 = PEDALBOARD, vue 1 = SIRENE (ALG bascule) ----
         if (st.page == 5 && st.fxView == 1) {
-            text(c, 6f, 15f, "SIREN", REC_RED, 12f)
+            title(c, 6f, 15f, "SIREN", REC_RED)
             text(c, 70f, 15f, if (st.sirenOn) "ON" else "OFF", if (st.sirenOn) REC_RED else DIM, 9f)
             text(c, 6f, 40f, "TYPE", DIM, 9f)
             text(c, 60f, 40f, ZtekAudio.SIREN_WAVES[st.sirenWave.coerceIn(0, 3)], FLUO_YEL, 12f)
@@ -787,7 +873,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             return
         }
         if (st.page == 5) {   // vue PEDALBOARD
-            text(c, 6f, 15f, "FX", FLUO_TURQ, 12f)
+            title(c, 6f, 15f, "FX", FLUO_TURQ)
             text(c, 40f, 15f, "PEDALBOARD", FLUO_TURQ, 9f)
             text(c, 190f, 15f, "ALG=SIREN", DIM, 8f)
             if (st.fxSub == 0) {
@@ -866,7 +952,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         if (st.page == 15) {
             // ---- page DRUMS : 8 pads (choke) + grille 16 steps du pad sélectionné ----
-            text(c, 6f, 15f, "DRUMS", AMBER, 12f)
+            title(c, 6f, 15f, "DRUMS", AMBER)
             text(c, 70f, 15f, if (st.drumOn) "ON" else "OFF", if (st.drumOn) FLUO_YEL else DIM, 9f)
             text(c, 140f, 15f, if (st.drumLeader == 1) "LDR" else "KOALA", if (st.drumLeader == 1) FLUO_YEL else DIM, 8f)
             for (p in 0 until ZtekAudio.DR_NPADS) {
@@ -920,7 +1006,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         if (st.page == 11) {
             // ---- page MAIN MIX : 4 tranches (K1..K4=VOL, SEL=voie, PRE=filtre, ALG=CUT) + 16 pads PoW! en bas ----
-            text(c, 6f, 15f, "MIX", FLUO_TURQ, 12f)
+            title(c, 6f, 15f, "MIX", FLUO_TURQ)
             // mode MUT/SOLO (OP5, noire 5) : fixe en solo, oscillant en mute
             val modeCol = if (st.mixMode == 1) FLUO_YEL else if (blink) FLUO_YEL else DIM
             text(c, 46f, 15f, if (st.mixMode == 1) "SOLO" else "MUT", modeCol, 9f)
@@ -1024,7 +1110,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             val Y0 = 26f
             when (st.patchView) {
                 0 -> {   // vue générale : une boîte par source puis par module, compteur de câbles
-                    text(c, 6f, 15f, "PATCH", FLUO_TURQ, 12f)
+                    title(c, 6f, 15f, "PATCH", FLUO_TURQ)
                     text(c, 78f, 15f, "SEL=boîte PLAY=ouvre", DIM, 8f)
                     val first = st.winFirst(st.boxSel, st.patchBoxes, 11)
                     for (k in 0 until 11) {
@@ -1102,7 +1188,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                     text(c, 6f, 236f, "SEL=ligne  PLAY=débranche  MUT=liste  REC=retour", DIM, 8f)
                 }
                 else -> {  // vue 3 : liste plate de tous les câbles (la baie grandit avec les patchs)
-                    text(c, 6f, 15f, "CÂBLES", FLUO_TURQ, 12f)
+                    title(c, 6f, 15f, "CABLES", FLUO_TURQ)
                     text(c, 90f, 15f, "${st.flatRows.size} au total", DIM, 8f)
                     if (st.flatRows.isEmpty()) text(c, 12f, Y0 + 12f, "aucun câble", DIM, 10f)
                     val first = st.winFirst(st.rowSel, st.flatRows.size, 11)
@@ -1124,7 +1210,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
         if (st.page == 18) {   // page FINE : 4 colonnes façon Shruthi (SEL = banc, K1..K4 = réglages)
             val b = st.fineBank.coerceIn(0, ZtekAudio.FINE_BANKS.size - 1)
-            text(c, 6f, 15f, "FINE ${b + 1}/${ZtekAudio.FINE_BANKS.size} ${ZtekAudio.FINE_BANKS[b]}", FLUO_TURQ, 12f)
+            title(c, 6f, 15f, "FINE ${b + 1}/${ZtekAudio.FINE_BANKS.size} ${ZtekAudio.FINE_BANKS[b]}", FLUO_TURQ)
             val opts = ZtekAudio.FINE_BANK_OPT[b]
             for (k in 0..3) {
                 val idx = opts[k]
@@ -1145,7 +1231,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         }
         // ---- page OPTIONS (16) : liste — SEL=navigue, ALG=valeur live, REC/tout bouton=quitte, Shift=reset ----
         if (st.page == 16) {
-            text(c, 6f, 15f, "OPTIONS", FLUO_TURQ, 12f)
+            title(c, 6f, 15f, "OPTIONS", FLUO_TURQ)
             val names = arrayOf("ECO", "LABELS", "VUE", "LUXE")
             val vals = arrayOf(
                 if (st.ecoOn) "ON" else "OFF",
@@ -1184,7 +1270,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         }
 
         // ---- top bar ----
-        text(c, 6f, 15f, "ZULUTEK", FLUO_YEL, 12f)
+        title(c, 6f, 15f, "ZULUTEK", FLUO_YEL)
         text(c, 140f, 15f, if (st.playing) "PLAY" else "STOP", if (st.playing) FLUO_PINK else DIM, 10f)
         text(c, 176f, 15f, "${st.bpm}", INK, 10f)
         text(c, 200f, 15f, if (st.seqOn) "SEQ" else "seq", if (st.seqOn) FLUO_TURQ else DIM, 10f)
@@ -1242,7 +1328,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         // ---- pack SEQ+ (PR #3): pages 6..10 + MIX/PATCH (PR #1 agglomérés): 6..12 ----
         if (st.page >= 6 && st.page <= 14) {
             val pn = st.pageNames2[st.page] ?: "?"
-            text(c, 6f, 105f, pn, FLUO_TURQ, 10f)
+            title(c, 6f, 105f, pn, FLUO_TURQ)
             when (st.page) {
                 6 -> {
                     val nm = arrayOf("LCK", "LEN", "MUT", "PLY", "RND")
@@ -1320,7 +1406,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         }
         // ---- page LINK (17) : liaison ZTF avec le FM-1 ----
         if (st.page == 17) {
-            text(c, 6f, 105f, "LINK", FLUO_TURQ, 10f)
+            title(c, 6f, 105f, "LINK", FLUO_TURQ)
             text(c, 60f, 105f, when (st.linkTab) { 0 -> "FM-1"; 1 -> "LOCAL"; 2 -> "PARAMS"; else -> "PRESETS" }, INK, 9f)
             if (st.linkTab == 1) text(c, 110f, 105f, "ZSMP$st.linkDst", DIM, 8f)
             else if (st.linkTab == 3) text(c, 110f, 105f, "PRT ${ZtekAudio.PART_NAMES.getOrElse(st.linkDst) { "?" }} ZPRE", DIM, 8f)
@@ -1355,7 +1441,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             mono.textSize = 9f; mono.color = DIM; mono.style = Paint.Style.FILL
             c.drawText(nm, 120f - mono.measureText(nm) / 2f, 70f, mono)
             mono.textSize = 22f; mono.color = INK
-            c.drawText(st.popVal, 120f - mono.measureText(st.popVal) / 2f, 92f, mono)
+            PixFont.draw(c, st.popVal, 120f, 84f, 2.2f, mono)
             val stTxt = when {
                 st.popState.isNotEmpty() -> st.popState
                 now < st.hintUntil && st.hintMsg.isNotEmpty() -> st.hintMsg
