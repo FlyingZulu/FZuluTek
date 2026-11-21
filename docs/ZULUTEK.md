@@ -78,6 +78,7 @@ PRESET = niveau, K1 PITCH / K2 POS / K3 MODE rev-pingpong / K4 MUTATION), touche
 = grille 16 pas (SELECT = vélocité), GLO(15) + pad = RESAMPLE (ring auto-RAM), page MIX
 (SEL) = niveaux + aux -> LOOP / POW!, source PoW! par slot (ALGO en page PUNCH),
 micro barré si aux à 0, mode SIREN (triple-tap GLO), option SIREN>POW!.
+- **Sirène FM-1 (patch 0015, PR en cours)** : triple-tap GLO = mode SIREN (auto-quit à tout changement de page, LED GLO clignotante, header « SIREN ») ; noires k=13/15/17/20 = les 4 types CLASSIQUE/CHOP/POLICE/LASER en momentané ; K1..K4 = WAVE/RATE/DEPTH/MIX ; persistance OBJ_OPTIONS (OPT6) + 4 params ZTF groupe SIREN. Côté APK : page 5 vue SIRENE (SEL=ON/OFF, ALG=type, K1..K4=RATE/DEPTH/FB/MIX).
 
 ## Charte graphique
 

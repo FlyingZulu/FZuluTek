@@ -1,0 +1,482 @@
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 3a287a5..723a14d 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -65,6 +65,7 @@
+ #include "ztek_macro.h"    /* patch 0008: macros 16 slots, page MACRO (13) */
+ #include "ztek_link.h"     /* patch 0009: liaison APK <-> FM-1 ZTF (companion files/params + SysEx) */
+ #include "ztek_fine.h"     /* patch 0012: page FINE (14) — 4 knobs façon Shruthi sur les réglages fins voix */
++#include "ztek_siren.h"    /* patch 0015: sirène (triple-tap GLO, noires 13/15/17/20) */
+ 
+ /* the Animatek palette, as on the VCV Rack modules (UZZ-VCV-RACK src/ui/CommonWidgets.hpp, AcidEditor.hpp):
+  * the screens are slate, the values in the displays' blue, the selection in the logo's blue */
+@@ -160,8 +161,8 @@ static int8_t cur_preset = -1;                 /* the one loaded (or saved) last
+ 
+ /* the OPTIONS menu (OCT- + HOME): the unit's own choices, apart from the settings so no preset carries them (OBJ_OPTIONS,
+  * saved as the menu closes). Each an index into its choices */
+-#define OPT_MAGIC 0x4F505435u                  /* "OPT5": patch 0012 ajoute FILTER MODEL + FILTER MORPH après les AT_OPT_* */                  /* "OPT4": patch 0009 adds OP_ECO, OP_CHOKE_LDR */                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
+-enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_ECO, OP_CHOKE_LDR, OP_FINE,   /* patch 0009 */ OP_N = OP_FINE + AT_NOPTS + 2 };   /* patch 0012: +2 (MODEL/MORPH) */   /* patch 0005: OP_LUDIQUE */
++#define OPT_MAGIC 0x4F505436u                  /* "OPT6": patch 0015 ajoute SIREN WAVE/RATE/DEPTH/MIX (vieux records OPT5 = defaults) */                  /* "OPT4": patch 0009 adds OP_ECO, OP_CHOKE_LDR */                  /* "OPT3": patch 0005 adds OP_LUDIQUE */                  /* "OPT2": CLK OFFSET added (an older record: the defaults) */
++enum { OP_COLOR, OP_MIDI_IN, OP_MIDI_OUT, OP_SEQ_OUT, OP_CLOCK_OUT, OP_CLK_OFS, OP_LUDIQUE, OP_ECO, OP_CHOKE_LDR, OP_FINE,   /* patch 0009 */ OP_SIREN_WAVE, OP_SIREN_RATE, OP_SIREN_DEPTH, OP_SIREN_MIX,   /* patch 0015: sirène */ OP_N = OP_FINE + AT_NOPTS + 2 + 4 };   /* patch 0012: +2 (MODEL/MORPH) ; patch 0015: +4 (sirène) */   /* patch 0005: OP_LUDIQUE */
+ #define CLK_OFS_MAX 40                         /* OPTIONS > CLK OFFSET: -40 .. +40 ms, stored + 40 */
+ typedef struct {
+     uint32_t magic;
+@@ -185,12 +186,16 @@ static void options_defaults(void)
+         opt.v[OP_FINE + i] = AT_OPT_DEFAULT[i];
+     opt.v[OP_FINE + AT_NOPTS] = 0;           /* patch 0012: filtre ORG */
+     opt.v[OP_FINE + AT_NOPTS + 1] = 0;       /* patch 0012: morph LP */
++    opt.v[OP_SIREN_WAVE] = 0;                /* patch 0015: CLASSIQUE */
++    opt.v[OP_SIREN_RATE] = 128;
++    opt.v[OP_SIREN_DEPTH] = 128;
++    opt.v[OP_SIREN_MIX] = 160;
+ }
+ static int opt_count(int i)                    /* how many choices item i has */
+ {
+     static const uint8_t N[OP_FINE] = {0, 17, 16, 2, 2, 2 * CLK_OFS_MAX + 1, 2, 2, 2};   /* patch 0009: + ECO on/off, CHOKE LDR on/off */   /* patch 0005: + LUDIQUE on/off */
+     return i == OP_COLOR ? NTHEMES : i < OP_FINE ? N[i] : i < OP_FINE + AT_NOPTS ? AT_OPT_N[i - OP_FINE]
+-           : i == OP_FINE + AT_NOPTS ? 2 : 256;   /* patch 0012: FILTER MODEL ORG/NEW (2), MORPH 0..255 */
++           : i == OP_FINE + AT_NOPTS ? 2 : i == OP_SIREN_WAVE ? ZSIR_NW : 256;   /* patch 0012: MODEL (2), MORPH 256 ; patch 0015: SIREN WAVE 4, RATE/DEPTH/MIX 256 */
+ }
+ static void options_load(void)
+ {
+@@ -199,6 +204,8 @@ static void options_load(void)
+         ok = opt.v[i] < opt_count(i);
+     if (!ok)
+         options_defaults();
++    for (i = 0; i < 4; i++)               /* patch 0015: sync sirène depuis OBJ_OPTIONS */
++        zsir_set(i, opt.v[OP_SIREN_WAVE + i]);
+ }
+ static uint32_t midi_out_ch(void) { return opt.v[OP_MIDI_OUT] & 15u; }
+ static void midi_note_out(int note, uint32_t vel)   /* a note to USB on the OPTIONS channel (vel 0: off); main loop or render */
+@@ -920,6 +927,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
+     app_render_voice(mono, n);
+     zdr_render(n);                           /* patch 0007: drum machine, bus stereo */
+     zml_render(n, mono);                     /* patch 0008: MIDI looper (events + ring resample) */                           /* patch 0007: drum machine, bus stéréo */
++    zsir_render(mono, n);                    /* patch 0015: sirène pre-FX (chaîne APK : … siren → fx → out) */
+     app_render_fx(mono, lr, n, master_q12);
+     {   /* patch 0007: bus drum mixé en post-FX (même gain que la chaîne FX) */
+         const float *dl = zdr_bus_l(), *dr = zdr_bus_r();
+@@ -1129,9 +1137,12 @@ void app_init(void)
+     zml_init((float)SR);                  /* patch 0008: MIDI looper */
+     zmac_init();                          /* patch 0008: macros */
+     zlk_init();                           /* patch 0009: liaison APK <-> FM-1 ZTF */
++    zsir_init((float)SR);                 /* patch 0015: sirène */
+     int i;
+     at_init(&voice, SR);
+     options_load();
++    for (i = 0; i < 4; i++)               /* patch 0015: sirène depuis OBJ_OPTIONS */
++        zsir_set(i, opt.v[OP_SIREN_WAVE + i]);
+     zsp_set_ludique(opt.v[OP_LUDIQUE]);
+     fx_set_eco(opt.v[OP_ECO]); zdr_set_eco(opt.v[OP_ECO]); zml_set_eco(opt.v[OP_ECO]);   /* patch 0009: OPTIONS > ECO */
+     zdr_set_leader(opt.v[OP_CHOKE_LDR]); zml_set_leader(opt.v[OP_CHOKE_LDR]);   /* patch 0009: OPTIONS > CHOKE LDR */   /* patch 0005: LUDIQUE option -> SEQ+ flash */
+@@ -1208,6 +1219,7 @@ static struct {
+     uint8_t opts, opt_cur, opt_dirty;          /* the OPTIONS menu: up, its item, changed (saved as it closes) */
+     uint8_t seqadv;                            /* patch 0005: SEQ+ sub-mode (double-tap SEQ) */
+     uint32_t last_seq_tap, last_env_tap, last_lfo_tap, last_arp_tap, last_glo_tap;   /* patch 0007 */
++    uint8_t glo_taps;                        /* patch 0015: nb de taps GLO dans la fenêtre (triple-tap = SIREN) */
+     uint8_t rec_hold, rec_used;              /* patch 0008: REC maintenu = combos (+PLAY = LOOP 12, +SEQ = MACRO 13) */
+ } ui;
+ 
+@@ -1679,7 +1691,8 @@ static void edit_move(int32_t d)
+ /* ------------------------------------------------------------ OPTIONS --- */
+ static const char *const OPT_LABEL[OP_N] = {"COLOR", "MIDI IN CH", "MIDI OUT CH", "SEQ NOTES OUT", "CLOCK OUT",
+     "CLK OFFSET", "LUDIQUE", "ECO", "CHOKE LDR",   /* patch 0009 */   /* patch 0005 */ "PULSE WIDTH", "SQUARE DROOP", "SAW RESET", "SAW DROOP", "FILTER DRIVE", "SLIDE TIME", "AUTO LEGATO",
+-    "OTA SATURATION", "OUT SATURATION", "ANALOG DRIFT", "UNIT",   /* patch 0012 */ "FILTER MODEL", "FILTER MORPH"};
++    "OTA SATURATION", "OUT SATURATION", "ANALOG DRIFT", "UNIT",   /* patch 0012 */ "FILTER MODEL", "FILTER MORPH",
++    "SIREN WAVE", "SIREN RATE", "SIREN DEPTH", "SIREN MIX"};   /* patch 0015 */
+ static const char *const OPT_SECTION[OP_N] = {"DISPLAY", "MIDI", 0, 0, 0, 0, "FINE TUNING", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};   /* patch 0012: +2 (MODEL/MORPH, même section) */
+ static void fine_value_text(int idx, int v, char *t)   /* patch 0012: table FINE extraite ; idx AT_NOPTS = MODEL, AT_NOPTS+1 = MORPH */
+ {
+@@ -1716,6 +1729,12 @@ static void opt_value_text(int i, char *t)
+     }
+     else if (i < OP_FINE)
+         text_cat(t, v ? "ON" : "OFF");
++    else if (i == OP_SIREN_WAVE)                 /* patch 0015 */
++        text_cat(t, ZSIR_NAMES[v < ZSIR_NW ? v : 0]);
++    else if (i > OP_SIREN_WAVE) {                /* patch 0015: pourcentage */
++        int_text(v * 100 / 255, t);
++        text_cat(t, "%");
++    }
+     else
+         fine_value_text(i - OP_FINE, v, t);
+ }
+@@ -1733,12 +1752,15 @@ static void opt_change(int i, int32_t e)       /* a step through item i's choice
+         fx_set_eco(opt.v[OP_ECO]); zdr_set_eco(opt.v[OP_ECO]); zml_set_eco(opt.v[OP_ECO]);
+     } else if (i == OP_CHOKE_LDR) {   /* patch 0009: OPTIONS > CHOKE LDR = ON/OFF */
+         zdr_set_leader(opt.v[OP_CHOKE_LDR]); zml_set_leader(opt.v[OP_CHOKE_LDR]);
+-    } else if (i >= OP_FINE)
++    } else if (i >= OP_SIREN_WAVE)   /* patch 0015: sirène live */
++        zsir_set(i - OP_SIREN_WAVE, opt.v[i]);
++    else if (i >= OP_FINE)
+         post(EV_OPTION, (uint32_t)(i - OP_FINE), (uint32_t)v);
+ }
+ static void opt_close(void)
+ {
+     ui.opts = 0;
++    ui.glo_taps = 0;                         /* patch 0015 */
+     if (ui.opt_dirty && !backup_hold) {
+         ui.opt_dirty = 0;
+         zsp_set_ludique(opt.v[OP_LUDIQUE]);
+@@ -1754,6 +1776,31 @@ static void opt_close(void)
+ }
+ /* ---- patch 0012: accesseurs pour ztek_fine.c (page FINE 14) ---- */
+ void app_say(const char *a, const char *b);   /* app.h (app.c ne l'inclut pas: prototype local) */
++/* ---- patch 0015: accesseurs sirène (OP_SIREN_*, persistés dans OBJ_OPTIONS, save throttlé 1 s) ---- */
++int  zsir_opt_get(int idx) { return idx >= 0 && idx < 4 ? opt.v[OP_SIREN_WAVE + idx] : 0; }
++void zsir_opt_set(int idx, int v)
++{
++    static uint32_t last_save;
++    if (idx < 0 || idx >= 4)
++        return;
++    opt.v[OP_SIREN_WAVE + idx] = (uint8_t)v;
++    zsir_set(idx, (uint8_t)v);
++    ui.opt_dirty = 1;
++    if (plat_ms() - last_save > 1000u) {
++        last_save = plat_ms();
++        if (plat_store_save(OBJ_OPTIONS, &opt, sizeof opt) != 0)
++            app_say("OPTIONS", "NOT SAVED");
++    }
++}
++/* accesseurs ZTF (ztek_link.c) */
++int32_t zlk_siren_get(int k) { return k == 0 ? (int32_t)zsir_get(0) : (int32_t)zsir_get(k) * 1000 / 255; }   /* patch 0015: wave en brut 0..3 */
++void    zlk_siren_set(int k, int32_t v)
++{
++    if (v < 0) v = 0;
++    if (k == 0) { if (v > 3) v = 3; zsir_opt_set(0, (int)v); }   /* wave 0..3 */
++    else { if (v > 1000) v = 1000; zsir_opt_set(k, (int)(v * 255 / 1000)); }
++}
++
+ int  zf_opt_get(int idx) { return idx >= 0 && idx < ZFINE_NOPT ? opt.v[OP_FINE + idx] : 0; }
+ void zf_opt_set(int idx, int v)
+ {
+@@ -1791,6 +1838,10 @@ static void input(void)
+ {
+     uint32_t keys, btn = plat_buttons(), k;
+     int32_t e;
++    static uint8_t last_page = 255;
++    if (zsir_mode() && set.page != last_page)   /* patch 0015: auto-quit du mode SIREN à tout changement de page */
++        zsir_mode_set(0);
++    last_page = set.page;
+     if (ui.loaded_seen != loaded_n) {          /* a preset went in (now, or at the end of the pattern) */
+         ui.loaded_seen = loaded_n;
+         cur_preset = loaded_preset;
+@@ -1809,6 +1860,15 @@ static void input(void)
+                     preset_load_now(list_half() + w);
+             continue;                          /* (its release: a note off for nothing, harmless) */
+         }
++        if (zsir_mode() && (k == 13 || k == 15 || k == 17 || k == 20)) {   /* patch 0015: mode SIREN — 4 noires = 4 sirènes momentanées */
++            int w = (k - 13) / 2;              /* 13->0 15->1 17->2 20->3 */
++            if ((keys & bit) && !(ui.keys & bit)) {
++                zsir_trig(w);
++                app_say("SIREN", ZSIR_NAMES[w]);
++            } else if (!(keys & bit) && (ui.keys & bit))
++                zsir_off();
++            continue;
++        }
+         if ((keys & bit) && !(ui.keys & bit)) {
+             if (set.page == 11u) {           /* patch 0007: page DRUM — blanches = steps, noires = pads */
+                 int w;
+@@ -2051,19 +2111,30 @@ static void input(void)
+                      (uint32_t)view_base());   /* the page on view */
+             }
+             set_dirty = 1;
+-        } else if (k == B_GLO || (k == B_HOME && ui.oct_hold)) {   /* patch 0007: double-tap GLO = page DRUM */
++        } else if (k == B_GLO || (k == B_HOME && ui.oct_hold)) {   /* patch 0007: double-tap GLO = page DRUM ; patch 0015: triple-tap GLO = mode SIREN */
+             uint32_t now = plat_ms();
+-            if (k == B_GLO && set.page != 11u && now - ui.last_glo_tap < 350u) {
++            if (k == B_GLO) {
++                if (now - ui.last_glo_tap < 350u) ui.glo_taps++; else ui.glo_taps = 1;
++                ui.last_glo_tap = now;
++            }
++            if (k == B_GLO && ui.glo_taps >= 3) {          /* patch 0015: triple-tap = SIREN (quitte au changement de page) */
++                ui.glo_taps = 0;
++                ui.opts = 0;
++                zsir_mode_set(!zsir_mode());
++                app_say("SIREN", zsir_mode() ? "ON" : "OFF");
++                ui.redraw = 1;
++            } else if (k == B_GLO && ui.glo_taps == 2 && set.page != 11u) {
++                ui.glo_taps = 0;
+                 ui.last_glo_tap = 0;
+                 set.page = 11u;
+                 ui.edit = ui.list = 0;
++                ui.opts = 0;
++                ui.redraw = 1;
++            } else if ((k == B_GLO && ui.glo_taps == 1) || k != B_GLO) {
++                ui.oct_used = 1;
++                ui.opts = 1;
++                ui.edit = ui.list = 0;
+                 ui.redraw = 1;
+-            } else {
+-                if (k == B_GLO) ui.last_glo_tap = now;
+-            ui.oct_used = 1;
+-            ui.opts = 1;
+-            ui.edit = ui.list = 0;
+-            ui.redraw = 1;
+             }
+         } else if (k == B_HOME)
+             home_pages();
+@@ -2111,6 +2182,13 @@ static void input(void)
+             ui.redraw = 1;
+             continue;
+         }
++        if (zsir_mode() && k >= EN_K1 && k <= EN_K4) {   /* patch 0015: mode SIREN — K1..K4 = WAVE/RATE/DEPTH/MIX */
++            zsir_encoder(k - EN_K1, e);
++            zsir_opt_set(k - EN_K1, zsir_get(k - EN_K1));
++            app_say("SIREN", ZSIR_NAMES[zsir_get(0)]);
++            ui.redraw = 1;
++            continue;
++        }
+         if (k == EN_PRESET) {                  /* through the saved presets, loading each */
+             preset_step(e);
+             continue;
+@@ -2194,7 +2272,7 @@ static void input(void)
+          * In the list the white keys are its presets: the one loaded lit, the saved ones at the mid level */
+         uint32_t b = btn | (set_dirty ? 1u << B_SAVE : 0u) | (sq.running ? 1u << B_PLAY : 0u)
+                      | (set.locked ? 1u << B_SEQ : 0u) | (ui.edit ? 1u << B_EDIT : 0u)
+-                     | (ui.opts ? 1u << B_GLO : 0u) | (ui.list ? 1u << B_SEL : 0u),
++                     | (ui.opts || (zsir_mode() && (plat_ms() / 250u) % 2u) ? 1u << B_GLO : 0u) | (ui.list ? 1u << B_SEL : 0u),   /* patch 0015: GLO clignote en mode SIREN */
+                  kl = keys, km = 0;
+         if (ui.list) {
+             int w, half = list_half();
+@@ -2536,7 +2614,7 @@ static void draw(void)
+         int32_t x = cv_text(10, 6, &FONT_B, ui.msg[0], C_WHITE);
+         cv_text(x + 8, 6, &FONT_B, ui.msg[1], C_HI);
+     } else {
+-        int32_t x = cv_text(10, 6, &FONT_B, ui.opts ? "OPTIONS" : ui.save ? "SAVE" : ui.list ? "PRESETS" : ui.edit ? "EDIT" : cur_preset >= 0 ? presets[cur_preset].name : APP_NAME, C_WHITE);
++        int32_t x = cv_text(10, 6, &FONT_B, ui.opts ? "OPTIONS" : ui.save ? "SAVE" : ui.list ? "PRESETS" : ui.edit ? "EDIT" : zsir_mode() ? "SIREN" : cur_preset >= 0 ? presets[cur_preset].name : APP_NAME, C_WHITE);   /* patch 0015: header SIREN */
+         if (ui.edit) {                         /* the step under the cursor: number, note, accent, slide */
+             const acid_grid_t *gg = &sq.grid;
+             int st = ui.cursor;
+diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+index c65bdce..4d8fea3 100644
+--- a/atek303/app/fm1.toml
++++ b/atek303/app/fm1.toml
+@@ -11,7 +11,7 @@ backup = true
+ companion = true               # patch 0009: services companion (files/params) + ZTF, liaison APK <-> FM-1
+ words = "words.tsv"
+ include = ["dsp"]
+-o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c", "ztek_link.c", "ztek_fine.c"]   /* patch 0012: + page FINE */   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper ; patch 0009: + ztek_link (ZTF/companion) (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
++o2 = ["dsp/atek_voice.c", "dsp/acid_pattern.c", "dsp/fx.c", "dsp/bass_engines.c", "ztek_seqplus.c", "ztek_arp.c", "ztek_drum.c", "ztek_drum_fm1.c", "ztek_loop_fm1.c", "ztek_loop.c", "ztek_macro.c", "ztek_link.c", "ztek_fine.c", "ztek_siren.c"]   /* patch 0012: + page FINE ; patch 0015: + sirène */   /* patch 0007: + drum (bass_engines pour l'hybridation HYB, drum_engine.c via ztek_drum_fm1.c avec DR_FM1_ECO) ; patch 0008: + looper ; patch 0009: + ztek_link (ZTF/companion) (midi_looper.c via ztek_loop_fm1.c, ML_RS_MAX 4096) + loop glue + macros */   # el motor, el generador y los efectos, a -O2
+ # el sitio
+ title = "ATEK303"              # el nombre que ve la gente (si no, firmware.json saldría como «Animatek»)
+ tagline = "The ATEK303 acid voice on the M-VAVE FM-1"
+diff --git a/atek303/app/ztek_link.c b/atek303/app/ztek_link.c
+index dfef73f..6959a9a 100644
+--- a/atek303/app/ztek_link.c
++++ b/atek303/app/ztek_link.c
+@@ -225,10 +225,12 @@ int zlk_file_busy(void) { return 0; }            /* les fichiers ZTF sont sûrs
+ /* ---- paramètres companion (APP_PARAMS) ---------------------------------------------- */
+ 
+ enum { P_CUTOFF, P_RESO, P_ENVMOD, P_DECAY, P_WAVE, P_ENGINE, P_TEMPO, P_PAGE,
+-       P_LOOPGAIN, P_DLYTIME, P_REVMIX, P_SWING, P_N };
+-static const char *const ZLK_GRP[4] = { "VOICE", "SEQ", "LOOP", "DRUM" };
++       P_LOOPGAIN, P_DLYTIME, P_REVMIX, P_SWING,   /* patch 0015: + sirène */
++       P_SIREN_WAVE, P_SIREN_RATE, P_SIREN_DEPTH, P_SIREN_MIX, P_N };
++static const char *const ZLK_GRP[5] = { "VOICE", "SEQ", "LOOP", "DRUM", "SIREN" };   /* patch 0015: + SIREN */
+ static const char *const ZLK_PNAME[P_N] = { "CUTOFF", "RESO", "ENV MOD", "DECAY", "WAVE", "ENGINE",
+-                                             "TEMPO", "PAGE", "LOOP GAIN", "DLY TIME", "REV MIX", "SWING" };
++                                             "TEMPO", "PAGE", "LOOP GAIN", "DLY TIME", "REV MIX", "SWING",
++                                             "SIREN WAVE", "SIREN RATE", "SIREN DEPTH", "SIREN MIX" };   /* patch 0015 */
+ 
+ int zlk_param(int i, plat_param_t *p)
+ {
+@@ -237,16 +239,18 @@ int zlk_param(int i, plat_param_t *p)
+     memset(p, 0, sizeof *p);
+     p->id = (uint16_t)i;
+     p->type = PLAT_PT_NUMBER;
+-    p->group = (uint8_t)(i <= P_ENGINE ? 0 : (i <= P_PAGE ? 1 : (i <= P_REVMIX ? 2 : 3)));
++    p->group = (uint8_t)(i <= P_ENGINE ? 0 : (i <= P_PAGE ? 1 : (i <= P_REVMIX ? 2 : (i < P_SIREN_WAVE ? 3 : 4))));   /* patch 0015: groupe SIREN */
+     p->name = ZLK_PNAME[i];
+     p->unit = 0;
+     if (i == P_TEMPO) { p->min = 30; p->max = 300; p->def = 120; }
+     else if (i == P_PAGE) { p->min = 0; p->max = 13; p->def = 0; }
++    else if (i == P_SIREN_WAVE) { p->min = 0; p->max = 3; p->def = 0; }   /* patch 0015 */
++    else if (i > P_SIREN_WAVE) { p->min = 0; p->max = 1000; p->def = i == P_SIREN_MIX ? 640 : 512; }   /* patch 0015 */
+     else { p->min = 0; p->max = 1000; p->def = 500; }
+     return 0;
+ }
+ 
+-const char *zlk_param_group(int g) { return (g >= 0 && g < 4) ? ZLK_GRP[g] : 0; }
++const char *zlk_param_group(int g) { return (g >= 0 && g < 5) ? ZLK_GRP[g] : 0; }   /* patch 0015: 5 groupes */
+ 
+ static float zlk_param_f(int i)   /* valeur 0..1 (ou bpm/page en brut via get) */
+ {
+@@ -262,6 +266,8 @@ static float zlk_param_f(int i)   /* valeur 0..1 (ou bpm/page en brut via get) *
+     case P_DLYTIME: return fx[FX_DLY_TIME];
+     case P_REVMIX: return fx[FX_REV_MIX];
+     case P_SWING: return zlk_swing();
++    case P_SIREN_WAVE: case P_SIREN_RATE: case P_SIREN_DEPTH: case P_SIREN_MIX:   /* patch 0015 */
++        return zlk_siren_get(i - P_SIREN_WAVE) / 1000.0f;
+     default: return 0.5f;
+     }
+ }
+@@ -270,6 +276,7 @@ int32_t zlk_param_get(int i)
+ {
+     if (i == P_TEMPO) return zlk_tempo();
+     if (i == P_PAGE) return zlk_page();
++    if (i == P_SIREN_WAVE) return zlk_siren_get(0);   /* patch 0015: wave en brut 0..3 */
+     if (i < 0 || i >= P_N) return 0;
+     return (int32_t)(zlk_param_f(i) * 1000.0f + 0.5f);
+ }
+@@ -294,6 +301,10 @@ int32_t zlk_param_set(int i, int32_t v)
+     case P_DLYTIME: zlk_fx_set(FX_DLY_TIME, f); break;
+     case P_REVMIX: zlk_fx_set(FX_REV_MIX, f); break;
+     case P_SWING: zlk_swing_set(f); break;
++    case P_SIREN_WAVE: zlk_siren_set(0, v); break;   /* patch 0015: wave en brut 0..3, pas à l'échelle 0..1000 */
++    case P_SIREN_RATE: case P_SIREN_DEPTH: case P_SIREN_MIX:
++        zlk_siren_set(i - P_SIREN_WAVE, (int32_t)(f * 1000.0f + 0.5f));
++        break;
+     default: break;
+     }
+     return (int32_t)(f * 1000.0f + 0.5f);
+diff --git a/atek303/app/ztek_link.h b/atek303/app/ztek_link.h
+index 2fc15d3..41c7ca3 100644
+--- a/atek303/app/ztek_link.h
++++ b/atek303/app/ztek_link.h
+@@ -65,6 +65,8 @@ float zlk_loop_gain(void);
+ void  zlk_loop_gain_set(float g);
+ float zlk_swing(void);
+ void  zlk_swing_set(float v);
++int32_t zlk_siren_get(int k);           /* patch 0015: sirène, k 0..3 = WAVE/RATE/DEPTH/MIX, 0..1000 */
++void    zlk_siren_set(int k, int32_t v);
+ uint32_t zlk_data_free(void);               /* octets libres estimés dans la zone data */
+ 
+ /* ---- patch 0013: fichiers companion VIRTUELS ZPRE00..31 / ZKIT00..02 (pas de flash : le store
+diff --git a/atek303/app/ztek_siren.c b/atek303/app/ztek_siren.c
+new file mode 100644
+index 0000000..dae799b
+--- /dev/null
++++ b/atek303/app/ztek_siren.c
+@@ -0,0 +1,105 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_siren.c — voir ztek_siren.h. Sirène 4 types, oscillateur à phase + balayage de hauteur,
++ * mixée pre-FX (le bus mono part dans fx_process, comme la chaîne APK : … → siren → fx → out). */
++#include <math.h>
++#include <string.h>
++#include "ztek_siren.h"
++
++const char *const ZSIR_NAMES[ZSIR_NW] = { "CLASSIQUE", "CHOP", "POLICE", "LASER" };
++
++static float  sr;
++static uint8_t par[4];                 /* WAVE, RATE, DEPTH, MIX — 0..255, persistés en OBJ_OPTIONS */
++static int    mode, gate;
++static float  phase, t;                /* phase osc, temps depuis le trig (s) */
++
++void zsir_init(float s)
++{
++    sr = s;
++    memset(par, 0, sizeof par);
++    par[1] = 128; par[2] = 128; par[3] = 160;   /* RATE/DEPTH milieux, MIX ~0.63 */
++    mode = 0; gate = 0; phase = 0.0f; t = 0.0f;
++}
++
++uint8_t zsir_get(int k) { return (k >= 0 && k < 4) ? par[k] : 0; }
++void zsir_set(int k, uint8_t v) { if (k >= 0 && k < 4) par[k] = v; }
++
++int  zsir_mode(void) { return mode; }
++void zsir_mode_set(int on) { mode = on ? 1 : 0; if (!mode) gate = 0; }
++
++void zsir_trig(int wave)
++{
++    if (!mode) return;
++    if (wave < 0 || wave >= ZSIR_NW) wave = 0;
++    par[0] = (uint8_t)wave;
++    gate = 1;
++    phase = 0.0f;
++    t = 0.0f;
++}
++
++void zsir_off(void) { gate = 0; }
++
++void zsir_encoder(int k, int32_t det)   /* k 0..3, pas de wrap (comme opt_change) */
++{
++    int32_t v;
++    if (k < 0 || k >= 4) return;
++    v = par[k] + (det > 0 ? 1 : -1);
++    if (v < 0) return;
++    if (k == 0) { if (v >= ZSIR_NW) return; }
++    else if (v > 255) return;
++    par[k] = (uint8_t)v;
++}
++
++/* fréquence courante (Hz) à l'instant t pour le type demandé */
++static float zsir_freq(int wave, float rate, float depth, float t)
++{
++    float f0 = 440.0f;
++    switch (wave) {
++    case 1:                                     /* CHOP : carré fixe, gate carré rapide */
++        return 330.0f;
++    case 2: {                                   /* POLICE : deux tons alternés */
++        float p = 1.0f / (0.5f + 3.0f * rate);
++        float ph = fmodf(t, p);
++        return ph < p * 0.5f ? 392.0f : 523.0f;
++    }
++    case 3: {                                   /* LASER : dent de scie descendante */
++        float f = f0 * 2.0f * expf(-(2.0f + 6.0f * rate) * t);
++        return f < 55.0f ? 55.0f : f;
++    }
++    default:                                    /* CLASSIQUE : balayage sinusoïdal lent */
++        return f0 * (1.0f + 0.6f * depth * sinf(6.2831853f * (0.5f + 4.0f * rate) * t));
++    }
++}
++
++void zsir_render(float *mono, uint32_t n)
++{
++    uint32_t i;
++    float rate, depth, mix, amp;
++    int wave, chop_on;
++    if (!mode || !gate || !mono) return;
++    wave = par[0];
++    rate = par[1] / 255.0f;
++    depth = par[2] / 255.0f;
++    mix = par[3] / 255.0f;
++    if (mix <= 0.0f) return;
++    amp = mix * 0.4f;
++    for (i = 0; i < n; i++) {
++        float f = zsir_freq(wave, rate, depth, t);
++        float s;
++        phase += 6.2831853f * f / sr;
++        if (phase > 6.2831853f * 64.0f) phase = fmodf(phase, 6.2831853f);
++        switch (wave) {
++        case 1:  chop_on = sinf(6.2831853f * (1.0f + 6.0f * rate) * t) > 0.0f;
++                 s = chop_on ? (sinf(phase) >= 0.0f ? 1.0f : -1.0f) : 0.0f;
++                 break;
++        case 3:  s = 2.0f * (phase / 6.2831853f) - 1.0f;   /* dent de scie */
++                 break;
++        case 2:  s = sinf(phase) >= 0.0f ? 0.8f : -0.8f;    /* carré doux deux tons */
++                 break;
++        default: s = sinf(phase);
++        }
++        mono[i] += s * amp;
++        t += 1.0f / sr;
++    }
++}
+diff --git a/atek303/app/ztek_siren.h b/atek303/app/ztek_siren.h
+new file mode 100644
+index 0000000..aa4a8e3
+--- /dev/null
++++ b/atek303/app/ztek_siren.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later
++ * Copyright (C) 2026 FlyingZulu
++ *
++ * ztek_siren: la sirène du FM-1 (patch 0015) — parité APK (triple-tap GLO = mode SIREN,
++ * noires k=13/15/17/20 = 4 types momentanés, K1..K4 = WAVE/RATE/DEPTH/MIX).
++ * C99, pas d'allocation dynamique. */
++#pragma once
++#include <stdint.h>
++
++#define ZSIR_NW 4
++extern const char *const ZSIR_NAMES[ZSIR_NW];   /* CLASSIQUE / CHOP / POLICE / LASER */
++
++void    zsir_init(float sr);
++void    zsir_render(float *mono, uint32_t n);   /* accumule la sirène dans le bus mono (pre-FX, comme la chaîne APK) */
++void    zsir_trig(int wave);                     /* démarre la sirène (gate on), wave 0..3 */
++void    zsir_off(void);                          /* gate off (touche relâchée) */
++int     zsir_mode(void);                         /* mode SIREN actif */
++void    zsir_mode_set(int on);
++void    zsir_encoder(int k, int32_t det);        /* en mode SIREN : k 0..3 = WAVE / RATE / DEPTH / MIX */
++uint8_t zsir_get(int k);                         /* param k en 0..255 */
++void    zsir_set(int k, uint8_t v);              /* param k en 0..255 */
