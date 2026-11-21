@@ -237,6 +237,11 @@ object ZtekAudio {
     fun drumLevel(pad: Int, lvl: Float) { if (handle != 0L) nativeDrumLevel(handle, pad, lvl) }
     fun drumMaster(m: Float) { if (handle != 0L) nativeDrumMaster(handle, m) }
     fun drumStep(): Int = if (handle != 0L) nativeDrumStep(handle) else 0
+    /* one-shot drums + looper (liaison APK/FM-1 : SHIFT+SEQ sur les pages DRUMS/LOOP) */
+    fun drumSetOneshot(on: Int) { if (handle != 0L) nativeDrumSetOneshot(handle, on) }
+    fun drumGetOneshot(): Int = if (handle != 0L) nativeDrumGetOneshot(handle) else 0
+    fun loopSetOneshot(on: Int) { if (handle != 0L) nativeLoopSetOneshot(handle, on) }
+    fun loopGetOneshot(): Int = if (handle != 0L) nativeLoopGetOneshot(handle) else 0
     fun drumSetChoke(pad: Int, grp: Int) { if (handle != 0L) nativeDrumSetChoke(handle, pad, grp) }
     fun drumGetChoke(pad: Int): Int = if (handle != 0L) nativeDrumGetChoke(handle, pad) else 0
     fun drumChokeMaster(grp: Int): Int = if (handle != 0L) nativeDrumChokeMaster(handle, grp) else -1
@@ -507,6 +512,10 @@ object ZtekAudio {
     private external fun nativeDrumLevel(handle: Long, pad: Int, lvl: Float)
     private external fun nativeDrumMaster(handle: Long, m: Float)
     private external fun nativeDrumStep(handle: Long): Int
+    private external fun nativeDrumSetOneshot(handle: Long, on: Int)
+    private external fun nativeDrumGetOneshot(handle: Long): Int
+    private external fun nativeLoopSetOneshot(handle: Long, on: Int)
+    private external fun nativeLoopGetOneshot(handle: Long): Int
     private external fun nativeDrumSetChoke(handle: Long, pad: Int, grp: Int)
     private external fun nativeDrumGetChoke(handle: Long, pad: Int): Int
     private external fun nativeDrumChokeMaster(handle: Long, grp: Int): Int
