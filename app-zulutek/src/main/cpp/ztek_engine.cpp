@@ -1097,10 +1097,12 @@ void ztek_undo(ztek_t *z)
 
 void ztek_redo(ztek_t *z)
 {
+    int rn;
     if (z->redo_n <= 0) return;
+    rn = z->redo_n - 1;                          /* dépiler AVANT push_undo : celui-ci remet redo_n à 0 (sinon redo_st[-1], lecture hors limites) */
     ztek_push_undo(z);
     z->undo_n--;                                 /* push_undo a remis l'état courant : on l'échange */
-    ztek_apply(z, &z->redo_st[--z->redo_n]);
+    ztek_apply(z, &z->redo_st[rn]);
 }
 
 void ztek_kit_store(ztek_t *z, int slot)
@@ -1656,7 +1658,7 @@ static void ztek_matrix_block(ztek_t *z)
         for (s = 0; s < ZTEK_NSTRIP; s++)
             for (int p = 0; p < ZTEK_MIX_N; p++) z->strip_mod[s][p] = 0.0f;
         for (int p = 0; p < ZTEK_MIXM_N; p++) z->master_mod[p] = 0.0f;
-        for (s = 4; s < ZTEK_NSRC; s++) {
+        for (s = 4; s < ZTEK_NSRC && s < ZT_NSRC; s++) {   /* src_val indexé 0..ZT_NSRC-1 : borne ZT_NSRC comme la boucle asg (évite lecture hors limites, UBSan) */
             float sv = (z->src_val[s] - 0.5f) * 2.0f;
             const uint64_t *bm = z->assign[s];
             for (w = base / 64; w < ZTEK_AWORDS; w++) {
