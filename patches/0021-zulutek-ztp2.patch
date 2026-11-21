@@ -1,0 +1,87 @@
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 494a21e..9f508ab 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -1328,7 +1328,7 @@ int app_zpre_export(int p, uint8_t *buf, int cap)
+     zlk_ztp1_t t;
+     if (p < 0 || p >= NPRESETS || !presets[p].used || !buf || cap < (int)sizeof t) return 0;
+     memset(&t, 0, sizeof t);
+-    t.magic = ZLK_ZTP1_MAGIC;
++    t.magic = ZLK_ZTP2_MAGIC;               /* patch 0021: 'ZTP2', layout tranches = ztek_mix (patch 0019) */
+     t.part = p / PRESETS_PER_OBJ;
+     t.slot = p % PRESETS_PER_OBJ;
+     memcpy(t.name, presets[p].name, sizeof presets[p].name);   /* name[8] -> name[16], complété à 0 */
+@@ -1338,7 +1338,16 @@ int app_zpre_export(int p, uint8_t *buf, int cap)
+     t.root = presets[p].s.root;
+     t.scale = presets[p].s.scale;
+     memcpy(t.seqk, presets[p].s.seqk, sizeof t.seqk);
+-    /* le reste (mod_knob, lab, asg, macros, strip, siren, opt) n'existe pas en preset_t ATEK303 : à 0 */
++    /* le reste (mod_knob, lab, asg, macros, siren, opt) n'existe pas en preset_t ATEK303 : à 0.
++     * patch 0021: la table de mixage existe côté FM-1 (OP_MIX_* dans OBJ_OPTIONS, patch 0019) :
++     * on exporte VOL/MUT des 4 tranches. Indices ZTEK_MIX côté APK (ztek_engine.h) : VOL = 2, MUT = 4.
++     * Attention : OP_MIX_VOL0+3 = MASTER, la tranche SIREN a son volume propre OP_SIREN_MIX. */
++    t.strip_par[0][2] = opt.v[OP_MIX_VOL0 + 0] / 255.0f;   /* VOICE */
++    t.strip_par[1][2] = opt.v[OP_MIX_VOL0 + 1] / 255.0f;   /* DRUMS */
++    t.strip_par[2][2] = opt.v[OP_MIX_VOL0 + 2] / 255.0f;   /* LOOP */
++    t.strip_par[3][2] = opt.v[OP_SIREN_MIX] / 255.0f;      /* SIREN */
++    for (int s = 0; s < 4; s++)
++        t.strip_par[s][4] = (opt.v[OP_MIX_MUT] >> s) & 1u ? 1.0f : 0.0f;
+     memcpy(buf, &t, sizeof t);
+     return (int)sizeof t;
+ }
+@@ -1349,7 +1358,7 @@ int app_zpre_import(int p, const uint8_t *buf, int len)
+     int bank;
+     if (p < 0 || p >= NPRESETS || !buf || len != (int)sizeof t) return 0;
+     memcpy(&t, buf, sizeof t);
+-    if (t.magic != ZLK_ZTP1_MAGIC) return 0;
++    if (t.magic != ZLK_ZTP1_MAGIC && t.magic != ZLK_ZTP2_MAGIC) return 0;   /* patch 0021: 'ZTP2' accepté */
+     presets[p].s = set;                          /* base valide (magic, steps, pattern), on écrase dessous */
+     memset(presets[p].name, 0, sizeof presets[p].name);
+     memcpy(presets[p].name, t.name, sizeof presets[p].name - 1);
+@@ -1361,6 +1370,21 @@ int app_zpre_import(int p, const uint8_t *buf, int len)
+     presets[p].s.scale = (uint8_t)(t.scale >= 0 && t.scale < ACID_SCALES_LEN ? t.scale : 0);
+     if (!settings_ok(&presets[p].s)) return 0;
+     presets[p].used = 1;
++    if (t.magic == ZLK_ZTP2_MAGIC) {    /* patch 0021: tranches VOICE/DRUMS/LOOP/SIREN -> OP_MIX_* (VOL = 2, MUT = 4 côté APK) */
++        int s;
++        float f;
++        for (s = 0; s < 3; s++) {
++            f = t.strip_par[s][2];
++            opt.v[OP_MIX_VOL0 + s] = (uint8_t)(f <= 0.0f ? 0 : f >= 1.0f ? 255 : (uint32_t)(f * 255.0f + 0.5f));
++        }
++        f = t.strip_par[3][2];                          /* SIREN (OP_MIX_VOL0+3 = MASTER) */
++        opt.v[OP_SIREN_MIX] = (uint8_t)(f <= 0.0f ? 0 : f >= 1.0f ? 255 : (uint32_t)(f * 255.0f + 0.5f));
++        zsir_set(3, opt.v[OP_SIREN_MIX]);               /* sync sirène, comme options_load */
++        opt.v[OP_MIX_MUT] = (uint8_t)(opt.v[OP_MIX_MUT] & 0x10u);   /* garde le bit MASTER */
++        for (s = 0; s < 4; s++)
++            if (t.strip_par[s][4] > 0.5f) opt.v[OP_MIX_MUT] |= (uint8_t)(1u << s);
++        plat_store_save(OBJ_OPTIONS, &opt, sizeof opt);
++    }
+     bank = p / PRESETS_PER_OBJ;
+     set_dirty = 1;
+     return plat_store_save((uint32_t)(OBJ_PRESETS_A + bank), &presets[bank * PRESETS_PER_OBJ],
+diff --git a/atek303/app/ztek_link.h b/atek303/app/ztek_link.h
+index 41c7ca3..9afbd4d 100644
+--- a/atek303/app/ztek_link.h
++++ b/atek303/app/ztek_link.h
+@@ -71,14 +71,16 @@ uint32_t zlk_data_free(void);               /* octets libres estimés dans la zo
+ 
+ /* ---- patch 0013: fichiers companion VIRTUELS ZPRE00..31 / ZKIT00..02 (pas de flash : le store
+  * sert de backing) — contrat avec la PR #20 (APK) ----
+- * ZPRE%02d = preset part×8+slot (part 0..3 = objets PRESETS_A..D, slot 0..7) en blob 'ZTP1',
+- * miroir exact de ztek_preset_t côté APK (ztek_engine.h, sizeof = 1284 o au patch 0013).
++ * ZPRE%02d = preset part×8+slot (part 0..3 = objets PRESETS_A..D, slot 0..7) en blob 'ZTP2'
++ * (patch 0021 : layout tranches VOICE/DRUMS/LOOP/SIREN = ztek_mix patch 0019 ; 'ZTP1' accepté en
++ * import sans les tranches), miroir exact de ztek_preset_t côté APK (sizeof = 1284 o, patch 0013).
+  * ZKIT00..02 = kits usine ZULU/808/909 en blob 'ZKT1' (voir dsp/drum_engine.h). */
+ #define ZLK_NPRE 32
+ #define ZLK_NKIT 3
+-#define ZLK_ZTP1_MAGIC 0x5A545031u          /* 'ZTP1' */
++#define ZLK_ZTP1_MAGIC 0x5A545031u          /* 'ZTP1' : ancien layout tranches (accepté en import) */
++#define ZLK_ZTP2_MAGIC 0x5A545032u          /* 'ZTP2' : tranches VOICE/DRUMS/LOOP/SIREN (ztek_mix, patch 0019), exporté par défaut */
+ typedef struct {
+-    uint32_t magic;                         /* 'ZTP1' */
++    uint32_t magic;                         /* 'ZTP2' (patch 0021), 'ZTP1' accepté en import */
+     int32_t  part, slot;                    /* part 0..3, slot 0..7 */
+     char     name[16];
+     int      engine;

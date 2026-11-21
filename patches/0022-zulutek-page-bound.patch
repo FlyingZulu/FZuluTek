@@ -1,0 +1,49 @@
+diff --git a/atek303/app/app.c b/atek303/app/app.c
+index 9f508ab..671e724 100644
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -1091,9 +1091,10 @@ static void bytes_copy(void *d, const void *s, uint32_t n)
+     while (n--)
+         *a++ = *b++;
+ }
++#define NPAGES 16                          /* patch 0011: + MIX(15); patch 0012: + FINE(14); patch 0008: + LOOP(12) MACRO(13); patch 0007: + DRUM(11); patch 0005: + LFO(8) ENV(9) ASSIGN(10). patch 0022: d\u00e9plac\u00e9 avant settings_ok (la borne page < 8 l'invalidait) */
+ static int settings_ok(const settings_t *t)
+ {
+-    int i, ok = t->magic == SET_MAGIC && t->octave >= -2 && t->octave <= 2 && t->page < 8u && t->steps >= 1u
++    int i, ok = t->magic == SET_MAGIC && t->octave >= -2 && t->octave <= 2 && t->page < NPAGES && t->steps >= 1u
+                 && t->steps <= ACID_MAX_STEPS && t->scale < ACID_SCALES_LEN && t->root < 12u && t->tempo >= 30u
+                 && t->tempo <= 300u;
+     for (i = 0; ok && i < AT_NPARAMS; i++)
+@@ -1183,7 +1184,6 @@ void app_init(void)
+ /* --------------------------------------------------------------------- UI --- */
+ /* a knob of a page: a voice parameter (0..), or a sequencer control */
+ enum { K_NONE = -1, K_SQ = 100, K_STEPS = 200, K_SCALE, K_TEMPO, K_ROOT, K_FX = 300 };
+-#define NPAGES 16                          /* patch 0011: + MIX(15); patch 0012: + FINE(14); patch 0008: + LOOP(12) MACRO(13); patch 0007: + DRUM(11); patch 0005: + LFO(8) ENV(9) ASSIGN(10) */
+ static const char *const PAGE_TITLE[NPAGES] = {"VOICE", "VOICE", "PATTERN", "PATTERN", "DELAY", "CHORUS", "DRIVE", "REVERB", "LFO", "ENV", "ASSIGN", "DRUM", "LOOP", "MACRO", "FINE", "MIX"};   /* patch 0005 + 0007 + 0008 + 0012 + 0011 */
+ static const char *const PAGE_NAME[NPAGES][4] = {{"CUTOFF", "RESO", "ENV MOD", "DECAY"},
+                                             {"ACCENT", "TUNE", "WAVE", "GATE"},
+diff --git a/atek303/app/tests/options.txt b/atek303/app/tests/options.txt
+index a54db07..6dd708a 100644
+--- a/atek303/app/tests/options.txt
++++ b/atek303/app/tests/options.txt
+@@ -36,16 +36,16 @@ turn K1 1
+ wait 30
+ expect color 1
+ shot options_green.png
+-# SELECT baja a ANALOG DRIFT (el 15) y K2 lo pone en MARKED
+-turn SELECT 15
++# SELECT baja a ANALOG DRIFT (el 18: OP_FINE=9 depuis patch 0009 + AT_OPT_DRIFT=9) y K2 lo pone en MARKED
++turn SELECT 18
+ wait 30
+-expect optcur 15
++expect optcur 18
+ turn K2 1
+ wait 60
+ expect drift 2
+ shot options_fine.png
+ # CLK OFFSET (el 5): de -16 MS (24, de serie) a -28 MS (12), y no pasa de -40 MS (0)
+-turn SELECT -10
++turn SELECT -13
+ wait 30
+ expect optcur 5
+ expect optval 24

@@ -1,0 +1,98 @@
+diff --git a/atek303/app/dsp/bass_engines.c b/atek303/app/dsp/bass_engines.c
+index e71acca..4d0b9d7 100644
+--- a/atek303/app/dsp/bass_engines.c
++++ b/atek303/app/dsp/bass_engines.c
+@@ -6,7 +6,7 @@
+ #include "bass_engines.h"
+ #include "fastmath.h"
+ 
+-#define KS_MAX 2304u                            /* the string's max length: sr/20 Hz */
++#define KS_MAX BASS_KS_N                        /* patch 0020: the string's max length (BASS_KS_N: 1024 on FM-1) */
+ 
+ const char *const AT_ENGINE_NAME[AT_NENGINES] = {"ATEK303", "PLUK", "FM", "SUB", "8BIT"};
+ 
+diff --git a/atek303/app/dsp/bass_engines.h b/atek303/app/dsp/bass_engines.h
+index 1968d88..8b9da0c 100644
+--- a/atek303/app/dsp/bass_engines.h
++++ b/atek303/app/dsp/bass_engines.h
+@@ -15,6 +15,12 @@
+ extern const char *const AT_ENGINE_NAME[AT_NENGINES];
+ int at_engine_index(float v);               /* AT_ENGINE's 0..1 to its entry */
+ 
++#ifdef PLAT_HOST
++#define BASS_KS_N 2304u                     /* host (golden tests): sr/20 Hz */
++#else
++#define BASS_KS_N 1024u                     /* patch 0020: PLUK string on FM-1 (~43 Hz min at 44,1 kHz) : -5,1 Ko per pad x 8 */
++#endif
++
+ typedef struct {
+     float sr;
+     float param[AT_NPARAMS];
+@@ -22,7 +28,7 @@ typedef struct {
+     float env;                              /* amp envelope, 0..1 */
+     float freq, freq_t;                     /* Hz; freq slews to freq_t on slide */
+     float ph, ph_m;                         /* oscillator / FM modulator phases */
+-    float ks[2304];                         /* PLUK's string, up to sr/20 Hz */
++    float ks[BASS_KS_N];                    /* PLUK's string, up to sr/20 Hz */
+     uint32_t ks_n, ks_pos;
+     float ks_last;
+     uint32_t rng;
+diff --git a/atek303/app/dsp/fx.c b/atek303/app/dsp/fx.c
+index 1ec8824..f217782 100644
+--- a/atek303/app/dsp/fx.c
++++ b/atek303/app/dsp/fx.c
+@@ -162,6 +162,9 @@ enum { R_PRE, R_IN1, R_IN2, R_IN3, R_IN4, R_IN5, R_IN6, R_AP1L, R_D1L, R_AP2L, R
+ #define EXC 48u                                /* the tank modulation's excursion, in samples (Black Hole swirl) */
+ static uint32_t r_len[R_NLINES], r_off[R_NLINES], r_pos[R_NLINES];
+ #define RV_N (PRE_MAX + 35200u)              /* the lines below add up to ~37123 */
++#if !defined(PLAT_HOST) && !defined(FX_RV_Q)
++#define FX_RV_Q 16384                         /* patch 0020: plate reverb in 16 bits on the FM-1 (the author's smaller-build option) : -74 Ko of .pool */
++#endif
+ #ifdef FX_RV_Q                                 /* the plate's lines in 16 bits, FX_RV_Q a unit (a smaller build) */
+ typedef int16_t rv_t;
+ static inline float rv_ld(rv_t v) { return (float)v * (1.0f / (float)FX_RV_Q); }
+diff --git a/atek303/app/ztek_drum.c b/atek303/app/ztek_drum.c
+index 5c381b8..39d4aa5 100644
+--- a/atek303/app/ztek_drum.c
++++ b/atek303/app/ztek_drum.c
+@@ -29,7 +29,9 @@ void zdr_init(float sr)
+ 
+ void zdr_render(uint32_t n)
+ {
++    uint32_t i;
+     if (n > ZDR_BUS_MAX) n = ZDR_BUS_MAX;
++    for (i = 0; i < n; i++) { busL[i] = 0.0f; busR[i] = 0.0f; }   /* patch 0020: drum_render accumule (outL[i] +=), bus remis à zéro par bloc comme zml_render */
+     drum_set_bpm(&d, (float)zdr_tempo());
+     d.playing = s_playing;
+     d.rec = s_rec;
+diff --git a/atek303/app/ztek_loop.c b/atek303/app/ztek_loop.c
+index 38b9da7..6041902 100644
+--- a/atek303/app/ztek_loop.c
++++ b/atek303/app/ztek_loop.c
+@@ -7,7 +7,11 @@
+ #include <string.h>
+ #include "ztek_loop.h"
+ 
+-#define ML_RS_MAX 4096                   /* doit matcher ztek_loop_fm1.c (taille de ml_t) */
++#ifdef PLAT_HOST
++#define ML_RS_MAX 4096
++#else
++#define ML_RS_MAX 2048                   /* patch 0020: ring resample FM-1 (4 Ko au lieu de 8) */
++#endif                                   /* doit matcher ztek_loop_fm1.c (taille de ml_t) */
+ #include "dsp/midi_looper.h"
+ 
+ static ml_t ml;
+diff --git a/atek303/app/ztek_loop_fm1.c b/atek303/app/ztek_loop_fm1.c
+index ddd05e7..39517d8 100644
+--- a/atek303/app/ztek_loop_fm1.c
++++ b/atek303/app/ztek_loop_fm1.c
+@@ -5,5 +5,9 @@
+  * (ML_RS_MAX 4096 ~ 8 Ko au lieu de 16384 ~ 32 Ko) — même principe que ztek_drum_fm1.c
+  * (DR_FM1_ECO). ztek_loop.c définit le même ML_RS_MAX avant d'inclure midi_looper.h,
+  * pour que sizeof(ml_t) soit identique dans les deux unités de compilation. */
++#ifdef PLAT_HOST
+ #define ML_RS_MAX 4096
++#else
++#define ML_RS_MAX 2048                   /* patch 0020: doit matcher ztek_loop.c */
++#endif
+ #include "dsp/midi_looper.c"
