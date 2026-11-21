@@ -67,38 +67,38 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
          * MAISON : le FM-1 custom maison peint (photo du 21/11) : face vert fluo, plateau
          * bleu vif, capuchons orange, pills bleu profond, marque rouge sang.
          * Couleurs mutables, applySkin() bascule via OPTIONS > SKIN (ligne SKIN). */
-        val ROOM_DA     = 0xFF090C10
-        val BODY_TOP_DA = 0xFF151920
-        val BODY_BOT_DA = 0xFF0E1116
-        val TRAY_DA     = 0xFF1B222B
-        val SILK_INK_DA = 0xFF9FE0D6
-        val BRAND_INK_DA = 0xFFFF2DA0
-        val BTN_TOP_DA  = 0xFF00FFE0
-        val BTN_BOT_DA  = 0xFF00A692
-        val BTN_INK_DA  = 0xFF09120F
-        val KEY_TOP_DA  = 0xFF00E8D0
-        val KEY_BOT_DA  = 0xFF00948A
-        val SKIRT_DA    = 0xFF3A3D43
-        val SKIRT_HI_DA = 0xFF6D7178
-        val POINTER_DA  = 0xFFEEEAE2
-        val RIDGE_DA    = 0xFF7BD6C5
-        val ROOM_M      = 0xFF0B100A
-        val BODY_TOP_M  = 0xFF00D90C
-        val BODY_BOT_M  = 0xFF039004
-        val TRAY_M      = 0xFF0A62D8
-        val SILK_INK_M  = 0xFFECFDF0
-        val BRAND_INK_M = 0xFFF90910
-        val BTN_TOP_M   = 0xFFFC7A03
-        val BTN_BOT_M   = 0xFFD85700
-        val BTN_INK_M   = 0xFF301202
-        val KEY_TOP_M   = 0xFF2F8CFF
-        val KEY_BOT_M   = 0xFF0A48A8
-        val SKIRT_M     = 0xFF145214
-        val SKIRT_HI_M  = 0xFF2E7D2A
-        val POINTER_M   = 0xFFF6FFF8
-        val RIDGE_M     = 0xFFDEF2FF
-        const val AMBER_LED = 0xFFF2A33A
-        const val GREEN_LED = 0xFF62D36E
+        val ROOM_DA     = 0xFF090C10.toInt()
+        val BODY_TOP_DA = 0xFF151920.toInt()
+        val BODY_BOT_DA = 0xFF0E1116.toInt()
+        val TRAY_DA     = 0xFF1B222B.toInt()
+        val SILK_INK_DA = 0xFF9FE0D6.toInt()
+        val BRAND_INK_DA = 0xFFFF2DA0.toInt()
+        val BTN_TOP_DA  = 0xFF00FFE0.toInt()
+        val BTN_BOT_DA  = 0xFF00A692.toInt()
+        val BTN_INK_DA  = 0xFF09120F.toInt()
+        val KEY_TOP_DA  = 0xFF00E8D0.toInt()
+        val KEY_BOT_DA  = 0xFF00948A.toInt()
+        val SKIRT_DA    = 0xFF3A3D43.toInt()
+        val SKIRT_HI_DA = 0xFF6D7178.toInt()
+        val POINTER_DA  = 0xFFEEEAE2.toInt()
+        val RIDGE_DA    = 0xFF7BD6C5.toInt()
+        val ROOM_M      = 0xFF0B100A.toInt()
+        val BODY_TOP_M  = 0xFF00D90C.toInt()
+        val BODY_BOT_M  = 0xFF039004.toInt()
+        val TRAY_M      = 0xFF0A62D8.toInt()
+        val SILK_INK_M  = 0xFFECFDF0.toInt()
+        val BRAND_INK_M = 0xFFF90910.toInt()
+        val BTN_TOP_M   = 0xFFFC7A03.toInt()
+        val BTN_BOT_M   = 0xFFD85700.toInt()
+        val BTN_INK_M   = 0xFF301202.toInt()
+        val KEY_TOP_M   = 0xFF2F8CFF.toInt()
+        val KEY_BOT_M   = 0xFF0A48A8.toInt()
+        val SKIRT_M     = 0xFF145214.toInt()
+        val SKIRT_HI_M  = 0xFF2E7D2A.toInt()
+        val POINTER_M   = 0xFFF6FFF8.toInt()
+        val RIDGE_M     = 0xFFDEF2FF.toInt()
+        val AMBER_LED = 0xFFF2A33A.toInt()
+        val GREEN_LED = 0xFF62D36E.toInt()
 
         var ROOM = ROOM_DA
         var BODY_TOP = BODY_TOP_DA
@@ -286,7 +286,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             rrect(c, b[1].toFloat(), b[2] + off, b[3].toFloat(), b[4].toFloat(), 9f, top, bot)
             val txt = if (st.labelsZulu) ZULU_LABELS[i] else SILK[b[0]]
             label(c, b[1] + b[3] / 2f, b[2] + b[4] / 2f + 5f + off, txt,
-                if (led > 0.5f) 0xFF2A1A03 else BTN_INK, 11f)
+                if (led > 0.5f) 0xFF2A1A03.toInt() else BTN_INK, 11f)
         }
         // encoders + the MASTER pot (decorative: the volume lives in the FX/MIX pages)
         for (i in ENCS.indices) {
@@ -315,7 +315,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             rrect(c, x + 1f, 680f + 4f, KW, 106f, KW / 2f, 0xFF1A1A1C.toInt())              // shadow
             rrect(c, x, 680f + off, KW, 106f, KW / 2f, mix(KEY_TOP, AMBER_LED, heat), mix(KEY_BOT, AMBER_LED, heat * 0.8f))
             rrect(c, x + KW / 2f - 2.5f, 680f + 18f + off, 5f, 106f - 36f, 2.5f,
-                if (heat > 0f) 0xFFEFE2B0 else RIDGE)
+                if (heat > 0f) 0xFFEFE2B0.toInt() else RIDGE)
         }
         for (bi in BLACK_NOTES.indices) {
             val note = BLACK_NOTES[bi]

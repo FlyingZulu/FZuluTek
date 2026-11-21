@@ -255,8 +255,9 @@ class LcdState {
     /* première ligne visible d'une fenêtre de `vis` lignes autour de `sel` dans `n` entrées */
     fun winFirst(sel: Int, n: Int, vis: Int) = (sel - vis / 2).coerceIn(0, (n - vis).coerceAtLeast(0))
 
-    /* pack SEQ+ (PR #3) : pages 6 SEQ+, 7 LFO, 8 ENV, 9 ASSIGN, 10 PRESETS */
-    val pageNames2 = mapOf(6 to "SEQ+", 7 to "LFO", 8 to "ENV", 9 to "ASSIGN", 10 to "PRESETS",
+    /* pages 0..18 : noms affichés (hint "PAGE x" à la navigation) ; 6..10 = pack SEQ+ (PR #3) */
+    val pageNames2 = mapOf(0 to "MAIN", 1 to "LOOP", 2 to "SNAP", 3 to "KIT", 4 to "XY", 5 to "FX",
+        6 to "SEQ+", 7 to "LFO", 8 to "ENV", 9 to "ASSIGN", 10 to "PRESETS",
         11 to "MIX", 12 to "PATCH", 13 to "ARP", 14 to "MACRO", 15 to "DRUMS", 16 to "OPTIONS",
         17 to "LINK", 18 to "FINE")
     var arpOn = false
