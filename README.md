@@ -7,7 +7,7 @@ Firmware ATEK303 personnalisé (dérivé GPL-3.0 d'Animatek — crédits : Anima
 code publié en GPL-3.0 + crédits Animatek, nouvelle clé de signature générée (l'actuelle
 reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
 
-## État des branches (maj 2026-11-21 ~15:10Z) — `main` = `254936f` ; mergées : #30 #31 #35 #36 #40 ; drafts ouvertes : #32/#33/#34 (équipe A, rebasées sur main), #37 (patches 0019-0022), #39 (doc), #41 (fix CI)
+## État des branches (maj 2026-11-21 ~15:45Z) — `main` = `5174962`, **CI verte run 44914471333** ; mergées : #30 #31 #35 #36 #40 #41 #32 #33 #34 #37 #39 — **aucune PR ouverte**, série de patches 0001..0022 complète dans `patches/` (prochain n° : 0023)
 
 - **Mergées dans main** (ordre : #3 → #9 → #5 → #2 → #4 → #6 → #7 → #8 puis **#1** `3ca9446` par la session B — baie v3 hiérarchique + DRUMS + choke MONO/POLY + OPTIONS(ECO/LDR) + mixeur 4 tranches + page DRUMS, CI verte run 44722534300 ; `gh pr merge` bloqué par le proxy → merges via `git merge --no-ff` + `git push origin main`, branches conservées) :
   - **PR #3** `vibe/zulutek-seq-plus-c9ef18` — pack SEQ+ APK (modulation 8/8, ASSIGN typé LUDIQUE, presets, ARP page 13, MACRO page 14)
@@ -36,7 +36,7 @@ reste privée), spec ZuluLink jamais publiée (voir `docs/PRISE-EN-MAIN.md`).
   - **PR #32 / #33** rebasées sur main (conflits `patches/README.md` résolus). Leurs CI rouges = `tools/make_icon.py` corrompu sur main (voir #41), pas leur code.
   - **PR #41** `vibe/fix-download-marker-line1-7f3a21` — fix urgent : ligne parasite `successfully downloaded text file (SHA: …)` en tête de 4 fichiers poussés via le connecteur (`make_icon.py`, `LcdView.kt`, `MainActivity.kt`, `SurfaceView.kt`) cassait la CI de toutes les PRs. CI verte run 44911528814.
   - **PR #39** doc statut FM-1 dans `docs/ZULUTEK-MIX-SIREN.md`. **PR #38** fermée (supersédée par #36).
-  - Reste : merger #41 → #32 → #33 → #34 → #37 → #39 (dans l'ordre de la série de patches), puis flash FM-1 (backup AT64 + dump JTAG) et test ZPRE ZTP2 de bout en bout.
+  - **Merges faits 2026-11-21 ~15:40Z (ordre #41 → #32 → #33 → #34 → #37 → #39, `git merge --no-ff` + push main car `gh pr merge` bloqué par le proxy)** : main = `5174962`, CI main verte run 44914471333. Reste : flash FM-1 (backup AT64 + dump JTAG) et test ZPRE ZTP2 APK↔FM-1 de bout en bout.
 - 🗺️ **Carte de la flash 1 MiB (zones interdites en écriture)** : `docs/FM1-FLASHMAP.md` — boot head `0x0..0x3FFF` et `key_mac 0xFF000` jamais écrits, zone app `0x4000..0x97000` réservée au loader OTA, VM/BTIF `0xE7000..0xE9FFF` interdits, nos fichiers ZTF validés dans `0xB0000..0xD3FFF`. Voir aussi `docs/FM1-HARDWARE.md` (FM-1 rev octobre 2026 = flash UC25HQ80 JEDEC `B3 60 14`, unbrick par `WL82 UBOOT1.00` USB ou dongle Seeed XIAO RP2040).
 
 <details><summary>Détail des PR mergées (archive)</summary>
