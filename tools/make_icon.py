@@ -75,7 +75,7 @@ PINK_D = (226, 74, 168, 255)
 DARK = (22, 23, 30, 255)
 GRAY = (200, 204, 214, 255)
 
-def draw(cv, bg=True):
+def draw(cv, bg=True, tag="ZT", accent=(255, 45, 160, 255), base=(10, 10, 16, 255)):
     # REMIX GHETTO BLASTER x NYAN CAT (drawing in 120 units, scaled to the grid)
     # le walkman-cat : corps pop-tart rose a croote + sprinkles, platine cassette devenue
     # visage de chat (yeux, joues roses, sourire, moustaches), oreilles, poignee, antenne,
@@ -84,7 +84,7 @@ def draw(cv, bg=True):
     def X(v):
         return v * k
     if bg:
-        cv.rect(0, 0, cv.s, cv.s, (10, 10, 16, 255), r=9 * k)
+        cv.rect(0, 0, cv.s, cv.s, base, r=9 * k)
     # trainee arc-en-ciel etoilee derriere le boombox
     bh, y0 = 6, 54
     for i, c in enumerate(RAINBOW):
@@ -139,6 +139,36 @@ def draw(cv, bg=True):
     cv.rect(X(62), X(84), X(70), X(87), (46, 48, 60, 255), r=1 * k)
     cv.circle(X(64.5), X(92), 1.4 * k, (255, 60, 60, 255))
     cv.circle(X(68.5), X(92), 1.4 * k, (255, 238, 0, 255))
+    if bg and tag:
+        draw_tag(cv, tag, accent)
+
+# --- initiales d'identité (charte) : UN SEUL DESSIN pour tout l'écosystème Zulu, mais
+# chaque app porte ses initiales dans un petit cartouche coloré à son accent, pour qu'on
+# ne confonde pas les icônes : ZT (ZuluTek) rose fluo, ZK (Zulu Kontrol) turquoise,
+# ZD (Drums) jaune fluo. La variation de teinte du fond est volontairement imperceptible
+# seule, repérable côte à côte. Voir docs/ZULUTEK-UI-STYLE.md.
+GLYPHS = {
+    "Z": ("###", "..#", ".#.", "#..", "###"),
+    "T": ("###", ".#.", ".#.", ".#.", ".#."),
+    "K": ("#.#", "#.#", "###", "#.#", "#.#"),
+    "D": ("###", "#.#", "#.#", "#.", "###"),
+}
+
+def draw_tag(cv, tag, accent):
+    """Cartouche d'initiales en bas à droite (style autocollant), pixel art 3x5."""
+    u = cv.s / 240.0
+    cv.rect(190 * u, 196 * u, 236 * u, 230 * u, accent, r=4 * u)
+    cv.rect(192 * u, 198 * u, 234 * u, 228 * u, (14, 15, 20, 255), r=3 * u)
+    px = 4.0 * u
+    x = 199.0 * u
+    y = 203.0 * u
+    for ch in tag:
+        g = GLYPHS[ch]
+        for ry in range(5):
+            for rx in range(3):
+                if g[ry][rx] == "#":
+                    cv.rect(x + rx * px, y + ry * px, x + (rx + 1) * px, y + (ry + 1) * px, (255, 255, 255, 255))
+        x += 4 * px
 
 master = Px(240)   # master fin (style Game Gear) ; les mipmap sont un nearest depuis 240
 draw(master, bg=True)
@@ -249,6 +279,7 @@ def draw_drum(cv):
 
 drum = Px(240)
 draw_drum(drum)
+draw_tag(drum, "ZD", (255, 238, 0, 255))
 for name, s in [("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)]:
     px = drum.nearest(s)
     write_png(os.path.join(ROOT_DRUMS, "mipmap-" + name, "ic_launcher.png"), s, s, px)
