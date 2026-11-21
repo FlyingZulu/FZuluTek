@@ -1,0 +1,34 @@
+diff --git a/atek303/app/tests/controls.txt b/atek303/app/tests/controls.txt
+index 19d4470..ee993a7 100644
+--- a/atek303/app/tests/controls.txt
++++ b/atek303/app/tests/controls.txt
+@@ -2,7 +2,7 @@
+ wait 600
+ # ALGO: la onda desde cualquier página (arranca en SAW o SQUARE según el de fábrica)
+ expect page 0
+-turn ALGO -13
++turn ALGO -16
+ wait 60
+ expect wave 0
+ turn ALGO 2
+@@ -11,8 +11,8 @@ expect wave 2
+ expect page 0
+ turn ALGO 20
+ wait 60
+-expect wave 13
+-turn ALGO -13
++expect wave 16
++turn ALGO -16
+ wait 60
+ expect wave 0
+ # EDIT: editor -> página SEQ -> página PATT -> editor
+diff --git a/atek303/app/tests/fx.txt b/atek303/app/tests/fx.txt
+index bf87580..137c49a 100644
+--- a/atek303/app/tests/fx.txt
++++ b/atek303/app/tests/fx.txt
+@@ -34,4 +34,4 @@ wait 1500
+ wavstop
+ tap FX
+ wait 30
+-expect page 4
++expect page 8
