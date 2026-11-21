@@ -72,12 +72,13 @@ ombre noire**, oreilles **blanches** à bord noir fin, **LECTEUR CASSETTE = LA B
 collée au blaster, traînée arc-en-ciel étoilée. Plus de poignée, plus de sourire trait.
 Line-art pixel art fin + accents **rose fluo / jaune fluo / turquoise**.
 
-**Titre d'intro façon affiche Indiana Jones remixé Zulu Cat** : pixel art CONDENSÉ À
-EMPATTEMENTS en arches douces vers le bas (les lettres des extrémités descendent) —
-« ZULUTEK » sous le boombox dans le splash (jaune fluo `rgb(255,238,0)`, liseré noir,
-ombre turquoise `rgb(0,255,224)` en bas-droite) ; côté Zulu Kontrol, l'IntroView dessine
-« ZULU » en arche au-dessus de « KONTROL » en serif condensé jaune fluo à liseré noir et
-ombre turquoise, avec les petites étoiles blanches de la traînée du logo.
+**Titre d'intro : ÉTIQUETTE COMPACTE façon logo Game Boy remixée Zulu Cat** — DEUX lignes
+pixel art 5x9 CONDENSÉES À EMPATTEMENTS, **JUSTIFIÉES à la même largeur** et SERRÉES
+pour former UNE étiquette compacte, plus petite que le logo, posée en sticker : « ZULU »
+sur « TEK » sous le boombox dans le splash (jaune fluo `rgb(255,238,0)`, liseré noir,
+ombre turquoise `rgb(0,255,224)` en bas-droite, légère arche sur la 1re ligne) ; côté Zulu
+Kontrol, l'IntroView dessine la même étiquette pixel art « ZULU » sur « KONTROL », avec
+les petites étoiles blanches de la traînée du logo.
 Le prompt pour IA générative vit dans `docs/PROMPT-BOOT-IA.md`, l'outil de conversion
 image → LCD (240×240, 1 bit + accents) dans `tools/lcd_image.py`.
 
@@ -92,10 +93,12 @@ pour tout l'écosystème Zulu (comme iOS sur iPhone et iPad) : mêmes couleurs, 
 même dessin. Fond sombre, encre mono, accents fluo ZU/LU/turquoise/REC/ambre **uniquement
 pour les états** (thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
 
-- Intro : titre **« ZULU » en arche au-dessus de « KONTROL »**, typographie serif condensée à
-  empattements façon affiche Indiana Jones REMIXÉE Zulu Cat — **jaune fluo `rgb(255,238,0)`**,
-  liseré noir, **ombre turquoise `rgb(0,255,224)`** en bas-droite, petites étoiles blanches ;
-  ~2 s, tap = passer ; même pixel art fin que le boot ZuluTek.
+- Intro : étiquette compacte pixel art **« ZULU » sur « KONTROL »**, deux lignes 5x9 à
+  EMPATTEMENTS **justifiées à la même largeur** et serrées, façon logo Game Boy remixé
+  Zulu Cat, plus petite que le logo — **jaune fluo `rgb(255,238,0)`**, liseré noir fin,
+  **ombre turquoise `rgb(0,255,224)`** en bas-droite, légère arche sur « ZULU », petites
+  étoiles blanches autour de l'étiquette ; ~2 s, tap = passer ; même pixel art fin que
+  le boot ZuluTek.
 - Crédit **« Flying Zulu »** : petit, **en bas, centré, dans le splash** — identique ZuluTek
   (gris atténué, police mono). Aucun crédit permanent dans l'app.
 - Mode VHS : scanlines **uniquement sur le noir** (blend LIGHTEN, gris `argb(255,24,24,28)`,
@@ -152,8 +155,9 @@ reste sans badge : le crédit « Flying Zulu » est au bas de l'écran.
   boombox zébré pop en tons du blaster + trame halftone (couleur du blaster par app),
   visage de chat sur la platine zébrée où les yeux-HP XXL sont collés aux bords du cadre
   noir, truffe ovale, lecteur cassette en bouche (REC/PLAY/STOP), traînée arc-en-ciel
-  étoilée, tap = passer. Titre « ZULUTEK » pixel art condensé à empattements en
-  arches vers le bas : jaune fluo `rgb(255,238,0)`, liseré noir, ombre turquoise
+  étoilée, tap = passer. Étiquette de titre « ZULU » sur « TEK », pixel art 5x9 à EMPATTEMENTS : DEUX lignes
+  JUSTIFIÉES à la même largeur, serrées en bloc compact façon logo Game Boy (plus
+  petite que le logo), jaune fluo `rgb(255,238,0)`, liseré noir fin, ombre turquoise
   `rgb(0,255,224)` en bas-droite (`draw_title` dans `tools/make_icon.py`).
 - Côté LCD 240×240 du FM-1 : mêmes règles, dessin direct en pixels (RGB565, ST7789) ; voir
   `docs/FM1-RESSOURCES.md` (émulateur fm1-emu, miroir d'écran fm1-projector, police pixel 3x de fm1-sampler).
