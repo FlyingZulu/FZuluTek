@@ -35,13 +35,9 @@ void drum_init(drum_t *d, float sr)
         d->lvl[p] = 0.9f;
         d->v[p].t = -1.0f;
     }
-    /* patterns par défaut : 4-on-the-floor, backbeat, 8th hats */
+    /* pattern par défaut : kick four-to-the-floor seul (Flying Zulu : au demarrage de l'app,
+     * la boite a rythme n'a que le kick, on habille ensuite ; patch APK 0023) */
     for (int s = 0; s < DR_NSTEPS; s += 4) d->pat[DR_KICK][s] = 1;
-    d->pat[DR_SNARE][4] = d->pat[DR_SNARE][12] = 1;
-    for (int s = 0; s < DR_NSTEPS; s += 2) d->pat[DR_HATC][s] = 1;
-    d->pat[DR_HATO][14] = 1;
-    d->pat[DR_CLAP][12] = 1;
-    d->pat[DR_CONGA][6] = d->pat[DR_CONGA][14] = 1;
     /* choke désactivé par défaut (tout à 0) ; leader ON, pas de leader désigné */
     d->leader = 1;
     for (int g = 0; g < DR_NCHOKE; g++) d->lead[g] = -1;
@@ -97,6 +93,7 @@ void drum_reset(drum_t *d)
 {
     d->step = 0;
     d->ph = 0.0f;
+    d->oneshot_off = 0;              /* relance après une fin one-shot : repart du step 0 */
     for (int p = 0; p < DR_NPADS; p++) d->v[p].t = -1.0f;
 }
 
@@ -197,16 +194,31 @@ static float voice_sample(drum_t *d, dr_voice_t *v)
 /* horloge du séquenceur : déclenche les pads du step courant */
 static void clock(drum_t *d, float dt)
 {
+    if (d->oneshot_off) return;                 /* one-shot terminé : figé, les voix finissent de sonner */
     d->ph += dt;
     float stepDur = 60.0f / (d->bpm * 4.0f);              /* 16e de note */
     float off = (d->step % 2 == 1) ? d->swing * stepDur : 0.0f;
     if (d->ph >= stepDur + off) {
         d->ph -= stepDur + off;
+        /* one-shot : le step 15 vient d'être joué — dernier step relevé, pas de wrap.
+         * Le séquenceur se fige là (drum_reset repart au step 0 si on relance). */
+        if (d->oneshot && d->step == DR_NSTEPS - 1) {
+            d->oneshot_off = 1;
+            return;
+        }
         d->step = (d->step + 1) % DR_NSTEPS;
         for (int p = 0; p < DR_NPADS; p++)
             if (d->pat[p][d->step]) drum_hit(d, p);
     }
 }
+
+void drum_set_oneshot(drum_t *d, int on)
+{
+    d->oneshot = on ? 1 : 0;
+    if (!on) d->oneshot_off = 0;               /* toggle off : le seq reprend là où il était */
+}
+
+int drum_get_oneshot(const drum_t *d) { return d->oneshot; }
 
 void drum_render(drum_t *d, float *out, int n)
 {
@@ -267,3 +279,4 @@ void drum_clear_leader(drum_t *d, int grp)          /* POLY sans sélection : mo
 {
     if (grp > 0 && grp < DR_NCHOKE) d->lead[grp] = -1;
 }
+
