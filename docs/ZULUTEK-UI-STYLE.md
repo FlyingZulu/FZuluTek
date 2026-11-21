@@ -114,11 +114,20 @@ pour les états** (thème `ZcDark`/`ZcTheme`, `Theme.kt`). Aucune variante :
   cassette = bouche REC/PLAY/STOP, antenne fine, traînée arc-en-ciel 6 bandes + étoiles) ;
   blaster **menthe ZK** `rgb(175,255,240)` / croûte `rgb(46,210,180)`, comme l'icône —
   aucun autre chat, aucune variante.
-- **Étiquettes Game Boy partout** : tous les labels des pads/kits/widgets qui pop dans
-  les menus utilisent la typo pixel **5×9 à EMPATTEMENTS** de l'étiquette de titre
-  (`PixelFont.kt`, mêmes glyphes que `TITLE_GLYPHS` de `make_icon.py`) : un mot court =
-  une ligne, un mot composé (« MIDI LOOP ») = DEUX lignes JUSTIFIÉES à la même largeur,
-  à l'échelle du contrôle, couleurs d'état inchangées (PadBar, KitBar, ControlZone).
+- **Étiquettes Game Boy partout** : TOUS les éléments apparents de l'UI — labels des
+  pads/kits/widgets qui pop dans les menus ET **titres de toutes les pages/menus** —
+  utilisent la typo pixel **5×9 à EMPATTEMENTS** de l'étiquette de titre (`PixelFont.kt`
+  côté ZK, `PixFont` intégré au `LcdView` côté ZT, mêmes glyphes que `TITLE_GLYPHS` de
+  `make_icon.py`) : un mot court = une ligne, un mot composé (« MIDI LOOP ») = DEUX
+  lignes JUSTIFIÉES à la même largeur, à l'échelle du contrôle. Couvert : PadBar, KitBar,
+  ControlZone, OptionsMenu (sections + items en `PixelLabel`), en-tête du miroir FM-1 de
+  LcdZone, **tous les titres de pages du LcdView ZuluTek** (SMP, LOOP, SNAP, KIT, XY, FX,
+  SIREN, DRUMS, MIX, PATCH, OPTIONS, FINE, CABLES, LINK, SEQ+… + barre ZULUTEK + grande
+  valeur du panneau pop). **RÈGLE POUR TOUT PROJET FUTUR ZULU** : toute nouvelle app/écran
+  hérite de cette typo pour ses titres et labels apparents (police pixel 5×9 à
+  empattements, glyphes `TITLE_GLYPHS`) ; seules les micro-lignes d'aide denses (rappels
+  de touches, listes longues) restent en MONOSPACE système pour la place. Les accents sont
+  pliés (É→E), caractère inconnu → '?'.
 ### Icônes des apps : un dessin, des initiales
 
 Chaque app Zulu garde **la même icône** (le remix officiel généré par `tools/make_icon.py`,
