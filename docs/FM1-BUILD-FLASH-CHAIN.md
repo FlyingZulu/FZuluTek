@@ -84,7 +84,7 @@ python3 terceros/fm1-base/tools/fm1_install.py app/build/atek303.fwsc --yes
 OTA en 2 étapes (le firmware tournant démarre le loader, le loader écrit la flash, reprise
 sur coupure) ; la FM-1 demande confirmation à l'écran. `--classic` force l'ancien protocole.
 
-## 7. Bloquant actuel : le fit SRAM de la série de patches
+## 7. ~~Bloquant actuel~~ **RÉSOLU par le patch 0020** : le fit SRAM de la série de patches
 
 Avec les patches 0001..0018 appliqués, le build firmware **compile et link sans erreur**
 (0 symbole manquant — patch 0018) mais **ne tient pas en SRAM** :
@@ -119,9 +119,28 @@ Pistes pour le régime (≥ 83 Ko, décision équipe A) : généraliser le mode 
 
 ## 8. Ordre recommandé avant le premier flash réel
 
-1. `git apply` 0001..0018 sur clone neuf de `8934f53` → build host OK → tests host sim
-   (7/9 scénarios OK ; `options`/`presets` = régressions connues, voir PR #33).
-2. Build firmware `.fwsc` (quand le fit SRAM sera réglé) → `fm1-emu` avec script de touches →
-   WAV non muet, pas de NaN.
-3. Sur le FM-1 : `--info`, backup AT64 + dump flash complet, puis `fm1_install.py`,
-   puis re-vérifier l'identité et rejouer les scénarios clés.
+**Étapes 1 et 2 VÉRIFIÉES en sandbox le 2026-11-21 (session VibeCode, branche `vibe/fm1-jieli-emu-verify-c75184`) :**
+
+1. ✅ `git apply` 0001..0022 dans l'ordre sur clone neuf de `8934f53` : propre de bout en bout.
+   Build host OK (`build.py app --host`) → **10/10 scénarios sim `atek303/app/tests/*.txt` passent
+   (basic, clkofs, clock, controls, editor, fx, mix, options, presets, steps64 : 237 assertions « ok »,
+   0 FAIL)**.
+2. ✅ Build firmware `.fwsc` toolchain JieLi pinnée (`toolchain.lock`, sha256 vérifié) + SDK AC79
+   miroir `amitv87/fw-AC79_AIoT_SDK` @ `d179b448` (3 fichiers, sha256 vérifiés) :
+   **`atek303.fwsc` 616 059 o, identité `FM-1_33000`, SRAM 438 092/475 136 o (37 044 o libres)**.
+   Patches jumeaux `patches/fm1-base/` + `patches/felucca-bsp/` appliqués et **validés au build
+   JieLi** (`uac_in_peek` implémenté dans `bsp/chip/usb.c`, hook `APP_USB_IN` dans
+   `device/uac_mix.h`) : même `.fwsc` buildé avec les deux (image 224 060 o, +256 o). fm1-emu
+   (cargo `-p fm1-emu`) sur ce `.fwsc` : **12 scénarios scriptés rc=0**, WAV 44,1 kHz stéréo
+   non muet (RMS ~3 700-4 700, 0-3 échantillons clippés sur transitoires), LCD 240×240 actif
+   (22-55 frames selon scénario), pages rendues : boot « ATEK303 », **LOOP PAGE 12** (REC+PLAY),
+   **MACRO PAGE 13** (REC+SEQ), **FINE PAGE 14** (REC+EDIT, bancs OSC + K1..K4),
+   **MIX PAGE 15** (REC+SAVE, tranches VOICE/DRUMS/LOOP/SIREN/MASTER), **OPTIONS** (tap GLO),
+   cycle de pages via encodeur SELECT. Commandes types : `fm1-emu --fwsc atek303.fwsc --ms 6000
+   --keys "0-200:PLAY,1000-1500:REC,1100-1300:PLAY" --snap 1800,3000 --wav out.wav`
+   (appui maintenu = `T-T2:nom`, encodeur = `T:SELECT:+n` / `T:enc2:+n`, MIDI = `T:midi:HEX`).
+   Note sandbox : `X0X_FONTSET=terminus` (pas de FriBiDi pour Pillow/raqm ici ; la fonte n'affecte
+   que le rendu, pas les tests).
+3. ⏳ **Reste (FM-1 physique, Flying Zulu)** : `--info`, backup AT64 + dump flash complet,
+   puis `fm1_install.py app/build/atek303.fwsc --yes`, puis re-vérifier l'identité et rejouer
+   les scénarios clés sur l'appareil ; puis test ZPRE ZTP2 APK↔FM-1 de bout en bout.
