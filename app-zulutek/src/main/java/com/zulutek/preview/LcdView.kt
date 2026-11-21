@@ -1,3 +1,4 @@
+successfully downloaded text file (SHA: b9d5ef3603a672bd99bdf90b8feabebafafa0223)
 successfully downloaded text file (SHA: 3885c063a950f2745b090a286570e70bc3f39576)
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
@@ -362,26 +363,83 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         Color.rgb(255, 60, 60), Color.rgb(255, 160, 40), Color.rgb(255, 238, 0),
         Color.rgb(60, 220, 90), Color.rgb(60, 160, 255), Color.rgb(150, 80, 255))
 
-    /* the Nyan Cat ghetto blaster crossing the FM-1's inside, rainbow trail behind */
+    /* the Ghetto Blaster x Nyan Cat remix (same art as the boot image of tools/make_icon.py):
+     * pop-tart body with crust + sprinkles, cat face on the cassette deck, ears, handle,
+     * antenna, speaker cones, starred rainbow trail. One single design everywhere. */
     private fun drawCat(c: Canvas, x: Float, y: Float, scale: Float) {
-        val body = Paint().apply { color = Color.rgb(255, 150, 190); style = Paint.Style.FILL }
-        val head = Paint().apply { color = Color.rgb(190, 195, 205); style = Paint.Style.FILL }
+        val s = scale
+        val pink = Paint().apply { color = Color.rgb(255, 150, 190); style = Paint.Style.FILL }
+        val crust = Paint().apply { color = Color.rgb(255, 100, 155); style = Paint.Style.FILL }
+        val dark = Paint().apply { color = Color.rgb(36, 37, 48); style = Paint.Style.FILL }
+        val white = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
+        val cheek = Paint().apply { color = Color.rgb(255, 120, 160); style = Paint.Style.FILL }
+        val sprinkle = Paint().apply { style = Paint.Style.FILL }
+        val spr = intArrayOf(Color.WHITE, Color.rgb(255, 238, 0), Color.rgb(0, 255, 224),
+            Color.rgb(255, 60, 60), Color.rgb(60, 160, 255), Color.rgb(170, 60, 255))
         // traînée arc-en-ciel
         for (k in RAINBOW.indices) {
             frame.color = RAINBOW[k]
-            frame.strokeWidth = 2.2f * scale
-            val yy = y + (k - 2.5f) * 3.2f * scale
-            c.drawLine(x - 8f * scale, yy, x - 52f * scale, yy, frame)
+            frame.strokeWidth = 2.2f * s
+            val yy = y + (k - 2.5f) * 3.2f * s
+            c.drawLine(x - 8f * s, yy, x - 52f * s, yy, frame)
         }
-        // corps (pop-tart) + tête + oreilles + yeux
-        c.drawRect(x - 10f * scale, y - 8f * scale, x + 14f * scale, y + 8f * scale, body)
-        c.drawCircle(x + 18f * scale, y, 9f * scale, head)
-        c.drawRect(x + 12f * scale, y - 15f * scale, x + 16f * scale, y - 8f * scale, head)
-        c.drawRect(x + 20f * scale, y - 15f * scale, x + 24f * scale, y - 8f * scale, head)
-        mono.color = Color.BLACK
-        mono.textSize = 6f * scale
-        c.drawText("o", x + 15f * scale, y + 2f * scale, mono)
-        c.drawText("o", x + 21f * scale, y + 2f * scale, mono)
+        // étoiles blanches dans la traînée
+        frame.color = Color.WHITE
+        frame.strokeWidth = 1.2f * s
+        for (st in arrayOf(floatArrayOf(-40f, -13f), floatArrayOf(-27f, 11f),
+                           floatArrayOf(-46f, 4f), floatArrayOf(-33f, -18f))) {
+            val dx = x + st[0] * s; val dy = y + st[1] * s
+            c.drawLine(dx - 2.5f * s, dy, dx + 2.5f * s, dy, frame)
+            c.drawLine(dx, dy - 2.5f * s, dx, dy + 2.5f * s, frame)
+        }
+        // antenne (boule rose)
+        c.drawLine(x + 19f * s, y - 8f * s, x + 27f * s, y - 16f * s, frame)
+        c.drawCircle(x + 27.5f * s, y - 16.5f * s, 1.5f * s, crust)
+        // poignée entre les oreilles
+        c.drawRect(x - 3.5f * s, y - 12f * s, x + 4.5f * s, y - 10.6f * s, crust)
+        c.drawRect(x - 3.5f * s, y - 9.4f * s, x + 4.5f * s, y - 8.6f * s, crust)
+        // oreilles
+        val p = android.graphics.Path()
+        p.moveTo(x - 11f * s, y - 8.6f * s); p.lineTo(x - 13f * s, y - 14f * s); p.lineTo(x - 5f * s, y - 8.6f * s); p.close()
+        c.drawPath(p, crust)
+        p.reset()
+        p.moveTo(x + 3f * s, y - 8.6f * s); p.lineTo(x + 5f * s, y - 14f * s); p.lineTo(x + 11f * s, y - 8.6f * s); p.close()
+        c.drawPath(p, crust)
+        // corps pop-tart : croûte puis intérieur rose
+        c.drawRect(x - 12f * s, y - 8.6f * s, x + 13f * s, y + 9f * s, crust)
+        c.drawRect(x - 10.6f * s, y - 7.2f * s, x + 11.6f * s, y + 7.6f * s, pink)
+        // sprinkles multicolores (hors platine/HP)
+        val spxy = arrayOf(-9.8f to -5.6f, -6.6f to -6.0f, 8.6f to -5.4f,
+                           10.4f to -4.8f, 10.6f to -1.2f, 9.9f to 1.2f)
+        for (i in spxy.indices) {
+            sprinkle.color = spr[i % spr.size]
+            c.drawCircle(x + spxy[i].first * s, y + spxy[i].second * s, 0.8f * s, sprinkle)
+        }
+        // platine cassette = visage du chat
+        c.drawRect(x - 5f * s, y - 4.4f * s, x + 7f * s, y + 3.6f * s, dark)
+        c.drawCircle(x - 1.8f * s, y - 1.6f * s, 1.6f * s, white)
+        c.drawCircle(x + 3.8f * s, y - 1.6f * s, 1.6f * s, white)
+        c.drawCircle(x - 1.4f * s, y - 1.2f * s, 0.7f * s, dark)
+        c.drawCircle(x + 4.2f * s, y - 1.2f * s, 0.7f * s, dark)
+        c.drawCircle(x - 3.7f * s, y + 1f * s, 1.1f * s, cheek)
+        c.drawCircle(x + 5.7f * s, y + 1f * s, 1.1f * s, cheek)
+        p.reset()
+        p.moveTo(x - 1f * s, y + 1.5f * s); p.lineTo(x + 3f * s, y + 1.5f * s); p.lineTo(x + 1f * s, y + 2.7f * s); p.close()
+        c.drawPath(p, white)
+        // moustaches
+        frame.color = Color.WHITE
+        frame.strokeWidth = 0.8f * s
+        c.drawLine(x - 8.2f * s, y - 1.1f * s, x - 5.6f * s, y - 1.6f * s, frame)
+        c.drawLine(x - 8.2f * s, y + 0.9f * s, x - 5.6f * s, y + 0.6f * s, frame)
+        c.drawLine(x + 10.6f * s, y - 1.1f * s, x + 8f * s, y - 1.6f * s, frame)
+        c.drawLine(x + 10.6f * s, y + 0.9f * s, x + 8f * s, y + 0.6f * s, frame)
+        // haut-parleurs (cônes) en bas du corps
+        for (hx in floatArrayOf(-7.6f, 8.6f)) {
+            c.drawCircle(x + hx * s, y + 5.4f * s, 2.5f * s, dark)
+            c.drawCircle(x + hx * s, y + 5.4f * s, 1.5f * s, crust)
+            c.drawCircle(x + hx * s, y + 5.4f * s, 0.6f * s, dark)
+        }
+        frame.strokeWidth = 1f
     }
 
     private fun text(c: Canvas, x: Float, y: Float, s: String, color: Int, size: Float) {
