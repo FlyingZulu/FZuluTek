@@ -61,6 +61,8 @@ void ztek_loop_set_sp(ztek_t *z, int slot, int idx, float v);
 int  ztek_loop_slot_on(const ztek_t *z, int slot);
 int  ztek_loop_slot_rec(const ztek_t *z, int slot);
 float ztek_loop_get_sp(const ztek_t *z, int slot, int idx);   /* ML_SP_* */
+void ztek_loop_set_oneshot(ztek_t *z, int on);                 /* one-shot : fin au wrap, notes relevées (liaison APK/FM-1) */
+int  ztek_loop_get_oneshot(const ztek_t *z);
 /* resample (reloop) : enregistre le bus monitoré dans un slot en ring audio (µ-law 8 bits) */
 void ztek_loop_rs_start(ztek_t *z, int dst, uint16_t monmask, int fmt, int khz);
 void ztek_loop_rs_stop(ztek_t *z);
@@ -341,6 +343,8 @@ void ztek_drum_swing(ztek_t *z, float s);               /* 0..0.5 */
 void ztek_drum_level(ztek_t *z, int pad, float lvl);
 void ztek_drum_master(ztek_t *z, float m);
 int  ztek_drum_step(const ztek_t *z);
+void ztek_drum_set_oneshot(ztek_t *z, int on);                /* one-shot : le seq s'arrête au dernier step relevé (liaison APK/FM-1) */
+int  ztek_drum_get_oneshot(const ztek_t *z);
 /* choke des séquenceurs (style Koala, mode leader/hybride ou normal) */
 void ztek_drum_set_choke(ztek_t *z, int pad, int grp);   /* grp 0..6 ; 1er assigné = master */
 int  ztek_drum_get_choke(const ztek_t *z, int pad);
@@ -394,3 +398,4 @@ int   ztek_fxblock_used(const ztek_t *z, int blk);
 #ifdef __cplusplus
 }
 #endif
+
