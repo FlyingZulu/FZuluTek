@@ -1,3 +1,4 @@
+successfully downloaded text file (SHA: aff79996158c72faffe2dd0aad11c093c89c1cdc)
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
  *
@@ -52,6 +53,30 @@ class MainActivity : Activity(), SurfaceListener {
         st.hintUntil = System.currentTimeMillis() + 1600
         st.hintMsg = msg
         lcd.invalidate()
+    }
+
+    /* panneau pop d'un paramètre touché (charte UI) : remplit popVal/popState affichés par
+     * LcdView — valeur en grand au centre, ou la cible quand l'encodeur sert à la navigation
+     * (SLOT n / OPT x / TAB x / BNK). État : S = SNAP armé, L = page LFO, E = page ENV. */
+    private fun popPanelInfo(i: Int, v: Float) {
+        if (i !in 0..6) { st.popVal = ""; return }
+        st.popVal = when {
+            (st.page == 0 || st.page == 1 || st.page == 2 || st.page == 3 || st.page == 15) && i == 0 ->
+                "SLOT ${st.selSlot + 1}"
+            st.page == 16 && i == 0 ->
+                "OPT " + arrayOf("ECO", "LABELS", "VUE", "LUXE")[st.optRow.coerceIn(0, 3)]
+            st.page == 17 && i == 0 -> "LIGNE ${st.linkSel + 1}"
+            st.page == 17 && i == 1 ->
+                "TAB " + arrayOf("FM-1", "LOCAL", "PARAMS", "PRESETS")[st.linkTab.coerceIn(0, 3)]
+            st.page == 18 && i == 0 ->
+                "BNK ${st.fineBank + 1}/${ZtekAudio.FINE_BANKS.size}"
+            else -> "${(v * 100).toInt()}"
+        }
+        st.popState = buildString {
+            if (st.snapArm) append('S')
+            if (st.page == 7) append('L')
+            if (st.page == 8) append('E')
+        }
     }
     private fun srcNamesUpTo(maxExclusive: Int): String {
         val sb = StringBuilder()
@@ -821,6 +846,7 @@ class MainActivity : Activity(), SurfaceListener {
     }
     override fun onEncoder(i: Int, v: Float) {
         st.pop(i)
+        popPanelInfo(i, v)
         val dv = v - encPrev[i]
         encPrev[i] = v
         if (st.page in 6..10) {
@@ -1240,8 +1266,8 @@ class MainActivity : Activity(), SurfaceListener {
         st.snapArm = true
         st.snapArmUntil = now + 5000
         st.flashUntil = now + 120
-        st.camUntil = now + 1500
-        st.camShrinkAt = 0
+        st.camShrinkAt = now + 1200     // plein cadre 1,2 s puis rétrécissement 400 ms (charte)
+        st.camUntil = st.camShrinkAt + 400
         st.keysLockUntil = now + 1500
         hint("SNAP: PAD?")
         lcd.invalidate(); surface.invalidate()
@@ -1253,7 +1279,8 @@ class MainActivity : Activity(), SurfaceListener {
                 st.loopRecArm = -2
                 st.loopRecWinUntil = System.currentTimeMillis() + 2000
                 st.flashUntil = System.currentTimeMillis() + 120
-                st.camUntil = System.currentTimeMillis() + 1500
+                st.camShrinkAt = System.currentTimeMillis() + 1200
+                st.camUntil = st.camShrinkAt + 400
                 hint("LOOP REC: PAD?")
             }
             -2 -> hint("LOOP REC: PAD?")
@@ -1726,11 +1753,11 @@ class MainActivity : Activity(), SurfaceListener {
             else { ZtekAudio.punch(0, 0, 0f, 0f, 0f); ZtekAudio.punchTail(0.3f) }
             lcd.invalidate(); surface.invalidate(); return
         }
-        if (st.snapArm && down && !longPress) {   // capture SNAP armée (REC+PLAY) : tap du pad = destination, icône rétrécit en 0,8 s
+        if (st.snapArm && down && !longPress) {   // capture SNAP armée (REC+PLAY) : tap du pad = destination, l'icône rétrécit (400 ms, charte)
             ZtekAudio.snapStore(slot); st.snapFilled[slot] = true
             st.snapArm = false
             val n = System.currentTimeMillis()
-            st.camShrinkAt = n + 800; st.camUntil = n + 800
+            st.camShrinkAt = n; st.camUntil = n + 400   // tap du pad : rétrécit tout de suite (400 ms, charte)
             hint("SNAP ${slot + 1}")
             lcd.invalidate(); surface.invalidate()
             return
