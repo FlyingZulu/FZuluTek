@@ -20,7 +20,8 @@ Deux livrables, un même moteur :
 notes/clavier ──► voix (AT_ENGINE: 0 ATEK303 · 1 PLUK · 2 FM · 3 SUB · 4 8BIT)
                 ──► FX: DRIVE (OFF/OVERDRIVE/RAT/FUZZ/MOJO[soft-clip airwindows + BIT/HOLD])
                       → MOD (CHORUS/FLANGER) → DELAY BBD libre 10..600 ms
-                      → REVERB Black Hole (decay 0.995, mix en smoothstep)
+                      → REVERB Freeverb 0024 (combs/allpasses, decay max 0.995, mix en smoothstep)
+                      (l'APK garde la plaque Black Hole en attendant le portage du 0024)
                       → anneau PoW! 8192 éch. (15 types punch-in, en fin de chaîne)
                 ──► sortie (limiteur doux)
 ```
@@ -243,10 +244,10 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
 
 - **OPTIONS > ECO = OFF/ON** (« MODE ECO (BATTERIE) », comme Zulu v0.33) — mode éco DSP/RAM :
   runtime (flag `ztek_set_eco`, lu dans le render) : entrée crush 96 + loudness `tanh` (style Zulu),
-  BBD **mono**, swirl de la Black Hole off, pre-delay max /2, decay réverb ≤ **0.70** (0.89 sinon),
+  BBD **mono**, swirl off (APK ; FM-1 : le Freeverb du 0024 n'a pas de swirl), pre-delay max /2, decay réverb ≤ **0.70** (0.89 sinon),
   polyphonie drums **8 → 5**, resample loop forcé **µ-law + paliers lo-fi (fmt 2), ring 32 kHz, capa /2**,
   LCD throttlé (~1 s) + animations figées côté APK. Build éco firmware (defines, `patches/README.md`) :
-  `-DFX_RV_Q` (lignes plaque en 16 bits, −73 Ko), `DLY_N`/2 (BBD 300 ms max, −51 Ko), `PN_N`/2, `ML_RS_MAX`/2
+  `-DFX_RV_Q` (lignes de reverb en 16 bits, −73 Ko à l'époque de la plaque ; Freeverb depuis 0024 : ~59 Ko), `DLY_N`/2 (BBD 300 ms max, −51 Ko), `PN_N`/2, `ML_RS_MAX`/2
   → ≈ **−220 Ko** de pool sur l'AC791N (~430 Ko RAM). Persistance : SharedPreferences APK / OBJ_OPTIONS FM-1.
 - **LDR par tranche** (page MIX 11, Shift+OPx) — remplace l'ancien OPTIONS > CHOKE LDR : ON = **LEADER** (hybride),
   OFF = **NORMAL** (Koala). Choke des séquenceurs (MONO/POLY, noires 9e/10e) inchangé, voir `docs/ZULUTEK-LOOP.md`.
@@ -277,7 +278,7 @@ vol ↔ `siren_lvl` (param ZTF SIREN MIX), mute ↔ siren off, le routage audio 
 **post-fader** : PoW! (P), Loop (L — la tranche LOOP n'en a pas), 2 slots libres AUX1/AUX2
 (assignables dans la baie, module AUX). Master : **BUS** (gain, SEL=tranche 4) + départs aux
 libres master AUX1/AUX2 (vides par défaut, baie) + **VU**. Chaîne FX partagée (1×) sur le bus
-master, Black Hole bridée. Pas d'inserts delay/reverb dans le mixeur (pages instruments).
+master, reverb bridée (Freeverb FM-1 depuis le 0024 / Black Hole APK). Pas d'inserts delay/reverb dans le mixeur (pages instruments).
 Contrôles page MIX : SEL=tranche/master, K1=vol (bus si master), K2=mut, K3=filtre LP/·/HP,
 K4=cutoff, PRE=aux PoW!, ALG=aux Loop. Moteur : `ztek_mix_set/get_strip` (ZTEK_MIX_*), tranches
 préservées par snapshots/kits/undo. **Migration** : magic preset `ZTP1` → `ZTP2`, remap
