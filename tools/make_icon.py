@@ -219,8 +219,64 @@ for name, s in [("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xx
     write_png(os.path.join(ROOT, "mipmap-" + name, "ic_launcher.png"), s, s, px)
     print("wrote mipmap-%s/ic_launcher.png (%d px)" % (name, s))
 
+
+# --- TITRE D'INTRO (splash) : pixel art condensé à empattements, façon affiche Indiana
+# Jones remixée Zulu Cat : lettres JAUNE FLUO rgb(255,238,0) à liseré noir,
+# ombre TURQUOISE rgb(0,255,224) en bas-droite, arches douces vers le bas
+# (les lettres des extrémités descendent), sous le boombox. Voir docs/ZULUTEK-UI-STYLE.md.
+TITLE = "ZULUTEK"
+TITLE_GLYPHS = {
+    "Z": ("#####", "....#", "...#.", "..#..", ".#...", "#....", "#....", "#....", "#####"),
+    "U": ("#...#", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."),
+    "L": ("#....", "#....", "#....", "#....", "#....", "#....", "#....", "#....", "#####"),
+    "T": (".####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#..", "..#..", ".####"),
+    "E": ("#####", "#....", "#....", "####.", "#....", "#....", "####.", "#....", "#####"),
+    "K": ("#..##", "#.#..", "##...", "##...", "#.#..", "#..#.", "#..#.", "#..#.", "#..#."),
+    "O": (".###.", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."),
+    "N": ("#...#", "##..#", "##..#", "#.#.#", "#.#.#", "#..##", "#..##", "#...#", "#...#"),
+    "R": ("####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#", "#...#", "#...#"),
+}
+
+def draw_title(cv, name):
+    """Titre façon affiche Indiana Jones remixé chat : jaune fluo, liseré noir,
+    ombre turquoise, arches vers le bas. Pixel art 5x9, centré."""
+    U = (255, 238, 0, 255)      # jaune fluo (LU)
+    Tq = (0, 255, 224, 255)     # turquoise (complémentaire)
+    u = cv.s / 240.0
+    n = len(name)
+    units = n * 5 + (n - 1)
+    px = min(3.4 * u, 224.0 * u / units)
+    base_y = 204.0 * u
+    cx = (240.0 * u - units * px) / 2.0
+    c = (n - 1) / 2.0
+    for i, ch in enumerate(name):
+        g = TITLE_GLYPHS[ch]
+        x = cx + i * 6 * px
+        dip = 5.0 * u * ((i - c) / max(c, 1.0)) ** 2
+        y = base_y + dip
+        # ombre turquoise (bas-droite), liseré noir, remplissage
+        for off in ((2.4 * u, 2.4 * u, Tq),):
+            for ry in range(9):
+                for rx in range(5):
+                    if g[ry][rx] == "#":
+                        cv.rect(x + rx * px + off[0], y + ry * px + off[1],
+                                x + (rx + 1) * px + off[0] + 1, y + (ry + 1) * px + off[1] + 1, off[2])
+        o = 1.4 * u
+        for dx, dy in ((-o, 0), (o, 0), (0, -o), (0, o), (-o, -o), (o, -o), (-o, o), (o, o)):
+            for ry in range(9):
+                for rx in range(5):
+                    if g[ry][rx] == "#":
+                        cv.rect(x + rx * px + dx, y + ry * px + dy,
+                                x + (rx + 1) * px + dx + 1, y + (ry + 1) * px + dy + 1, DARK)
+        for ry in range(9):
+            for rx in range(5):
+                if g[ry][rx] == "#":
+                    cv.rect(x + rx * px, y + ry * px,
+                            x + (rx + 1) * px, y + (ry + 1) * px, U)
+
 splash = Px(240)
 draw(splash, bg=False)
+draw_title(splash, TITLE)
 px = splash.nearest(480)
 write_png(os.path.join(ROOT, "drawable-nodpi", "splash_boombox.png"), 480, 480, px)
 print("wrote drawable-nodpi/splash_boombox.png (480 px, art 240x240)")
