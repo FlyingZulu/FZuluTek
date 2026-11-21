@@ -20,6 +20,8 @@ La sirène est traitée comme un module du rack à part entière : tranche de mi
 
 ## Côté FM-1 (équipe A) — patch 0011 à écrire directement en 4 tranches
 
+(implémenté : PR #37 `vibe/fm1-patch-0019-0020-mix-sram-7f3a21` — patch **0019** page MIX 15 (4 tranches VOICE/DRUMS/LOOP/SIREN + master via `ztek_mix.c/h`, vol/mute persistés dans OBJ_OPTIONS `OP_MIX_*`, SIREN = `zsir` `par[3]`), patch **0020** régime SRAM (firmware tient : 438 092/475 136 o, 37 Ko libres, `.fwsc` 616 059 o), patch **0021** blobs ZPRE `'ZTP2'` : acceptés en import et exportés avec VOL/MUT des 4 tranches — miroir du magic `ZTP2` de l'APK, PR #36)
+
 - `enum { ZLK_STRIP_VOICE = 0, ZLK_STRIP_DRUMS, ZLK_STRIP_LOOP, ZLK_STRIP_SIREN, ZLK_NSTRIP = 4 }`.
 - Tranche SIREN : **K1 = vol → `zsir` `par[3]`** (c'est le param ZTF `P_SIREN_MIX`, groupe SIREN n°4,
   déjà exposé et déjà mirroré côté APK). **Aucun nouveau param ZTF** → aucune rupture du lien.
