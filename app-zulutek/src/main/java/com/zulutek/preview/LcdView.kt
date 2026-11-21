@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-=======
->>>>>>> origin/vibe/fix-download-marker-line1-7f3a21
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
  *
