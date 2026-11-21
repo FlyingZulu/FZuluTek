@@ -220,3 +220,6 @@ porte la charte Zulu, pas le thème menthe de la machine : fond et pièce noirs 
 sérigraphie menthe pâle rgb(159,224,214), bonbons et pills turquoise fluo
 rgb(0,255,224)/rgb(0,166,146) à encre noire, marque « ZULUTEK » rose fluo rgb(255,45,160)
 en bas de façade. Les états (ambre, vert PLAY, chaleur des pills) restent ceux de la charte.
+
+## Zulu Kontrol : widgets
+Les widgets du controleur (boutons carres, pads, knobs) suivent la meme recette bonbon que la facade : ombre portee legere, rrect arrondi avec degrade vertical (accent vers accent assombri), encre sombre candy pour les labels, halo translucide a l'appui. Knob = jupe grise degradee (skirtHi vers skirtLo) + pointeur dans l'accent du widget, balayage -135 a +135 degres. Les pads chauffent (degrade eclairci) pad appuye.
