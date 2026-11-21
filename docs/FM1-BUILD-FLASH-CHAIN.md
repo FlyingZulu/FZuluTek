@@ -97,6 +97,22 @@ Gros postes (mesurés) : `.bss` 223 Ko dont `ztek_drum.o` 113 Ko (`static drum_t
 `unity.o` 50 Ko, `loader.o` 31 Ko, `ztek_loop.o` 28 Ko (`static ml_t ml`) ; `.pool` 346 Ko
 dont `dsp_fx.o` 280 Ko, `unity.o` 74 Ko. Total ~594 Ko.
 
+### Chiffrage par levier (mesuré 2026-11-21, structs compilés en host)
+
+| Levier | RAM gagnée | CPU (ISR audio) | Notes |
+|---|---|---|---|
+| `DR_NPADS` 8→7 | **~9,5 Ko** (1× `dr_voice_t` 96 o + `dr_pad_t` 116 o + `bass_t` 9 304 o) | nul en pratique (les voix muettes sont sautées, `v->t<0 → continue`) | insuffisant seul |
+| `bass_t.ks[2304]` → `ks[1024]` en ECO (Karplus-Strong PLUK, `bass_engines.h:25`) | **~41 Ko** (5,2 Ko/pad × 8) | légère baisse (ring plus court) | meilleur levier drum |
+| Mode ECO poly 8→5 (déjà dans patch 0009, vol de voix `drum_engine.c:262`) | 0 o | **borne le pire cas à 5 voix** | levier CPU, pas RAM |
+| `DR_FM1_ECO` ring delay 16384→8192 (déjà actif via `ztek_drum_fm1.c`) | ~32 Ko | ring 2× plus court | déjà en place |
+| `ML_RS_MAX` 4096→2048 (looper) | ~4 Ko | — | `ztek_loop.c` |
+| `ram_layout="packed"` + `cache_ram_ways=7` | +28 Ko de budget | — | map, pas une coupe |
+| `.pool` `dsp_fx.o` 280 Ko (lignes FX) | à sizabler | — | plus gros poste |
+
+Ordre de grandeur : drum_t non-ECO = 144 148 o (`fx` 67 732 o dont `dly[16384]` 64 Ko ;
+avec ECO `dly[8192]` → ~34 Ko, d'où les 113 Ko mesurés en `.bss`). Total patché ≈ 594 Ko
+(.bss 223 Ko + .pool 346 Ko + ram_text/data) pour ~503 Ko dispo → **régime ≥ 83 Ko**.
+
 Pistes pour le régime (≥ 83 Ko, décision équipe A) : généraliser le mode ECO
 (`DR_FM1_ECO`-style) à tous les moteurs, passer les gros buffers en `.pool`
 (`PLAT_POOL`) ou `.cache_ram`, réduire `ML_RS_MAX` / `DR_NPADS` en mode ECO.
