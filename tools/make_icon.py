@@ -1,8 +1,9 @@
+successfully downloaded text file (SHA: 2f406d10ebd837f5f420c34ea6883caa21384215)
 #!/usr/bin/env python3
 # tools/make_icon.py — génère les visuels de l'APK zuluTek en PIXEL ART fin
 # (style console portable 16 bits type Game Gear, pas le gros pixel Game Boy) :
-# un ghetto blaster façon Nyan Cat (corps pop-tart rose, oreilles de chat, yeux sur la
-# platine cassette, traînée arc-en-ciel derrière).
+# REMIX Ghetto Blaster x Nyan Cat : corps pop-tart rose (croûte + sprinkles), platine
+# cassette devenue visage de chat, oreilles, poignée, antenne, HP, traînée étoilée.
 # - icônes launcher : master 120x120 -> nearest vers mipmap 48..192
 # - splash : master 240x240 -> drawable-nodpi/splash_boombox.png (480 px, fond transparent)
 # Redimensionnement au plus proche voisin : les pixels restent nets.
@@ -76,54 +77,69 @@ DARK = (22, 23, 30, 255)
 GRAY = (200, 204, 214, 255)
 
 def draw(cv, bg=True):
-    # dessin defini en unites 120, mis a l'echelle de la grille reelle
+    # REMIX GHETTO BLASTER x NYAN CAT (drawing in 120 units, scaled to the grid)
+    # le walkman-cat : corps pop-tart rose a croote + sprinkles, platine cassette devenue
+    # visage de chat (yeux, joues roses, sourire, moustaches), oreilles, poignee, antenne,
+    # deux HP, trainee arc-en-ciel etoilee derriere.
     k = cv.s / 120.0
     def X(v):
         return v * k
     if bg:
         cv.rect(0, 0, cv.s, cv.s, (10, 10, 16, 255), r=9 * k)
-    # traînee arc-en-ciel derriere le boombox
-    bh, y0 = 6, 53
+    # trainee arc-en-ciel etoilee derriere le boombox
+    bh, y0 = 6, 54
     for i, c in enumerate(RAINBOW):
-        cv.rect(0, X(y0 + i * bh), X(55), X(y0 + (i + 1) * bh), c)
+        cv.rect(0, X(y0 + i * bh), X(52), X(y0 + (i + 1) * bh), c)
+    for sx, sy in ((8, 40), (16, 84), (26, 32), (34, 92), (44, 46), (12, 66)):
+        cv.line(X(sx - 2), X(sy), X(sx + 2), X(sy), 1 * k, (255, 255, 255, 255))
+        cv.line(X(sx), X(sy - 2), X(sx), X(sy + 2), 1 * k, (255, 255, 255, 255))
     # antenne
-    cv.line(X(99), X(33), X(116), X(11), 2.2 * k, GRAY)
-    cv.circle(X(116), X(11), 2.6 * k, GRAY)
+    cv.line(X(96), X(30), X(114), X(10), 2.2 * k, GRAY)
+    cv.circle(X(114), X(10), 2.6 * k, GRAY)
     # poignee entre les oreilles
-    cv.rect(X(56), X(28), X(72), X(31), PINK_D)
-    cv.rect(X(56), X(36), X(72), X(39), PINK_D)
-    cv.rect(X(56), X(28), X(59), X(39), PINK_D)
-    cv.rect(X(69), X(28), X(72), X(39), PINK_D)
+    cv.rect(X(52), X(26), X(74), X(29), PINK_D)
+    cv.rect(X(52), X(36), X(74), X(39), PINK_D)
+    cv.rect(X(52), X(26), X(55), X(39), PINK_D)
+    cv.rect(X(71), X(26), X(74), X(39), PINK_D)
     # oreilles de chat (contour sombre puis rose)
-    cv.tri(X(42), X(39), X(38), X(21), X(55), X(39), DARK)
-    cv.tri(X(86), X(39), X(73), X(39), X(91), X(21), DARK)
-    cv.tri(X(43.5), X(38), X(40.5), X(24), X(53), X(38), PINK)
-    cv.tri(X(84.5), X(38), X(77), X(38), X(88.5), X(24), PINK)
-    # corps du ghetto blaster (contour sombre 2 px, puis pop-tart rose)
-    cv.rect(X(29), X(36), X(103), X(102), DARK, r=8 * k)
-    cv.rect(X(31), X(38), X(101), X(100), PINK, r=7 * k)
-    cv.rect(X(31), X(38), X(101), X(46), PINK_D)
-    # haut-parleurs
-    for sx in (50, 82):
-        cv.circle(X(sx), X(73), 16 * k, DARK)
-        cv.circle(X(sx), X(73), 14 * k, (46, 48, 60, 255))
-        cv.circle(X(sx), X(73), 9 * k, DARK)
-        cv.circle(X(sx), X(73), 4 * k, PINK_D)
-    # platine cassette = tete de chat
-    cv.rect(X(58), X(48), X(74), X(88), DARK, r=3 * k)
-    cv.rect(X(60), X(50), X(72), X(86), (36, 37, 48, 255), r=2 * k)
-    cv.circle(X(64), X(60), 2.2 * k, (255, 255, 255, 255))
-    cv.circle(X(69), X(60), 2.2 * k, (255, 255, 255, 255))
-    cv.circle(X(64.4), X(60.4), 1 * k, DARK)
-    cv.circle(X(69.4), X(60.4), 1 * k, DARK)
-    cv.tri(X(65.5), X(66), X(67.5), X(66), X(66.5), X(68.5), (255, 90, 140, 255))
-    for sgn in (-1, 1):
-        cv.line(X(66.5), X(67), X(66.5 + sgn * 7), X(65.5 + sgn * 2), 1 * k, (255, 255, 255, 255))
-        cv.line(X(66.5), X(68.5), X(66.5 + sgn * 7), X(69 + sgn * 1.5), 1 * k, (255, 255, 255, 255))
-    # boutons sous les HP
-    cv.rect(X(72), X(91), X(82), X(95), (46, 48, 60, 255), r=1.5 * k)
-    cv.circle(X(45), X(93), 1.6 * k, PINK_D)
-    cv.circle(X(50), X(93), 1.6 * k, PINK_D)
+    cv.tri(X(40), X(38), X(36), X(19), X(54), X(38), DARK)
+    cv.tri(X(88), X(38), X(74), X(38), X(92), X(19), DARK)
+    cv.tri(X(42), X(37), X(39), X(23), X(52), X(37), PINK)
+    cv.tri(X(86), X(37), X(77), X(37), X(89), X(23), PINK)
+    # corps du ghetto blaster : contour sombre, croote pop-tart, interieur rose
+    cv.rect(X(26), X(36), X(106), X(104), DARK, r=8 * k)
+    cv.rect(X(28.5), X(38.5), X(103.5), X(101.5), PINK_D)
+    cv.rect(X(30), X(40), X(102), X(100), PINK, r=6 * k)
+    # sprinkles sur la pop-tart (hors platine/HP)
+    SPR = [(255, 255, 255, 255), (255, 238, 0, 255), (0, 255, 224, 255),
+           (255, 48, 48, 255), (0, 160, 255, 255), (170, 60, 255, 255)]
+    for si, (sx, sy) in enumerate(((34, 44), (40, 42), (58, 43), (70, 43), (84, 44), (95, 42), (102, 74), (103, 88))):
+        cv.circle(X(sx), X(sy), 1.3 * k, SPR[si % 6])
+    # platine cassette = visage du chat (grande fenetre centrale)
+    cv.rect(X(46), X(46), X(94), X(77), DARK, r=4 * k)
+    cv.rect(X(48), X(48), X(92), X(75), (36, 37, 48, 255), r=3 * k)
+    cv.circle(X(59), X(58), 2.6 * k, (255, 255, 255, 255))       # oeil gauche
+    cv.circle(X(81), X(58), 2.6 * k, (255, 255, 255, 255))       # oeil droit
+    cv.circle(X(59.6), X(58.6), 1.1 * k, DARK)
+    cv.circle(X(81.6), X(58.6), 1.1 * k, DARK)
+    cv.circle(X(54), X(66), 2.2 * k, (255, 120, 160, 255))       # joue rose
+    cv.circle(X(86), X(66), 2.2 * k, (255, 120, 160, 255))
+    cv.tri(X(58), X(66), X(70), X(66), X(64), X(71), (255, 255, 255, 255))   # sourire
+    cv.tri(X(70), X(66), X(82), X(66), X(76), X(71), (255, 255, 255, 255))
+    cv.line(X(49), X(55), X(57), X(56), 1 * k, (255, 255, 255, 255))          # moustaches
+    cv.line(X(49), X(61), X(57), X(60), 1 * k, (255, 255, 255, 255))
+    cv.line(X(91), X(55), X(83), X(56), 1 * k, (255, 255, 255, 255))
+    cv.line(X(91), X(61), X(83), X(60), 1 * k, (255, 255, 255, 255))
+    # haut-parleurs (cones)
+    for cx in (40, 92):
+        cv.circle(X(cx), X(89), 9.5 * k, DARK)
+        cv.circle(X(cx), X(89), 8 * k, (46, 48, 60, 255))
+        cv.circle(X(cx), X(89), 4.5 * k, DARK)
+        cv.circle(X(cx), X(89), 2 * k, PINK_D)
+    # bouton + LED sous la platine
+    cv.rect(X(62), X(84), X(70), X(87), (46, 48, 60, 255), r=1 * k)
+    cv.circle(X(64.5), X(92), 1.4 * k, (255, 60, 60, 255))
+    cv.circle(X(68.5), X(92), 1.4 * k, (255, 238, 0, 255))
 
 master = Px(240)   # master fin (style Game Gear) ; les mipmap sont un nearest depuis 240
 draw(master, bg=True)
