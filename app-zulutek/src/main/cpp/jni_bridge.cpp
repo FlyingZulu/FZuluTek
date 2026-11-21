@@ -330,6 +330,24 @@ ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumStep(JNIEnv *
     return ztek_drum_step(zte(NULL, h));
 }
 
+/* ---- one-shot drums + looper (patch liaison 0023 APK/FM-1 : SHIFT+SEQ) ---- */
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumSetOneshot(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_drum_set_oneshot(zte(NULL, h), on);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumGetOneshot(JNIEnv *, jclass, jlong h)
+{
+    return ztek_drum_get_oneshot(zte(NULL, h));
+}
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopSetOneshot(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_loop_set_oneshot(zte(NULL, h), on);
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeLoopGetOneshot(JNIEnv *, jclass, jlong h)
+{
+    return ztek_loop_get_oneshot(zte(NULL, h));
+}
+
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumSetChoke(JNIEnv *, jclass, jlong h, jint pad, jint grp)
 {
     ztek_drum_set_choke(zte(NULL, h), pad, grp);
