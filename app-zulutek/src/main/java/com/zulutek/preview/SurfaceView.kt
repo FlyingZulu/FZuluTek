@@ -1,3 +1,4 @@
+successfully downloaded text file (SHA: a6f5b111641c244cd99881c1fdf7c4435e804b5f)
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (C) 2026 FlyingZulu
  *
@@ -158,9 +159,21 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                          (st.slotRec.getOrElse(st.selSlot) { false } && i == 11) ||
                          (i == 5 && st.sirenMode && (System.currentTimeMillis() / 260) % 2 == 0L) ||
                          ((i == 5 || i == 11) && st.loopRecArm >= 0 && (System.currentTimeMillis() / 260) % 2 == 0L)
-            frame.color = if (active) LcdView.REC_RED else LcdView.DIM
+            // rappel lock clavier MIDI (charte) : HOME clignote une fois (260 ms) toutes les 20 s sans jouer
+            val nowMs = System.currentTimeMillis()
+            val homeNudge = i == 6 && st.lastKeyUse > 0 &&
+                           nowMs - st.lastKeyUse > 20000 && (nowMs % 20000) < 260
+            frame.color = when {
+                active -> LcdView.REC_RED
+                homeNudge -> LcdView.FLUO_TURQ
+                else -> LcdView.DIM
+            }
             c.drawRect(x0, y0, x0 + bw - 6f, y0 + btnH(), frame)
-            mono.color = if (active) LcdView.INK else LcdView.DIM
+            mono.color = when {
+                active -> LcdView.INK
+                homeNudge -> LcdView.FLUO_TURQ
+                else -> LcdView.DIM
+            }
             mono.textSize = 9f
             val labels = if (st.labelsZulu) ZULU_LABELS else BTN_LABELS
             c.drawText(labels[i], x0 + 4f, y0 + btnH() - 8f, mono)
@@ -209,10 +222,12 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                     3 -> {
                         handler.postDelayed(longRunnable, 500)
                         longPosted = true
+                        st.lastKeyUse = System.currentTimeMillis()   // rappel HOME 20 s (charte)
                         listener.onWhiteKey(i, true, false)
                     }
                     4 -> {
                         val note = BLACK_NOTES[i]
+                        st.lastKeyUse = System.currentTimeMillis()   // rappel HOME 20 s (charte)
                         listener.onBlackKey(note, true)
                     }
                 }
