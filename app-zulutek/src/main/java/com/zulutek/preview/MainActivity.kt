@@ -27,7 +27,7 @@ class MainActivity : Activity(), SurfaceListener {
     private val st = LcdState()
     private lateinit var lcd: LcdView
     private lateinit var surface: SurfaceView
-    private lateinit var rootLayout: LinearLayout
+    private lateinit var rootLayout: android.widget.FrameLayout
 
     private var root = 45
     private var scale = 0
@@ -351,15 +351,21 @@ class MainActivity : Activity(), SurfaceListener {
         lcd = LcdView(this, st)
         surface = SurfaceView(this, st, this)
 
-        rootLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        /* Le LCD vit dans l'emplacement dedie de la facade : SurfaceView dessine le bezel
+         * (352,24,516x516 ; ecran utile 370,42,480x480 en coordonnees panneau 1280x820).
+         * Facade plein ecran, LCD pose dessus, cale apres chaque layout via placeLcdInBezel(). */
+        rootLayout = android.widget.FrameLayout(this).apply {
             setBackgroundColor(LcdView.BG)
         }
-        rootLayout.addView(lcd, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        rootLayout.addView(surface, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        rootLayout.addView(surface, android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT))
+        rootLayout.addView(lcd, android.widget.FrameLayout.LayoutParams(480, 480))
         setContentView(rootLayout)
+        surface.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            if (surface.visibility == android.view.View.VISIBLE) placeLcdInBezel()
+        }
+        surface.post { placeLcdInBezel() }
         updateViewCompact()   // OPTIONS > VUE (vue compacte initiale, views prêtes)
         handler.postDelayed(tick, 250)
 
@@ -524,11 +530,15 @@ class MainActivity : Activity(), SurfaceListener {
             st.page = 12
             st.patchView = 0
             surface.visibility = android.view.View.GONE
-            (surface.layoutParams as LinearLayout.LayoutParams).weight = 0f
+            val lp = lcd.layoutParams as android.widget.FrameLayout.LayoutParams
+            lp.width = android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            lp.height = android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            lp.leftMargin = 0; lp.topMargin = 0
+            lcd.layoutParams = lp
         } else {
             st.page = 17
             surface.visibility = android.view.View.VISIBLE
-            (surface.layoutParams as LinearLayout.LayoutParams).weight = 1f
+            placeLcdInBezel()
             setEncLabels(encLink)
         }
         lcd.invalidate(); surface.invalidate()
@@ -789,6 +799,22 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- OPTIONS > VUE = PLEIN/CLAV/AUTO (APK only) : AUTO = CLAV si FM-1/ZTF ou peer ZuluLink up (+ pop singe 400 ms)
     private fun linkUpNow() = Fm1Usb.connected || ZuluLink.peersSnapshot().any { !it.lost }
+    /* Calque le LCD sur l'ecran du bezel : memes cotes que SurfaceView (canevas panneau
+     * 1280x820 centre et mis a l'echelle) ; l'ecran utile du bezel est 370,42,480x480. */
+    private fun placeLcdInBezel() {
+        val w = surface.width; val h = surface.height
+        if (w <= 0 || h <= 0) return
+        val sc = minOf(w / 1280f, h / 820f)
+        val ox = (w - 1280f * sc) / 2f
+        val oy = (h - 820f * sc) / 2f
+        val lp = lcd.layoutParams as android.widget.FrameLayout.LayoutParams
+        lp.width = (480f * sc).toInt()
+        lp.height = (480f * sc).toInt()
+        lp.leftMargin = (ox + 370f * sc).toInt()
+        lp.topMargin = (oy + 42f * sc).toInt()
+        lcd.layoutParams = lp
+    }
+
     private fun updateViewCompact() {
         val up = linkUpNow()
         val compact = when (st.viewMode.coerceIn(0, 2)) { 1 -> true; 2 -> up; else -> false }
