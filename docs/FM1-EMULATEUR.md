@@ -30,3 +30,30 @@ fait tourner les firmwares **tels quels** (packages `.fwsc` inchangés) :
 ## Note
 Un firmware qui boot dans l'émulateur boot sur le vrai appareil (les premières frames prennent
 plus de temps). Voir aussi `w0ts/fm1-emulator` / `hdavid/fm1-emulator` (Rust, desktop).
+
+## Test zuluTek lancé en sandbox le 2026-11-21 (branche `vibe/fm1-jieli-emu-verify-c75184`)
+
+Build : `animatek/FM1-Animatek` @ `8934f53` + `git apply` 0001..0022 (propre), `terceros/fm1-emu`
+(`cargo build --release -p fm1-emu`), `.fwsc` buildé toolchain JieLi pinnée (616 059 o,
+`FM-1_33000`, SRAM 37 044 o libres). 12 scénarios headless, tous **rc=0** :
+
+```sh
+fm1-emu --fwsc atek303.fwsc --ms 5000 \
+  --keys "0-200:PLAY,300-500:n7,700-900:n9,1100-1300:n12,2000:midi:903e64,2300:midi:803e64" \
+  --wav out.wav          # boot + notes clavier + MIDI -> WAV 44,1 kHz non muet (RMS ~4 600)
+fm1-emu --fwsc atek303.fwsc --ms 6000 \
+  --keys "1000-1500:REC,1100-1300:PLAY" --snap 1800 --wav out.wav   # -> LOOP PAGE 12 à l'écran
+fm1-emu --fwsc atek303.fwsc --ms 6000 \
+  --keys "1000-1500:REC,1100-1300:SEQ"  --snap 1800 --wav out.wav   # -> MACRO PAGE 13
+fm1-emu --fwsc atek303.fwsc --ms 6000 \
+  --keys "1000-1500:REC,1100-1300:EDIT" --snap 1800 --wav out.wav   # -> FINE PAGE 14
+fm1-emu --fwsc atek303.fwsc --ms 6000 \
+  --keys "1000-1500:REC,1100-1300:SAVE" --snap 1800 --wav out.wav   # -> MIX PAGE 15 (4 tranches)
+# + tap GLO -> OPTIONS, encodeur SELECT -> cycle de pages, dbl-tap SEQ/GLO, triple-tap GLO (sirène)
+```
+
+Syntaxe `--keys` : `T-T2:nom` = appui maintenu de T à T2, `T:nom` = tap, `T:n7` = note (n0..n26),
+`T:C4` = note nommée, `T:SELECT:+n` / `T:enc2:+n` = encodeur, `T:midi:HEX` = octets MIDI IN,
+`T:pot:512` = potard MASTER. `--snap MS,...` écrit `work/lcd_<ms>.bmp` (créer `work/` d'abord).
+Résultat : WAV non muet (97 % d'échantillons non nuls, 0 clip hors transitoires), LCD actif,
+pages zuluTek rendues (vérifié visuellement sur les snapshots).
