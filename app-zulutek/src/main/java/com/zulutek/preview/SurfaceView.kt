@@ -3,8 +3,8 @@
  *
  * SurfaceView: the APK's clone of the FM-1 front panel, reproduced after the canonical
  * panel art of the FM-1 emulator (github.com/joakimeriksson/fm1-emu, crates/fm1-live/src/
- * panel.rs, drawn after Felucca's controls diagram) and its "black-green" theme, the
- * machine's own (mint candy caps and pills). Logical canvas 1280x820, scaled to fit:
+ * panel.rs, drawn after Felucca's controls diagram) wearing the Zulu charte
+ * (black body, fluo turquoise candy caps and pills, pink ZULUTEK brand). Logical canvas 1280x820, scaled to fit:
  * MASTER/SELECT/PRESETS/ALGORITHM left with OCT-/OCT+ under them, the LCD bezel centre
  * (the LcdView sits above), KNOB1..4 then two rows of six candy buttons right (FX SCL ENV
  * LFO EDIT GLO / HOME SAVE ARP SEQ PLAY REC, PLAY+REC outlined), and the 27 pill keys
@@ -62,18 +62,18 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         const val PW = 1280f
         const val PH = 820f
 
-        /* theme "black-green": the machine's own (panel.rs THEMES) */
-        const val ROOM      = 0xFF18191b
-        const val BODY_TOP  = 0xFF3A3A3D
-        const val BODY_BOT  = 0xFF2E2E30
-        const val TRAY      = 0xFF75C0B7
-        const val SILK_INK  = 0xFFA0D8D0
-        const val BRAND_INK = 0xFFA0D8D0
-        const val BTN_TOP   = 0xFF65C6B8
-        const val BTN_BOT   = 0xFF52B0A0
-        const val BTN_INK   = 0xFF1E3830
-        const val KEY_TOP   = 0xFF65C6B8
-        const val KEY_BOT   = 0xFF52B0A0
+        /* DA Zulu (Flying Zulu) : fond noir charte, bonbons/pills turquoise fluo */
+        const val ROOM      = 0xFF090C10
+        const val BODY_TOP  = 0xFF151920
+        const val BODY_BOT  = 0xFF0E1116
+        const val TRAY      = 0xFF1B222B
+        const val SILK_INK  = 0xFF9FE0D6
+        const val BRAND_INK = 0xFFFF2DA0
+        const val BTN_TOP   = 0xFF00FFE0
+        const val BTN_BOT   = 0xFF00A692
+        const val BTN_INK   = 0xFF09120F
+        const val KEY_TOP   = 0xFF00E8D0
+        const val KEY_BOT   = 0xFF00948A
         const val AMBER_LED = 0xFFF2A33A
         const val GREEN_LED = 0xFF62D36E
         const val SKIRT     = 0xFF3A3D43
@@ -202,13 +202,13 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         rrect(c, 370f, 42f, 480f, 480f, 8f, 0xFF181818.toInt(), 0xFF141414.toInt())
         rrect(c, 50f, 388f, 260f, 64f, 14f, TRAY)                                           // OCT tray
         rrect(c, 896f, 222f, 360f, 160f, 16f, TRAY)                                         // button tray
-        rrect(c, 34f, 562f, 1212f, 236f, 26f, 0xFF2F2F33.toInt(), 0xFF27272A.toInt())       // keyboard tray
+        rrect(c, 34f, 562f, 1212f, 236f, 26f, 0xFF161A20.toInt(), 0xFF111419.toInt())       // keyboard tray
         label(c, POT.first, POT.second - POT.third - 14f, "MASTER", SILK_INK, 16f)
         for (i in ENCS.indices)
             label(c, ENCS[i].first, ENCS[i].second - ENCS[i].third - 8f, ENC_SILK[i], SILK_INK, 16f)
         rrect(c, 1134f, 302f, 112f, 72f, 10f, 0xFF3C6B43.toInt())                           // PLAY/REC outlined
         rrect(c, 1136f, 304f, 108f, 68f, 9f, TRAY)
-        label(c, 640f, 552f, "FM-1  FELUCCA", BRAND_INK, 9f)
+        label(c, 640f, 552f, "ZULUTEK", BRAND_INK, 10f)
 
         // LED states (charte): the cap tints amber when active, green for PLAY
         val now = System.currentTimeMillis()
