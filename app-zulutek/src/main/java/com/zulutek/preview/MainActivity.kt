@@ -320,6 +320,8 @@ class MainActivity : Activity(), SurfaceListener {
         return super.dispatchTouchEvent(ev)
     }
 
+        /* jeu tactile (Flying Zulu) : pas de vue verticale, on verrouille paysage, facade FM-1 */
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ZtekAudio.start()
@@ -1204,7 +1206,3 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
             return
         }
-        if (st.page == 18) {   // page FINE : SEL=banque, K1..K4 = 4 options de la banque (idem patch 0012)
-            when (i) {
-                0 -> {
-                    val b = (v * (ZtekAudio.FINE_BANKS.size - 1).toFloat()).toInt().coerceIn(0, ZtekAudio.FINE_BANKS.size - 1)
