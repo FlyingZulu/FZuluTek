@@ -28,7 +28,7 @@
 - Conserver le réglage **TEMPO** de la page **SEQ**, sur **K3** (ordre documenté : K1 STEPS, K2 SCALE, K3 TEMPO, K4 ROOT).
 - **K3 = 0** signifie **GLOBAL** : le séquenceur/arpégiateur ATEK303 suit le tempo général de ZuluTek. Ce n'est ni 0 BPM ni STOP.
 - **K3 > 0** : tempo propre à l'arpégiateur, indépendant du tempo global. Exemple demandé : arpégiateur 280 BPM alors que ZuluTek est à 75 BPM.
-- Revenir à **0 / GLOBAL** réactive la synchronisation sur le tempo global, **avec une zone tampon de 4 crans d'encodeur entre le BPM indépendant minimum et GLOBAL** afin d'éviter un basculement accidentel. Dans la zone tampon, conserver le BPM minimum sans changement de mode ; prévoir également une séparation perceptible dans le sens GLOBAL → tempo libre. Nombre de crans proposé, à confirmer avec l'utilisateur.
+- Revenir à **0 / GLOBAL** réactive la synchronisation sur le tempo global, **avec une zone tampon de 4 crans d'encodeur entre le BPM indépendant minimum et GLOBAL** afin d'éviter un basculement accidentel. Dans la zone tampon, conserver le BPM minimum sans changement de mode ; prévoir également une séparation perceptible dans le sens GLOBAL → tempo libre. **4 crans validés par l'utilisateur.**
 - À inspecter : plage réelle de BPM disponible, mécanisme de synchronisation/rephase lors du retour à GLOBAL et persistance du réglage.
 
 ## GLOBAL et changement de pattern SEQ
@@ -48,6 +48,10 @@
 - En ASSIGN, **OP1 / OP2 / OP3** activent ou désactivent les slots correspondants ; LED allumée = slot actif. Un seul slot actif facilite MIDI Learn ; plusieurs slots actifs peuvent émettre ensemble ; aucun slot actif = aucun CC externe.
 - **OPn maintenu + potentiomètre** permet de piloter exclusivement le CC du slot n sans modifier le paramètre interne du potentiomètre. Vérifier la coexistence des gestes maintien et bascule, ainsi que le contexte hors ASSIGN avant implémentation.
 - MIDI OUT NOTE + CC réutilise les configurations NOTE et CC existantes. Configurations et états des slots persistés dans KIT.
+
+## Idée différée — MACRO
+
+- Explorer plus tard la possibilité de **segmenter virtuellement la course d'un encodeur en zones** (par exemple premier quart affecté à une fonction MACRO). Idée seulement évoquée, **aucun comportement ni mapping validé** à ce stade ; reprendre lors de l'inspection MACRO.
 
 ## Inspection technique prioritaire
 
