@@ -680,6 +680,15 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 i++
             }
         }
+        // VHS couvre le LCD entier, y compris les pages qui quittent onDraw tôt.
+        if (st.vhsOn) {
+            var yy = 2
+            while (yy < H) {
+                val y = top + yy * s
+                screen.drawRect(left, y, left + W * s, y + s, scanPaint)
+                yy += 4
+            }
+        }
     }
 
     override fun onDraw(screen: Canvas) {
@@ -1540,10 +1549,6 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 mono.textSize = 8f; mono.color = AMBER
                 c.drawText(stTxt, (120f - mono.measureText(stTxt) / 2f).coerceAtLeast(6f), 101f, mono)
             }
-        }
-        // VHS (bible: "léger effet VHS" = rendu standard du LCD) : scanlines par défaut, coupées en ECO
-        if (st.vhsOn) {
-            for (yy in 2 until H step 4) c.drawRect(0f, yy.toFloat(), W.toFloat(), yy + 1f, scanPaint)
         }
         // panneau "sens interdit" (rond rouge + barre blanche) + suggestions / bulles de conseils
         if (now < st.noEntryUntil) {
