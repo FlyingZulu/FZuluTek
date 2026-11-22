@@ -221,3 +221,7 @@ Complément de revue statique : la borne de surbrillance de la ligne sélectionn
 ## VHS — couverture de toutes les pages LCD
 
 Revue du chemin de rendu : la majorité des pages appellent `blitTo()` puis quittent `onDraw()` par un `return`. Les scanlines dessinées uniquement à la fin de `onDraw()` ne couvraient donc que le chemin de rendu sans retour anticipé ; OPTIONS et plusieurs autres pages n’étaient pas couvertes. Correction : déplacer l’application des scanlines dans `blitTo()`, après le blit du framebuffer et la grille, en coordonnées écran calculées depuis le rectangle LCD. Le réglage `st.vhsOn` s’applique désormais à chaque page qui passe par le blit commun. Commit LcdView : `0297db2a17e8b729e8d81c1bd35dce78caa7312f`.
+
+## Audit palette clavier APK — 2026-11-22
+
+Inspection de `SurfaceView.kt` : les constantes `WHITE_KEY_TOP/BOT` (ivoire `#FFFFFEFC` → `#FFE4E0E5`) et `PINK_KEY_TOP/BOT` (`#FFFF8BC8` → `#FFD92B83`) sont bien celles utilisées directement dans les deux boucles de dessin des touches blanches et noires. `applySkin(st.skinMaison)` est appelé avant le dessin, mais les couleurs des touches sont des constantes dédiées, non remplacées par la palette DA ZULU/MAISON. Le seul mélange dynamique est l’état actif (teinte ambre). Conclusion : pas de défaut de palette évident dans le code actuel ; la teinte turquoise rapportée n’est pas reproductible par inspection statique seule et doit être comparée à l’APK construit puis mesurée sur capture/appareil. Aucun changement clavier supplémentaire effectué ici.
