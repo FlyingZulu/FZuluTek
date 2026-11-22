@@ -294,6 +294,7 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
   agrandis (layout `SurfaceView` selon `st.viewCompact`) ; AUTO = CLAV dès qu'un lien est up
   (`Fm1Usb.connected` ou peer ZuluLink vivant) + **pop singe 400 ms** à la connexion (LCD). Persistance :
   SharedPreferences (`vue`). Non porté côté FM-1 (écran 240×240 fixe).
+- **OPTIONS > ENGINE = ATEK303 / PLUK / FM / SUB / 8BIT** (**APK only**) : sélection locale des cinq moteurs de voix. **SEL** choisit la ligne ENGINE, **ALG** choisit le moteur (0..4) ; la sélection est appliquée immédiatement, affichée sur le LCD et persistée dans SharedPreferences (`engine`). Engine 0 = ATEK303/LEAD ; engines 1..4 = PLUK/FM/SUB/8BIT (famille BASSE). HOME court conserve son cycle de parties BASSE/LEAD/DRUMS/LOOP ; ALG garde son rôle waveform sur MAIN. Shift court sur ENGINE remet ATEK303 ; reset global remet également le moteur 0. Non porté côté FM-1.
 - **OPTIONS > LUXE = OFF/ON** (**APK only**) : decay reverb Black Hole relevé à **0.99** (0.89 sinon),
   pre-delay max, BBD **stéréo**, swirl actif, drums **8 voix** — LUXE gagne sur ECO si les deux sont ON
   (`ztek_set_luxe`, `ztek_engine.cpp`). Build APK avec `-DZTEK_LUXE_BUF` (`app-zulutek/build.gradle`) :
