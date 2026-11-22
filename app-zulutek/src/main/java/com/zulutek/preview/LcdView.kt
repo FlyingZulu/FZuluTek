@@ -1524,8 +1524,8 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
                 c.drawText(stTxt, (120f - mono.measureText(stTxt) / 2f).coerceAtLeast(6f), 101f, mono)
             }
         }
-        // option VHS (OPTIONS > LUXE) : scanlines légères uniquement sur le noir (charte)
-        if (st.luxeOn) {
+        // VHS (bible: "léger effet VHS" = rendu standard du LCD) : scanlines par défaut, coupées en ECO
+        if (!st.ecoOn) {
             for (yy in 2 until H step 4) c.drawRect(0f, yy.toFloat(), W.toFloat(), yy + 1f, scanPaint)
         }
         // panneau "sens interdit" (rond rouge + barre blanche) + suggestions / bulles de conseils
