@@ -699,7 +699,9 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         fb.getPixels(fbBuf, 0, W, 0, 0, W, H)
         for (i in fbBuf.indices) {
             val p = fbBuf[i]
-            fbBuf[i] = (p and -0x10000) or (p and 0x00F80000) or (p and 0x0000FC00) or (p and 0xF8)
+            // RGB565 exact: preserve alpha, keep 5 red / 6 green / 5 blue high bits.
+            fbBuf[i] = (p and 0xFF000000.toInt()) or
+                (p and 0x00F80000) or (p and 0x0000FC00) or (p and 0x000000F8)
         }
         fb.setPixels(fbBuf, 0, W, 0, 0, W, H)
         val left = transX() * s
