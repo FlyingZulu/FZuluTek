@@ -455,12 +455,22 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
     private val vhsGlitchX = IntArray(2)
     private val vhsGlitchW = IntArray(2)
     private var vhsGlitchCount = 0
+    private var vhsShiftOn = false
+    private var vhsShiftY = 0
+    private var vhsShiftH = 1
+    private var vhsShiftX = 0
     private fun evolveVhs(now: Long, modulation: Float) {
         if (now < vhsNextChange) return
         vhsNextChange = now + 260L + vhsRandom.nextLong(0L, 220L)
         vhsOffset = vhsRandom.nextInt(0, 3)
         vhsLineAlpha = (8 + modulation * 7f + vhsRandom.nextInt(0, 4)).toInt().coerceIn(7, 19)
         vhsGlitchCount = if (vhsRandom.nextFloat() < (0.12f + modulation * 0.24f)) 1 + vhsRandom.nextInt(2) else 0
+        vhsShiftOn = vhsRandom.nextFloat() < (0.035f + modulation * 0.10f)
+        if (vhsShiftOn) {
+            vhsShiftY = vhsRandom.nextInt(2, H - 2)
+            vhsShiftH = 1 + vhsRandom.nextInt(2)
+            vhsShiftX = if (vhsRandom.nextBoolean()) 1 else -1
+        }
         for (i in 0 until vhsGlitchCount) {
             vhsGlitchY[i] = vhsRandom.nextInt(H)
             vhsGlitchX[i] = vhsRandom.nextInt(W)
@@ -695,6 +705,16 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         val top = transY() * s
         fbRect.set(left, top, left + W * s, top + H * s)
         screen.drawBitmap(fb, null, fbRect, blitPaint)
+        if (st.vhsOn && vhsShiftOn) {
+            // Décalage horizontal d'une tranche de 1–2 lignes, limité à un pixel logique.
+            val shiftTop = top + vhsShiftY * s
+            screen.save()
+            screen.clipRect(left, shiftTop, left + W * s, shiftTop + vhsShiftH * s)
+            fbRect.set(left + vhsShiftX * s, top, left + (W + vhsShiftX) * s, top + H * s)
+            screen.drawBitmap(fb, null, fbRect, blitPaint)
+            screen.restore()
+            fbRect.set(left, top, left + W * s, top + H * s)
+        }
         if (s >= 3f) {
             val right = left + W * s
             val bottom = top + H * s
