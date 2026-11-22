@@ -8,11 +8,17 @@ Base : `fix/apk-touch-bend-rec` (inclut le correctif tactile REC/LCD de la PR #4
 
 - **Périmètre autorisé : APK Android, Kotlin et moteur natif C/C++ embarqué dans l'APK.** L'utilisateur a explicitement demandé les corrections nécessaires et la documentation. Le firmware FM-1, les patches embarqués et les autres projets restent strictement hors périmètre.
 - Ne jamais modifier le firmware FM-1, les patches embarqués ni les autres projets/modules. Les sources C/C++ du moteur Android sont dans le périmètre de correction autorisé.
-- Ne pas tenter de « corriger » un risque de concurrence du moteur natif depuis Kotlin : le signaler et proposer une interface native dédiée seulement si l'utilisateur autorise ultérieurement ce périmètre.
+- Les corrections de concurrence et de DSP sont autorisées dans le moteur natif C/C++ de l'APK. Les contrôles Kotlin passent par JNI ; le callback Oboe ne doit jamais attendre un verrou. Cette autorisation ne s'étend jamais au firmware ni aux patches FM-1.
 - Dans la nomenclature de l'utilisateur, **SCL signifie SEL**. Ce n'est pas un bug à renommer ni à corriger.
 - Préserver les modifications de la branche `fix/apk-touch-bend-rec` ; travailler sur une branche dédiée issue de celle-ci.
 - Ne jamais annoncer un test matériel FM-1/téléphone s'il n'a pas réellement été exécuté. Un build CI réussi n'est pas une validation audio USB ni réseau sur appareil.
 - La spécification détaillée de ZuluLink est privée. Ne pas recopier sa spécification complète dans une documentation publique ; ce document ne décrit que les interfaces et constats nécessaires au code Android.
+
+## Contrat de surface à préserver
+
+- `ALG` / `ALGORITHM` est un **encodeur rotatif**. Sur MAIN, sa rotation règle `AT_WAVE` (forme d'onde) ; ce n'est pas un bouton de sélection du moteur. Aucun appui long sur ALG ne doit cycler les moteurs.
+- La sélection BASSE/LEAD se fait par HOME court ; les changements de moteur reçus par MIDI utilisent CC 80. Ne pas détourner ALG pour contourner ces commandes.
+- Sur MAIN, les 16 touches blanches pilotent les slots du looper. Les touches noires jouent des notes, avec les fonctions spéciales documentées (Shift et commandes sirène/choke selon la page). La page FX/SIREN donne accès au clavier chromatique complet. Ce mapping doit être décrit clairement plutôt que qualifié de panne du moteur.
 
 ## Topologie actuelle
 
@@ -62,8 +68,7 @@ Le protocole ZTF est transporté sur USB-MIDI. Il ne s'agit pas d'un flux audio 
 
 ### Correctifs supplémentaires dans cette branche
 
-
-10. **Concurrence JNI/Oboe :** le moteur Android partage ses objets DSP entre les setters JNI et le callback Oboe. Un verrou récursif protège désormais les appels JNI de contrôle/lecture et le callback utilise exclusivement `try_lock()` : il ne bloque jamais le thread audio. Si un contrôle détient brièvement l'état, le callback de sortie émet un bloc silencieux (et le callback d'entrée abandonne le bloc) puis reprend au cycle suivant. `nativeStop` et `nativeDestroy` arrêtent/rejoignent le flux avant de prendre le verrou afin d'éviter un interblocage avec le callback. Cette protection est une première correction de cohérence ; elle doit être validée sur appareils et profilée pour mesurer les blocs audio abandonnés.
+1. **Concurrence JNI/Oboe :** le moteur Android partage ses objets DSP entre les setters JNI et le callback Oboe. Un verrou récursif protège désormais les appels JNI de contrôle/lecture et le callback utilise exclusivement `try_lock()` : il ne bloque jamais le thread audio. Si un contrôle détient brièvement l'état, le callback de sortie émet un bloc silencieux (et le callback d'entrée abandonne le bloc) puis reprend au cycle suivant. `nativeStop` et `nativeDestroy` arrêtent/rejoignent le flux avant de prendre le verrou afin d'éviter un interblocage avec le callback. Cette protection est une première correction de cohérence ; elle doit être validée sur appareils et profilée pour mesurer les blocs audio abandonnés.
 
 ### Risques / travaux encore ouverts
 
