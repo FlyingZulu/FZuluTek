@@ -107,6 +107,12 @@
 - **FM-1** : quand on touche/bouge un potentiomètre capturé, afficher un **petit témoin lumineux** indiquant à la fois **qu'il est capturé** et **à quel pôle ZU/LOU il est affecté** ; couleur du pôle si matériellement disponible, sinon alternative de codage à définir après inspection matérielle. Si un même paramètre est dans plusieurs snaps/pôles, la représentation reste à préciser.
 - Recherche documentaire ponctuelle dans `docs/ZULUTEK.md`, `docs/ZULUTEK-SEQ-PLUS.md` et ce journal : **aucune occurrence explicite NO SNAP trouvée**. Cela ne prouve pas l'absence dans le code.
 
+## SNAP — retouche et duplication immédiate (23 novembre 2026)
+
+- **Retouche d'un SNAP** : lorsqu'un paramètre est déjà photographié dans le SNAP courant, le modifier puis le **capturer à nouveau via SHIFT** met à jour **sa valeur mémorisée** sans effacer les autres paramètres de ce SNAP.
+- **Duplication contextuelle rapide** : juste après avoir clos/sauvegardé une capture par **REC+PLAY** (« ranger l'appareil photo »), une **nouvelle pression rapide REC+PLAY** doit permettre de **réentrer directement avec le contenu du SNAP qui vient d'être enregistré**, puis **choisir un nouveau slot destination** afin de produire une **copie conforme** (mêmes paramètres et mêmes valeurs). L'utilisateur peut conserver la copie ou ne retoucher qu'un paramètre pour créer une variante, sans tout recapturer.
+- **Détails à préciser avant codage** : fenêtre temporelle exacte de la réentrée rapide, distinction avec l'entrée SNAP ordinaire, étape exacte qui confirme l'écriture de la copie, comportement si le slot cible est occupé, annulation, et relation avec la copie miroir par double-tap déjà décrite dans l'ancienne documentation. La copie doit être indépendante du SNAP source.
+
 ## Inspection technique prioritaire
 
 1. Inspecter les handlers HOME, GLO, REC, SEQ, ARP, EDIT et leurs appuis courts/longs/doubles/triples sur APK et FM-1 ; dresser la matrice des conflits.
