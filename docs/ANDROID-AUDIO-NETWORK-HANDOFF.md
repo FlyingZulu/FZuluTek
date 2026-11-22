@@ -237,3 +237,16 @@ Le listener `lcd.setOnTouchListener` de `MainActivity.kt` prend en charge le ben
 - Le commit suivant `96728ede72f0aed37d2ce51c2e05440a4c400f16` supprime la double lecture des 16 sources de modulation lorsque VHS est activé. Il n'est pas inclus dans le run #362 ; un build du head actuel reste nécessaire pour valider l'ensemble.
 - Aucun essai sur appareil Android physique n'a été effectué. La stabilité du rendu, le comportement tactile, la continuité audio et la mesure visuelle restent à valider sur appareil.
 - Périmètre inchangé : APK Android uniquement ; aucun firmware/patch embarqué FM-1 modifié.
+
+
+## Diagnostic LCD et audio — 2026-11-22
+
+Objectif : transformer les symptômes « LCD blanc » et « audio clic seul » en observations Logcat vérifiables, sans supposer une cause matérielle.
+
+- LcdView : log one-shot au premier blit avec dimensions de la vue et du Canvas, échelle, décalage, clip et nombre de pixels non noirs du framebuffer. Commit `9a1c46afc245d448669d60a7d1d24e7240ad3b7f`.
+- Oboe : log one-shot du premier callback (frames, fréquence effective, canaux, format, device ID, frames/burst), de la première contention du verrou et du niveau de crête du premier bloc rendu après une note. Commit `beb3be0767772b4b14bd56ca79b1a0e265e9c6d4`; optimisation pour ne calculer la crête qu'après un déclenchement de note : `cb384588d184118e899c62f2f6dce71a9152c927`. Aucun calcul de diagnostic continu dans le callback audio.
+- Correction de la conversion RGB565 : masque rouge corrigé de 8 à 5 bits ; vert 6 bits, bleu 5 bits, alpha préservé. Commit `7753fa2e9892f48f0971c9ec038e6542527fe54d`. Cette erreur affectait la précision de couleur, mais n'explique pas à elle seule l'écran blanc.
+- Builds #365 (run `44992852556`) et #366 (run `44992855477`) réussis, artefacts `zulu-apk-365` (6 317 817 octets) et `zulu-apk-366` (6 318 429 octets).
+- Build #368 (run `44992946473`) : compilation et publication réussies sur le head intégrant la correction RGB565 et l'optimisation du diagnostic audio ; artefact `zulu-apk-368` (6 318 292 octets), étape Release dédiée ignorée sur la branche PR.
+- Build #367 (run `44992903393`) lancé sur le commit intermédiaire RGB565 seul ; il n'est pas nécessaire pour la validation du head ultérieur #368.
+- Les logs ne deviennent probants qu'après lancement sur un appareil Android et reproduction des symptômes. Aucun essai matériel effectué à ce stade. Aucun changement du DSP audio, du routage, du verrouillage ou du firmware FM-1 dans cette passe.
