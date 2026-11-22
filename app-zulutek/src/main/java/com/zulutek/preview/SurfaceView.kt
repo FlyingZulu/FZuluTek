@@ -251,14 +251,12 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
     private var idx = -1
     private var startY = 0f
     private var startVal = 0f
-    private var longPosted = false
     private var downTime = 0L
     private var encMoved = false
     private val encHoldRunnable = Runnable {
         if (zone == 1 && idx >= 0 && !encMoved) listener.onEncoderHold(idx)
     }
     private val longRunnable = Runnable {
-        longPosted = false
         when (zone) {
             3 -> if (idx >= 0) listener.onWhiteKey(idx, true, true)
             2 -> if (idx >= 0) listener.onButtonLong(idx)
@@ -421,18 +419,16 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         when (ev.action) {
             MotionEvent.ACTION_DOWN -> {
                 val (z, i) = zoneAt(px, py)
-                zone = z; idx = i; startY = py; longPosted = false
+                zone = z; idx = i; startY = py
                 when (z) {
                     1 -> { startVal = st.encVals[i]; downTime = System.currentTimeMillis(); encMoved = false
                            handler.postDelayed(encHoldRunnable, 600) }
                     2 -> {
                         listener.onButton(i, true)
                         handler.postDelayed(longRunnable, 600)
-                        longPosted = true
                     }
                     3 -> {
                         handler.postDelayed(longRunnable, 500)
-                        longPosted = true
                         st.lastKeyUse = System.currentTimeMillis()   // rappel HOME 20 s (charte)
                         listener.onWhiteKey(i, true, false)
                     }
@@ -471,13 +467,13 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                 handler.removeCallbacks(longRunnable)
                 handler.removeCallbacks(encHoldRunnable)
                 when (zone) {
-                    1 -> if (!encMoved && System.currentTimeMillis() - downTime < 350)
+                    1 -> if (ev.action == MotionEvent.ACTION_UP && !encMoved && System.currentTimeMillis() - downTime < 350)
                              listener.onEncoderPress(idx)   // tap encodeur = appui SEL/... du FM-1
                     2 -> listener.onButton(idx, false)
-                    3 -> if (longPosted) listener.onWhiteKey(idx, false, false)
+                    3 -> listener.onWhiteKey(idx, false, false)
                     4 -> listener.onBlackKey(BLACK_NOTES[idx], false)
                 }
-                zone = 0; idx = -1; longPosted = false
+                zone = 0; idx = -1
                 invalidate()
                 return true
             }

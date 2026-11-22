@@ -101,10 +101,19 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
                 val end = System.currentTimeMillis() + timeoutMs
                 while (System.currentTimeMillis() < end) {
                     val pkt = link.read(end - System.currentTimeMillis()) ?: break
-                    if (!ZtfCodec.isZtf(pkt)) continue
-                    // on dépile aussi les notifs companion en passant
-                    val a = ZtfCodec.parseZtf(pkt) ?: continue
-                    return a
+                    if (!ZtfCodec.isZtf(pkt)) {
+                        val frame = ZtfCodec.parseFrame(pkt) ?: continue
+                        if (frame.first == ZtfCodec.CMD_PARAMS &&
+                            frame.second.firstOrNull()?.toInt() == ZtfCodec.PQ_CHANGED) {
+                            noteChanged(frame.second)
+                        }
+                        continue
+                    }
+                    val reply = ZtfCodec.parseZtf(pkt) ?: continue
+                    if (reply.first != cmd) continue
+                    // Le firmware renvoie le premier argument des commandes indexées.
+                    if (args.isNotEmpty() && reply.second.firstOrNull() != args[0]) continue
+                    return reply
                 }
             }
         }
@@ -144,7 +153,7 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
     /** charge (applique) le fichier i depuis la flash du FM-1 ; true si ok */
     fun ztfLoad(i: Int): Boolean {
         val (_, b) = zrequest('L', byteArrayOf(i.toByte()))
-        return b.size >= 3 && b[2].toInt() == 0
+        return b.size >= 2 && b[1].toInt() == 0
     }
 
     // ---- companion 0x60 : capability ---------------------------------------------------

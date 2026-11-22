@@ -293,16 +293,13 @@ object Fm1Usb {
         }
     }
 
-    fun ping(): Triple<String, Int, Long>? {
-        var out: Triple<String, Int, Long>? = null
+    fun ping() {
         run("ping") {
             val t = transport!!.ztfPing()
             if (t != null) {
-                out = t
                 onStatus("ZTF OK: ${t.first} v${t.second}, libre ${t.third / 1024} Ko")
             } else onStatus("pas de réponse ZTF (pas companion ?)")
         }
-        return out
     }
 
     fun refreshFiles() {
@@ -313,58 +310,47 @@ object Fm1Usb {
         }
     }
 
-    /** tire le fichier i du FM-1 vers un fichier local ; retourne la taille lue */
-    fun pull(i: Int, dest: File, label: String = "PULL"): Long {
-        var size = 0L
+    /** tire le fichier i du FM-1 vers un fichier local */
+    fun pull(i: Int, dest: File, label: String = "PULL") {
         run(label) {
             val data = transport!!.fileRead(i) { done, total ->
                 onProgress("$label $done/$total")
             }
             dest.parentFile?.mkdirs()
             dest.writeBytes(data)
-            size = data.size.toLong()
             onStatus("$label -> ${dest.name} (${data.size} o)")
         }
-        return size
     }
 
     /** pousse des octets vers le fichier i du FM-1 (begin/data/commit, CRC-32, reprise) */
-    fun push(i: Int, data: ByteArray, label: String = "PUSH"): Boolean {
-        var ok = false
+    fun push(i: Int, data: ByteArray, label: String = "PUSH") {
         run(label) {
             transport!!.fileWrite(i, data) { done, total ->
                 onProgress("$label ${(done * 100 / total.coerceAtLeast(1))}%")
             }
-            ok = true
             onStatus("$label OK (${data.size} o, CRC ok)")
         }
-        return ok
     }
 
     /** pousse vers un fichier nommé (ZSMP00..07 / ZLUP00..07 / ZMAC / ZPRE00..31 / ZKIT) */
-    fun pushNamed(name: String, data: ByteArray, label: String = "PUSH"): Boolean {
-        var ok = false
+    fun pushNamed(name: String, data: ByteArray, label: String = "PUSH") {
         run(label) {
             val f = transport!!.fileIndexOf(name)
             transport!!.fileWrite(f.index, data) { done, total ->
                 onProgress("$label ${(done * 100 / total.coerceAtLeast(1))}%")
             }
-            ok = true
             onStatus("$label $name OK (${data.size} o)")
         }
-        return ok
     }
 
-    fun pullNamed(name: String, dest: File, label: String = "PULL"): Long {
-        var size = 0L
+    fun pullNamed(name: String, dest: File, label: String = "PULL") {
         run(label) {
             val f = transport!!.fileIndexOf(name)
             val data = transport!!.fileRead(f.index) { done, total -> onProgress("$label $done/$total") }
             dest.parentFile?.mkdirs()
             dest.writeBytes(data)
-            size = data.size.toLong()
+            onStatus("$label -> ${dest.name} (${data.size} o)")
         }
-        return size
     }
 
     fun load(i: Int) {

@@ -284,7 +284,10 @@ int ztek_start(ztek_t *z)
         r = b.openStream(z->out);
     }
     if (r != oboe::Result::OK) return 0;
-    return z->out->requestStart() == oboe::Result::OK ? 1 : 0;
+    if (z->out->requestStart() == oboe::Result::OK) return 1;
+    z->out->close();
+    z->out.reset();
+    return 0;
 }
 
 void ztek_stop(ztek_t *z)

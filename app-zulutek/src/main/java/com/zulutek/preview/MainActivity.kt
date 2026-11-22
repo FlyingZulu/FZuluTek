@@ -326,7 +326,7 @@ class MainActivity : Activity(), SurfaceListener {
         super.onCreate(savedInstanceState)
         /* jeu tactile (Flying Zulu) : pas de vue verticale, on verrouille paysage, facade FM-1 */
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        ZtekAudio.start()
+        val audioStarted = ZtekAudio.start()
         ZtekAudio.initPrefs(this)
         // OPTIONS persistées (OBJ_OPTIONS côté FM-1) : ECO uniquement
         // (CHOKE LDR est supprimé d'OPTIONS : remplacé par le LDR par tranche, page MIX)
@@ -353,6 +353,7 @@ class MainActivity : Activity(), SurfaceListener {
         ZtekAudio.setParam(ZtekAudio.AT_DECAY, st.encVals[6])
 
         lcd = LcdView(this, st)
+        if (!audioStarted) android.widget.Toast.makeText(this, "Sortie audio indisponible", android.widget.Toast.LENGTH_LONG).show()
 
         // badge de build (anti-confusion d'artefacts) : SHA court du commit injecté par la CI via -PBUILD_SHA
         st.buildTag = try { getString(R.string.build_sha).take(8) } catch (e: Exception) { "" }
@@ -1759,8 +1760,8 @@ class MainActivity : Activity(), SurfaceListener {
     override fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean) {
         if (st.page == 17) {   // page LINK : le clavier joue les notes SUR le FM-1 (ZTF TRIG/OFF)
             val n = 48 + slot
-            if (down) Fm1Usb.remote("TRIG") { ztfNoteOn(n, 100) }
-            else Fm1Usb.remote("OFF") { ztfNoteOff(n) }
+            if (!down) Fm1Usb.remote("OFF") { ztfNoteOff(n) }
+            else if (!longPress) Fm1Usb.remote("TRIG") { ztfNoteOn(n, 100) }
             return
         }
         if (st.smpPage && down && !longPress) { ZtekAudio.smpPlay(1); return }
