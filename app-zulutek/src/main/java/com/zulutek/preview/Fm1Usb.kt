@@ -237,6 +237,12 @@ object Fm1Usb {
         val itf = midiIf ?: return
         val mgr = usbManager ?: return
         worker.execute {
+            // A page re-entry or repeated scan must reuse the live transport. In
+            // particular, do not replace its reader/watch threads while connected.
+            if (connected && transport != null) {
+                onConnected?.invoke()
+                return@execute
+            }
             try {
                 val conn = mgr.openDevice(dev) ?: throw ZtfException("openDevice a échoué")
                 var claimed = false
