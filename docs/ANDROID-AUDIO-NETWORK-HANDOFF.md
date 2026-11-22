@@ -108,3 +108,17 @@ Le protocole ZTF est transporté sur USB-MIDI. Il ne s'agit pas d'un flux audio 
 - Correctif tactile REC/LCD conservé par héritage.
 - Correctifs Kotlin de framing USB-MIDI, fermeture USB, permission audio et validation/identification des pairs UDP.
 - Build et essais matériels à consigner après exécution ; aucune validation matérielle n'est présumée par ce document.
+
+
+## Correctif clavier — relâchement après appui long (2026-11-22)
+
+Dans `SurfaceView.onTouchEvent()`, les touches blanches envoyaient immédiatement `onWhiteKey(idx, true, false)` à l'appui. Après 500 ms, `longRunnable` exécutait l'action longue puis mettait `longPosted = false`. Le traitement `ACTION_UP/ACTION_CANCEL` conditionnait alors l'événement de relâchement à `longPosted` : aucun `onWhiteKey(idx, false, false)` n'était envoyé après un appui long.
+
+Conséquences possibles :
+- sur SIREN, une note blanche démarrée à l'appui pouvait ne jamais recevoir son `noteOff` ;
+- sur LINK, une note déclenchée à distance pouvait ne jamais recevoir son message OFF ;
+- sur les autres pages, le relâchement des actions momentanées pouvait être perdu.
+
+Correction : le relâchement d'une touche blanche est maintenant toujours transmis sur `ACTION_UP` et `ACTION_CANCEL`, indépendamment de l'exécution du callback long. Le callback long conserve son rôle (ex. armement/enregistrement du slot looper) ; le mapping et les fonctions des touches ne changent pas.
+
+Validation : correction de code commitée sur la branche Android. Aucun build CI ni test tactile/audio sur appareil n'est encore revendiqué pour ce commit. À vérifier dans le prochain APK : appui bref et appui >500 ms sur une touche blanche en SIREN et LINK, puis vérifier que la note s'arrête au relâchement. Vérifier également que l'appui long d'un slot looper conserve son armement/enregistrement attendu.
