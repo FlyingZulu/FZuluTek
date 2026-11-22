@@ -199,3 +199,19 @@ Correction additive, sans détourner les commandes existantes :
 Commits code : `c157c75a6f17ff010b64829b5048d77d0879f55c` (MainActivity), `69729922105169b115dfcb4739cfb29a543f81ad` (LcdView). Bible `docs/ZULUTEK.md` mise à jour dans 407e087e9e0bb405144c961b32bf16ad42bb6c81.
 
 Validation : inspection statique des plages, du setter, de la préférence et de l'affichage. Build du nouveau code et validation tactile sur appareil à effectuer ; aucun test appareil revendiqué.
+
+
+## APK Android — option VHS indépendante de ECO (2026-11-22)
+
+Constat : le dessin des scanlines VHS était conditionné par `!st.ecoOn`, donc l’activation de ECO supprimait l’effet, contrairement à la demande.
+
+Correction :
+- ajout de `VHS` dans OPTIONS (page 16), après ENGINE ; SEL sélectionne la ligne et ALG règle ON/OFF ;
+- préférence `vhs` dans SharedPreferences, chargée au démarrage avec défaut `true` pour conserver l’aspect VHS existant ;
+- scanlines dessinées selon `st.vhsOn`, jamais selon ECO ; ECO conserve uniquement ses effets d’économie/throttling/blink ;
+- reset VHS et reset global restaurent VHS=ON ;
+- aucun changement aux paramètres audio, à la palette clavier, ni aux zones tactiles existantes.
+
+Commits code : LcdView `81352ba2c67949e42fb9e871a8d84f46105cf4d5`, MainActivity `ab3305b035152e0c3dbc696740a1ab07303d5c87`. Documentation bible : eee336a386a04cd867d8245e1b7925a71f767ad8.
+
+Validation : contrôles statiques des indices OPTIONS (0..6), affichage de la septième ligne, chargement/défaut/persistance, reset et condition de dessin VHS. Build CI et test tactile sur appareil restent à effectuer ; aucun test appareil revendiqué.
