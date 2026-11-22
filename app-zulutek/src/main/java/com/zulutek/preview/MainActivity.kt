@@ -868,19 +868,7 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- encoders ----
     override fun onEncoderHold(i: Int) {
-        when (i) {
-            0 -> selHeld = true
-            2 -> if (st.page == 0) cycleSynthEngine() // appui long ALG : sélecteur local des 5 moteurs
-        }
-    }
-
-    private fun cycleSynthEngine() {
-        curEngine = (curEngine + 1) % st.engineNames.size
-        st.engine = curEngine
-        ZtekAudio.setEngine(curEngine)
-        hint("MOTEUR " + st.engineNames[curEngine])
-        lcd.invalidate()
-        surface.invalidate()
+        if (i == 0) selHeld = true
     }
     override fun onEncoderPress(i: Int) {
         if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40) ; page PRESETS 10 : appui SEL = LOAD (confirme le choix)
