@@ -324,3 +324,11 @@ Objectif : transformer les symptômes « LCD blanc » et « audio clic seul » e
 - Code commits: `b883f1fe8722194b191011473742a97740b17538`, `556f65de08db939b9a519788733e16cc4f1fa2f3`.
 - CI validation pending. No physical FM-1 test is claimed. Repeated scan, unplug while transfer is active, and immediate replug still need hardware validation.
 - No firmware, embedded patches, or unrelated projects changed; PR #46 remains open and unmerged.
+
+
+## Oboe startup failure cleanup — 22/11/2026
+
+- Static lifecycle review found that `ztek_start()` returned failure when `requestStart()` failed but left `z->out` non-null. A later call then hit the existing `if (z->out) return 1` fast path and could falsely report audio started, preventing a retry.
+- Fix in `app-zulutek/src/main/cpp/ztek_engine.cpp`: on `requestStart()` failure, close and reset the stream before returning 0. Successful startup behavior and DSP/render code are unchanged.
+- Code commit: `34bd37e5228551746cf215b9d99429094350c0ff`.
+- CI validation pending. No Android device/Oboe hardware test has been performed; no FM-1 firmware or embedded patch changed.
