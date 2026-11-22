@@ -53,6 +53,16 @@
 
 - Explorer plus tard la possibilité de **segmenter virtuellement la course d'un encodeur en zones** (par exemple premier quart affecté à une fonction MACRO). Idée seulement évoquée, **aucun comportement ni mapping validé** à ce stade ; reprendre lors de l'inspection MACRO.
 
+## PoW! — punch-in, inspirations et contraintes de conception (visite du 23 novembre 2026)
+
+- **Intention confirmée** : effets punch-in immédiats et expressifs, inspirés notamment des Pocket Operator (PO-12 Rhythm) et d'Amenity sur FM-1 ; priorité musicale aux **altérations rythmiques / glitchs temporels** : shuffle, BPM stutter, beat repeat, micro-décalages, granulaire, déplacements dans le temps. Garder aussi des filtres, delays, saturations et traitements de timbre.
+- **Contrôle souhaité** : déclencher l'effet par maintien d'une touche et pouvoir **tourner K1–K4 pendant le maintien** pour régler en direct **quatre paramètres propres à chaque effet**. Modalités précises de sélection des effets, de mémorisation des paramètres et de relâchement à définir ; ne pas les inventer.
+- **Palette artistique privée de conception** : Aphex Twin, High Tone, MF DOOM, Tom Waits, Noisia (DnB), Skrillex (dubstep), Daft Punk, Boards of Canada, Radiohead, plus une famille glitchcore. Évoquer ces univers par les traitements et l'esthétique, **sans citer explicitement les artistes dans l'interface publique**.
+- **Pistes non figées** : environ quatre effets par famille, soit un catalogue exploratoire d'environ 40 propositions, **pas** 40 effets définitivement approuvés ni 40 effets simultanés sur les 16 touches. Exemples à explorer : Shuffle Punch, BPM Stutter, Time Slip, Granular Scrub, Beat Repeat, Reverse Slice, Micro-Jitter, Time Stretch Glitch. Éviter les doublons et prioriser le plaisir de jeu.
+- **Identité visuelle APK** : donner aux familles PoW! une couleur / signature graphique reconnaissable et une présentation des potentiomètres adaptée à leur personnalité, sans nuire à la lisibilité et sans noms d'artistes.
+- **Performance** : concevoir d'abord pour une APK Android stable, compatible autant que possible avec des appareils récents et plus anciens ; effets économes en CPU et mémoire, tampons limités, éviter les allocations dans le fil audio. ECO est un soutien, **pas une excuse pour une version normale instable**. Le portage FM-1 sera évalué séparément, effet par effet, avec mesures et aménagements possibles. **Faisabilité FM-1 et performances Android non encore vérifiées**.
+- **Point technique à inspecter plus tard** : moteurs et buffers audio disponibles, latence, polyphonie/voix, synchro BPM, charge maximale de plusieurs punch-in, impact ECO, faisabilité des traitements temporels. Les références artistiques et noms d'effets sont des pistes, pas des copies de traitements existants.
+
 ## Inspection technique prioritaire
 
 1. Inspecter les handlers HOME, GLO, REC, SEQ, ARP, EDIT et leurs appuis courts/longs/doubles/triples sur APK et FM-1 ; dresser la matrice des conflits.
