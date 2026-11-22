@@ -62,6 +62,8 @@ Le protocole ZTF est transporté sur USB-MIDI. Il ne s'agit pas d'un flux audio 
 
 ### Correctifs supplémentaires dans cette branche
 
+11. **Sélection locale du moteur :** la page MAIN n'exposait pas de commande locale pour choisir les cinq moteurs ; le changement n'était possible que par CC MIDI distant ou par le cycle de parties qui ne sélectionnait que le premier moteur de basse. Un appui long sur l'encodeur `ALG` en page MAIN fait maintenant défiler `ATEK303 → PLUK → FM → SUB → 8BIT`, appelle `ZtekAudio.setEngine()` et met à jour l'état affiché. L'appui court `ALG` conserve son réglage d'onde et le cycle HOME conserve ses fonctions existantes.
+
 10. **Concurrence JNI/Oboe :** le moteur Android partage ses objets DSP entre les setters JNI et le callback Oboe. Un verrou récursif protège désormais les appels JNI de contrôle/lecture et le callback utilise exclusivement `try_lock()` : il ne bloque jamais le thread audio. Si un contrôle détient brièvement l'état, le callback de sortie émet un bloc silencieux (et le callback d'entrée abandonne le bloc) puis reprend au cycle suivant. `nativeStop` et `nativeDestroy` arrêtent/rejoignent le flux avant de prendre le verrou afin d'éviter un interblocage avec le callback. Cette protection est une première correction de cohérence ; elle doit être validée sur appareils et profilée pour mesurer les blocs audio abandonnés.
 
 ### Risques / travaux encore ouverts
