@@ -30,6 +30,7 @@ class MainActivity : Activity(), SurfaceListener {
     private lateinit var lcd: LcdView
     private lateinit var surface: SurfaceView
     private lateinit var rootLayout: android.widget.FrameLayout
+    private var lcdPlacementLogged = false
 
     private var root = 45
     private var scale = 0
@@ -866,6 +867,13 @@ class MainActivity : Activity(), SurfaceListener {
         lp.leftMargin = r[0].toInt()
         lp.topMargin = r[1].toInt()
         lcd.layoutParams = lp
+        if (!lcdPlacementLogged) {
+            lcdPlacementLogged = true
+            android.util.Log.i(
+                "ZuluTekLCD",
+                "placement surface=${surface.width}x${surface.height} rect=${r.joinToString()} lcd=${lp.width}x${lp.height} margin=${lp.leftMargin},${lp.topMargin}"
+            )
+        }
     }
 
     private fun updateViewCompact() {
