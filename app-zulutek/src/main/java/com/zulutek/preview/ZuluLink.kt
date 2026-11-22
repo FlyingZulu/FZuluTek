@@ -89,6 +89,11 @@ object ZuluLink {
 
     val running = AtomicBoolean(false)
     private val peers = ConcurrentHashMap<String, Peer>()
+
+    /** Vérifie l'en-tête commun avant tout décodage de message UDP. */
+    private fun validHeader(b: ByteArray, len: Int): Boolean =
+        len >= 6 && b[0] == MAGIC[0] && b[1] == MAGIC[1] && b[2] == MAGIC[2] &&
+            b[3] == MAGIC[3] && b[5] == VERSION
     private var discoverySocket: DatagramSocket? = null
     private var directSocket: DatagramSocket? = null
     private var announceThread: Thread? = null
@@ -174,6 +179,7 @@ object ZuluLink {
 
     /** Traite un paquet de découverte (HELLO/BYE venant du port broadcast). */
     private fun handleIncoming(b: ByteArray, len: Int, fromAddr: String) {
+        if (!validHeader(b, len)) return
         when (b[4]) {
             T_HELLO -> {
                 val (name, role, tempo) = decodeHello(b, len) ?: return
@@ -182,6 +188,8 @@ object ZuluLink {
                 if (known == null) {
                     peers[name] = Peer(name, fromAddr, role, tempo, System.currentTimeMillis())
                     onPeersChanged?.invoke()
+                } else if (known.address != fromAddr) {
+                    peers[name] = Peer(name, fromAddr, role, tempo, System.currentTimeMillis())
                 } else {
                     known.role = role; known.tempo = tempo
                     known.lastSeen = System.currentTimeMillis()
@@ -197,7 +205,10 @@ object ZuluLink {
 
     /** Traite un message direct (CC, CLOCK, START/STOP, TAP, SNAP, PING/PONG, BYE). */
     private fun handleDirect(b: ByteArray, len: Int, fromAddr: String) {
-        val from = peers[fromAddr]?.name ?: "?"   // un inconnu peut nous parler ; on écoute quand même
+        if (!validHeader(b, len)) return
+        // Les commandes directes ne sont traitées que depuis un pair découvert.
+        val sender = peers.values.firstOrNull { it.address == fromAddr } ?: return
+        val from = sender.name
         when (b[4]) {
             T_CC -> {
                 val (target, cc, ch, v) = decodeCc(b, len) ?: return
@@ -213,10 +224,7 @@ object ZuluLink {
             T_PING -> { replyPong(fromAddr, b, len); onMessage?.invoke(RxMessage(T_PING, from, fromAddr)) }
             T_PONG -> {
                 val stamp = decodeStamp(b, len)
-                val peer = peers[fromAddr]
-                if (peer != null && stamp > 0L) {
-                    peer.lastPingMs = System.currentTimeMillis() - stamp
-                }
+                if (stamp > 0L) sender.lastPingMs = System.currentTimeMillis() - stamp
                 onMessage?.invoke(RxMessage(T_PONG, from, fromAddr, stamp = stamp))
             }
             else -> Unit // inconnu : tolérance, on ignore en silence

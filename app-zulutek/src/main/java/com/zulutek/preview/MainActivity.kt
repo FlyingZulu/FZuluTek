@@ -696,6 +696,9 @@ class MainActivity : Activity(), SurfaceListener {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                 != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 43)
+                st.linkStatus = "permission micro requise…"
+                lcd.invalidate()
+                return
             }
             val cap = Fm1UsbAudio.startCapture(this)
             var play = false
@@ -706,6 +709,20 @@ class MainActivity : Activity(), SurfaceListener {
             st.linkAud = cap || play
         }
         lcd.invalidate()
+    }
+
+    @Deprecated("Deprecated in Android API; retained for runtime permission callback")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 43) {
+            if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                linkAudioToggle()
+            } else {
+                st.linkStatus = "permission micro refusée"
+                st.linkAud = false
+                lcd.invalidate()
+            }
+        }
     }
 
     private fun linkImport() {
