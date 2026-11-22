@@ -153,6 +153,7 @@ class LcdState {
     var chokePad = -1                               // pad/slot en cours d'édition choke
     var polyArmed = false                           // POLY pressé : le prochain pad tapé sera désigné leader
     var ecoOn = false                               // OPTIONS > ECO ON : LCD throttlé + blink figé
+    var vhsOn = true                               // OPTIONS > VHS ON/OFF : scanlines indépendantes de ECO
     var labelsZulu = false                          // OPTIONS > LABELS = ZULU (APK only, cosmétique)
     var viewMode = 0                                // OPTIONS > VUE (APK only) : 0 PLEIN, 1 CLAV, 2 AUTO
     var viewCompact = false                         // vue CLAV résolue (PLEIN/CLAV/AUTO + link up)
@@ -1316,17 +1317,18 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         // ---- page OPTIONS (16) : liste — SEL=navigue, ALG=valeur live, REC/tout bouton=quitte, Shift=reset ----
         if (st.page == 16) {
             title(c, 6f, 15f, "OPTIONS", FLUO_TURQ)
-            val names = arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN", "ENGINE")
+            val names = arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN", "ENGINE", "VHS")
             val vals = arrayOf(
                 if (st.ecoOn) "ON" else "OFF",
                 if (st.labelsZulu) "ZULU" else "FM1",
                 arrayOf("PLEIN", "CLAV", "AUTO")[st.viewMode.coerceIn(0, 2)],
                 if (st.luxeOn) "ON" else "OFF",
                 if (st.skinMaison) "MAISON" else "DA ZULU",
-                st.engineNames[st.engine.coerceIn(0, st.engineNames.lastIndex)])
-            val apkOnly = arrayOf(false, true, true, true, true, true)
-            for (r in 0..5) {
-                val y = 44f + r * 30f
+                st.engineNames[st.engine.coerceIn(0, st.engineNames.lastIndex)],
+                if (st.vhsOn) "ON" else "OFF")
+            val apkOnly = arrayOf(false, true, true, true, true, true, true)
+            for (r in 0..6) {
+                val y = 36f + r * 27f
                 val sel = r == st.optRow.coerceIn(0, 5)
                 text(c, 6f, y, (if (sel) ">" else " ") + " " + names[r], if (sel) FLUO_YEL else INK, 10f)
                 text(c, 96f, y, vals[r], if (sel) FLUO_YEL else INK, 10f)
@@ -1540,7 +1542,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             }
         }
         // VHS (bible: "léger effet VHS" = rendu standard du LCD) : scanlines par défaut, coupées en ECO
-        if (!st.ecoOn) {
+        if (st.vhsOn) {
             for (yy in 2 until H step 4) c.drawRect(0f, yy.toFloat(), W.toFloat(), yy + 1f, scanPaint)
         }
         // panneau "sens interdit" (rond rouge + barre blanche) + suggestions / bulles de conseils
