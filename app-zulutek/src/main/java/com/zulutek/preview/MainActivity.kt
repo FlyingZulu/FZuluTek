@@ -182,7 +182,9 @@ class MainActivity : Activity(), SurfaceListener {
                     st.srcVals[i] = ZtekAudio.srcVal(i)
             }
             if (st.page in 6..10) {
-                for (i in 0 until ZtekAudio.ZT_NSRC) st.srcVals[i] = ZtekAudio.srcVal(i)
+                if (!st.vhsOn) {
+                    for (i in 0 until ZtekAudio.ZT_NSRC) st.srcVals[i] = ZtekAudio.srcVal(i)
+                }
                 for (k in 0 until 5) st.seqkVals[k] = ZtekAudio.seqKnobGet(5 + k)
                 if (st.page == 9) {
                     st.asgSrc = ZtekAudio.assignSrc(st.sub)
