@@ -19,6 +19,12 @@ extern "C" {
 
 typedef struct ztek_s ztek_t;
 
+/* Shared-state gate for JNI/UI control versus realtime Oboe callbacks.
+ * Control side may wait; audio side must use try-lock only. */
+void ztek_control_lock(void);
+int  ztek_audio_try_lock(void);
+void ztek_control_unlock(void);
+
 ztek_t *ztek_create(float sr);
 void ztek_destroy(ztek_t *z);
 
