@@ -4,8 +4,8 @@ Before changing this repository, read [docs/ANDROID-AUDIO-NETWORK-HANDOFF.md](do
 
 ## Non-negotiable project scope
 
-- Unless the user explicitly expands scope, change **Android APK/Kotlin only**.
-- Do not edit FM-1 firmware, embedded patches, native C/C++ audio engine, or unrelated projects.
+- The user has authorized corrections in the **Android APK, Kotlin, and its native C/C++ engine**. The FM-1 firmware, embedded firmware patches, and unrelated projects remain strictly out of scope.
+- Never edit FM-1 firmware, embedded firmware patches, or unrelated projects. Native C/C++ changes are allowed only in the Android APK engine.
 - The user's label **SCL means SEL**. Do not report or rename it as a defect.
 - Keep work on a dedicated branch; do not rewrite or force-push unrelated branches/PRs.
 - Do not claim hardware validation from a successful CI build. State separately what was built, what was tested on a device, and what remains unverified.
@@ -18,5 +18,5 @@ Before changing this repository, read [docs/ANDROID-AUDIO-NETWORK-HANDOFF.md](do
 - Preserve the 4-byte USB-MIDI event packet framing (CIN/cable header plus three MIDI data bytes).
 - Release claimed USB interfaces and close USB connections on every failure and shutdown path.
 - Respect Android runtime permissions before starting capture.
-- Never block the audio callback on locks or I/O.
+- Never block the audio callback on locks or I/O. For shared JNI/Oboe state, control calls may take the engine state gate; the realtime callback must use try-lock and must not wait. Stop/join Oboe before destroying engine state.
 - For every change, run the Android CI build and inspect the changed-file list to ensure scope compliance.
