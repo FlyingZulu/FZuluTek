@@ -215,3 +215,5 @@ Correction :
 Commits code : LcdView `81352ba2c67949e42fb9e871a8d84f46105cf4d5`, MainActivity `ab3305b035152e0c3dbc696740a1ab07303d5c87`. Documentation bible : eee336a386a04cd867d8245e1b7925a71f767ad8.
 
 Validation : contrôles statiques des indices OPTIONS (0..6), affichage de la septième ligne, chargement/défaut/persistance, reset et condition de dessin VHS. Build CI et test tactile sur appareil restent à effectuer ; aucun test appareil revendiqué.
+
+Complément de revue statique : la borne de surbrillance de la ligne sélectionnée a également été étendue à l’index 6 (commit LcdView `fe0838d47d65ce86a868dc39d52730720a2d014d`) ; sans cette correction, la ligne VHS aurait été affichée mais pas sélectionnable visuellement.
