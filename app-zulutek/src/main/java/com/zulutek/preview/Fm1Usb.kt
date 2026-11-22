@@ -58,7 +58,9 @@ private class UsbMidiLink(
             buf[0] = ((cin shl 4) or 0).toByte()   // câble 0
             System.arraycopy(pkt, off, buf, 1, take)
             val r = conn.bulkTransfer(epOut, buf, buf.size, 250)
-            if (r < 0) return false
+            // USB-MIDI event packets are indivisible 4-byte records. A short
+            // transfer must not be reported as a successfully sent SysEx chunk.
+            if (r != buf.size) return false
             off += take
         }
         return true
