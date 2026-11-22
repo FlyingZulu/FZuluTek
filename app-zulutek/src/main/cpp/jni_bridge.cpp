@@ -329,6 +329,14 @@ ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumStep(JNIEnv *
 {
     return ztek_drum_step(zte(NULL, h));
 }
+ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumTrSet(JNIEnv *, jclass, jlong h, jint on)
+{
+    ztek_drum_tr_set(zte(NULL, h), on);          /* transport drums indépendant (SHIFT+PLAY page DRUMS, patch 0023) */
+}
+ZTEK_JNI jint JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumTrGet(JNIEnv *, jclass, jlong h)
+{
+    return ztek_drum_tr_get(zte(NULL, h));
+}
 
 /* ---- one-shot drums + looper (patch liaison 0023 APK/FM-1 : SHIFT+SEQ) ---- */
 ZTEK_JNI void JNICALL Java_com_zulutek_preview_ZtekAudio_nativeDrumSetOneshot(JNIEnv *, jclass, jlong h, jint on)
