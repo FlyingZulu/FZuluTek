@@ -250,3 +250,29 @@ Objectif : transformer les symptômes « LCD blanc » et « audio clic seul » e
 - Build #368 (run `44992946473`) : compilation et publication réussies sur le head intégrant la correction RGB565 et l'optimisation du diagnostic audio ; artefact `zulu-apk-368` (6 318 292 octets), étape Release dédiée ignorée sur la branche PR.
 - Build #367 (run `44992903393`) lancé sur le commit intermédiaire RGB565 seul ; il n'est pas nécessaire pour la validation du head ultérieur #368.
 - Les logs ne deviennent probants qu'après lancement sur un appareil Android et reproduction des symptômes. Aucun essai matériel effectué à ce stade. Aucun changement du DSP audio, du routage, du verrouillage ou du firmware FM-1 dans cette passe.
+
+
+## Audit complémentaire — intégrité des transports ZTF / USB-MIDI / ZuluLink (2026-11-22)
+
+### Défauts corrigés
+- `ZtfTransport.zrequest()` ignore maintenant les réponses ZTF dont le caractère de commande ne correspond pas à la requête active. Cela évite qu'une trame retardée ou étrangère valide accidentellement une autre opération.
+- `fileRead()` rejette les tailles impossibles à allouer dans un tableau JVM et interrompt explicitement une lecture qui ne retourne aucun octet utile, au lieu de boucler sans progression.
+- `fileWrite()` valide l'offset de reprise renvoyé par BEGIN et exige que chaque réponse DATA fasse progresser l'offset sans dépasser la taille annoncée.
+- `UsbMidiLink.send()` exige désormais que chaque paquet d'événement USB-MIDI de 4 octets soit intégralement transféré. Un transfert partiel n'est plus déclaré comme un succès.
+- `ZuluLink.start()` lie les deux sockets avant de lancer les threads et nettoie les ressources si l'un des ports ne peut pas être ouvert. L'échec est exposé par `lastStartError`, renvoyé comme `false`, puis journalisé par MainActivity ; un nouvel essai reste possible.
+- Un changement d'adresse IP d'un pair ZuluLink déclenche désormais `onPeersChanged`.
+- Les paquets ZuluLink entrants valident la plage MIDI (CC 0..127, canal 0..15, valeur 0..127), les tempos finis (30..300 BPM), une position beat finie/non négative et un timestamp non négatif. Les PING trop courts ou sans timestamp positif sont ignorés.
+
+### Commits Android
+- `e65ad086b07fb14707799f92b673e9c12c60ee0f` — réponses ZTF et progression des transferts.
+- `8889a214f13c3531912cbd5f49ac3300fc04bfa3`, `dc0918f002f9e90f2d7345b735fa06da7b7cad49`, `3a00748d2b9b9e2b4923f0f252468f4c035cdc76` — démarrage ZuluLink récupérable, diagnostic UI et capture non nullable des sockets.
+- `433490e915324460166e9dda39f428b12024b1df` — rejet des écritures USB-MIDI partielles.
+- `6a8eb2e20b16af52d74bcacb57ea8b0c4cf963dc` — validation des champs réseau entrants.
+
+### Validation
+- Builds #370 à #373 : succès ; artefacts debug CI publiés.
+- Build #374 / run `44994695432` : succès sur `433490e915324460166e9dda39f428b12024b1df`, artefact `zulu-apk-374` (6 319 159 octets).
+- Build #375 / run `44994810690` : en cours sur le head `6a8eb2e20b16af52d74bcacb57ea8b0c4cf963dc` au moment de cette note. Son résultat doit être vérifié avant de considérer la validation du dernier contrôle réseau terminée.
+- Aucune validation sur matériel USB/FM-1 ou réseau multi-appareils n'a été réalisée. Les correctifs sont des protections de protocole et de cycle de vie statiquement auditées, pas une preuve de fonctionnement matériel.
+- Les API haut niveau `Fm1Usb.ping()/pull()/push()` conservent encore leurs retours synchrones trompeurs alors que l'opération est mise en file sur le worker ; leur évolution vers des callbacks/résultats asynchrones reste à traiter séparément, après revue des appelants.
+- Aucun firmware FM-1, patch embarqué ni projet sans rapport n'a été modifié.
