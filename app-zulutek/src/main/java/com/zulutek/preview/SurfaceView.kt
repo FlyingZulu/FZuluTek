@@ -72,8 +72,11 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         val BTN_TOP_DA  = 0xFF00FFE0.toInt()
         val BTN_BOT_DA  = 0xFF00A692.toInt()
         val BTN_INK_DA  = 0xFF09120F.toInt()
-        val KEY_TOP_DA  = 0xFF00E8D0.toInt()
-        val KEY_BOT_DA  = 0xFF00948A.toInt()
+        // Clavier APK : touches blanches ivoire, touches noires roses (indépendant du skin).
+        val WHITE_KEY_TOP = 0xFFFFFEFC.toInt()
+        val WHITE_KEY_BOT = 0xFFE4E0E5.toInt()
+        val PINK_KEY_TOP  = 0xFFFF8BC8.toInt()
+        val PINK_KEY_BOT  = 0xFFD92B83.toInt()
         val SKIRT_DA    = 0xFF3A3D43.toInt()
         val SKIRT_HI_DA = 0xFF6D7178.toInt()
         val POINTER_DA  = 0xFFEEEAE2.toInt()
@@ -87,8 +90,6 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         val BTN_TOP_M   = 0xFFFC7A03.toInt()
         val BTN_BOT_M   = 0xFFD85700.toInt()
         val BTN_INK_M   = 0xFF301202.toInt()
-        val KEY_TOP_M   = 0xFF2F8CFF.toInt()
-        val KEY_BOT_M   = 0xFF0A48A8.toInt()
         val SKIRT_M     = 0xFF145214.toInt()
         val SKIRT_HI_M  = 0xFF2E7D2A.toInt()
         val POINTER_M   = 0xFFF6FFF8.toInt()
@@ -105,8 +106,6 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         var BTN_TOP = BTN_TOP_DA
         var BTN_BOT = BTN_BOT_DA
         var BTN_INK = BTN_INK_DA
-        var KEY_TOP = KEY_TOP_DA
-        var KEY_BOT = KEY_BOT_DA
         var SKIRT = SKIRT_DA
         var SKIRT_HI = SKIRT_HI_DA
         var POINTER = POINTER_DA
@@ -117,13 +116,11 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                 ROOM = ROOM_M; BODY_TOP = BODY_TOP_M; BODY_BOT = BODY_BOT_M; TRAY = TRAY_M
                 SILK_INK = SILK_INK_M; BRAND_INK = BRAND_INK_M
                 BTN_TOP = BTN_TOP_M; BTN_BOT = BTN_BOT_M; BTN_INK = BTN_INK_M
-                KEY_TOP = KEY_TOP_M; KEY_BOT = KEY_BOT_M
                 SKIRT = SKIRT_M; SKIRT_HI = SKIRT_HI_M; POINTER = POINTER_M; RIDGE = RIDGE_M
             } else {
                 ROOM = ROOM_DA; BODY_TOP = BODY_TOP_DA; BODY_BOT = BODY_BOT_DA; TRAY = TRAY_DA
                 SILK_INK = SILK_INK_DA; BRAND_INK = 0xFFFF2DA0.toInt()
                 BTN_TOP = BTN_TOP_DA; BTN_BOT = BTN_BOT_DA; BTN_INK = BTN_INK_DA
-                KEY_TOP = KEY_TOP_DA; KEY_BOT = KEY_BOT_DA
                 SKIRT = SKIRT_DA; SKIRT_HI = SKIRT_HI_DA; POINTER = POINTER_DA; RIDGE = RIDGE_DA
             }
         }
@@ -393,7 +390,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             val off = if (down) 3f * ts else 0f
             val x = whiteKeyX(i)
             rrect(c, x + 1f * ts, wY + 4f * ts, wW, wH, wW / 2f, 0xFF1A1A1C.toInt())              // shadow
-            rrect(c, x, wY + off, wW, wH, wW / 2f, mix(KEY_TOP, AMBER_LED, heat), mix(KEY_BOT, AMBER_LED, heat * 0.8f))
+            rrect(c, x, wY + off, wW, wH, wW / 2f, mix(WHITE_KEY_TOP, AMBER_LED, heat), mix(WHITE_KEY_BOT, AMBER_LED, heat * 0.8f))
             rrect(c, x + wW / 2f - 2.5f * ts, wY + 14f * ts + off, 5f * ts, wH - 28f * ts, 2.5f * ts,
                 if (heat > 0f) 0xFFEFE2B0.toInt() else RIDGE)
         }
@@ -404,7 +401,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             val off = if (down) 3f * ts else 0f
             val x = blackKeyX(bi)
             rrect(c, x + 1f * ts, bY + 4f * ts, bW, bH, bW / 2f, 0xFF1A1A1C.toInt())
-            rrect(c, x, bY + off, bW, bH, bW / 2f, mix(KEY_TOP, AMBER_LED, heat), mix(KEY_BOT, AMBER_LED, heat * 0.8f))
+            rrect(c, x, bY + off, bW, bH, bW / 2f, mix(PINK_KEY_TOP, AMBER_LED, heat), mix(PINK_KEY_BOT, AMBER_LED, heat * 0.8f))
             rrect(c, x + bW / 2f - 2.5f * ts, bY + 14f * ts + off, 5f * ts, bH - 28f * ts, 2.5f * ts,
                 if (heat > 0f) 0xFFEFE2B0.toInt() else RIDGE)
         }
