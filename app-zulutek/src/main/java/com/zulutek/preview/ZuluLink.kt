@@ -215,7 +215,7 @@ object ZuluLink {
         when (b[4]) {
             T_CC -> {
                 val (target, cc, ch, v) = decodeCc(b, len) ?: return
-                if (target != localName) return     // pas pour nous : ignorer (le broadcast UDP direct ne rebondit pas, mais par prudence)
+                if (target != localName && !target.equals("TOUS", ignoreCase = true)) return
                 onMessage?.invoke(RxMessage(T_CC, from, fromAddr, cc = cc, ch = ch, value = v))
             }
             T_CLOCK -> {
