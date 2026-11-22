@@ -306,3 +306,12 @@ Objectif : transformer les symptômes « LCD blanc » et « audio clic seul » e
 - Commit : `d6feaae17f7d01470352d8e63da7183c483318a1`. Build #384 / run [45009852514](https://github.com/FlyingZulu/FZuluTek/actions/runs/45009852514) à confirmer.
 - L'accès aux trames companion, ZTF et aux notifications watch est sérialisé par le même verrou dans `ZtfTransport`. Aucun défaut additionnel confirmé dans la revue statique de ZuluLink.
 - Validation uniquement statique/CI en attente ; test réel de reconnexion, permission et débranchement USB nécessaire. Aucun changement firmware/patch embarqué.
+
+
+## Validation CI et arrêt du watcher USB — 22/11/2026
+
+- Build #384, commit code `d6feaae17f7d01470352d8e63da7183c483318a1` : réussi ; APK CI `zulu-apk-384`, 6 319 459 octets. Release dédiée ignorée.
+- Build #385, commit handoff `e0a2545ecd9410653a92f21fc86fc6727371b66c` : réussi ; APK CI `zulu-apk-385`, 6 319 473 octets. Release dédiée ignorée.
+- Audit approfondi : `UsbMidiLink.read(timeoutMs)` utilise une file bloquante interruptible. `ZtfTransport.poll()` peut donc propager `InterruptedException`. L'ancien watcher interceptait toute exception puis dormait 500 ms ; une reconnexion rapide pouvait réactiver ce thread quand `connected` repassait à true.
+- Correction code `fc9cfbb86ef992f027e41234b51aec3c2d22049d` : boucle du watcher vérifie l'état d'interruption ; traite `InterruptedException` séparément et termine immédiatement ; le délai de reprise après erreur ordinaire reste conditionné à une connexion active et à l'absence d'interruption.
+- Build de cette dernière correction à surveiller. Aucun test matériel ; aucun firmware/patch embarqué touché.
