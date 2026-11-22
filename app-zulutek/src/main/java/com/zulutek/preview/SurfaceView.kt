@@ -474,7 +474,9 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
                     1 -> if (!encMoved && System.currentTimeMillis() - downTime < 350)
                              listener.onEncoderPress(idx)   // tap encodeur = appui SEL/... du FM-1
                     2 -> listener.onButton(idx, false)
-                    3 -> if (longPosted) listener.onWhiteKey(idx, false, false)
+                    // Toujours transmettre le relâchement : le callback long a déjà été émis
+                    // pour les touches blanches, mais il ne doit jamais supprimer le note-off.
+                    3 -> listener.onWhiteKey(idx, false, false)
                     4 -> listener.onBlackKey(BLACK_NOTES[idx], false)
                 }
                 zone = 0; idx = -1; longPosted = false
