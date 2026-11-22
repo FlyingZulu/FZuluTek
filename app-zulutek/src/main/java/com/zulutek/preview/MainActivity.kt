@@ -326,7 +326,17 @@ class MainActivity : Activity(), SurfaceListener {
         super.onCreate(savedInstanceState)
         /* jeu tactile (Flying Zulu) : pas de vue verticale, on verrouille paysage, facade FM-1 */
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        ZtekAudio.start()
+        val audioStarted = ZtekAudio.start()
+        if (audioStarted) {
+            android.util.Log.i("ZuluTekAudio", "Oboe output stream started at ${ZtekAudio.SAMPLE_RATE} Hz")
+        } else {
+            android.util.Log.e("ZuluTekAudio", "Oboe output stream failed to start; synth controls will be inactive")
+            android.widget.Toast.makeText(
+                this,
+                "Audio indisponible : démarrage du moteur synthé échoué",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
         ZtekAudio.initPrefs(this)
         // OPTIONS persistées (OBJ_OPTIONS côté FM-1) : ECO uniquement
         // (CHOKE LDR est supprimé d'OPTIONS : remplacé par le LDR par tranche, page MIX)
