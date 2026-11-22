@@ -120,14 +120,16 @@ object ZuluLink {
         try {
             // Bind both ports before launching workers. If either bind fails, roll back
             // completely so a later retry is possible and no half-open listener remains.
-            ds = DatagramSocket(DISCOVERY_PORT)
-            ds.broadcast = true
-            dds = DatagramSocket(DIRECT_PORT)
-            discoverySocket = ds
-            directSocket = dds
+            val discovery = DatagramSocket(DISCOVERY_PORT)
+            ds = discovery
+            discovery.broadcast = true
+            val direct = DatagramSocket(DIRECT_PORT)
+            dds = direct
+            discoverySocket = discovery
+            directSocket = direct
 
-            listenThread = thread("zulu-link-listen") { listenLoop(ds) }
-            directListenThread = thread("zulu-link-direct") { directListenLoop(dds) }
+            listenThread = thread("zulu-link-listen") { listenLoop(discovery) }
+            directListenThread = thread("zulu-link-direct") { directListenLoop(direct) }
             announceThread = thread("zulu-link-hello") { announceLoop() }
             lastStartError = ""
             return true
