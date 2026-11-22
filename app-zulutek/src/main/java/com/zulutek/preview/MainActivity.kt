@@ -26,6 +26,7 @@ class MainActivity : Activity(), SurfaceListener {
 
     private val st = LcdState()
     private var drumOnUi = true     // boite a rythme ON au demarrage (kick 4OTF, patch APK 0023)
+    private var drumTrUi = true     // transport de la boite a rythme, independant du play looper (SHIFT+PLAY page DRUMS)
     private lateinit var lcd: LcdView
     private lateinit var surface: SurfaceView
     private lateinit var rootLayout: android.widget.FrameLayout
@@ -1686,6 +1687,25 @@ class MainActivity : Activity(), SurfaceListener {
                 hint(if (on != 0) "LOOP ONE-SHOT ON" else "LOOP ONE-SHOT OFF")
                 lcd.invalidate(); return
             }
+        }
+        if (down && label == "PLAY" && shiftHeld && !st.smpPage) {   // SHIFT+PLAY : play/stop independant du sequenceur de la page (patch APK 0023)
+            if (st.page == 15) {                                    // page DRUMS : transport de la boite a rythme
+                drumTrUi = !drumTrUi
+                ZtekAudio.drumTr(if (drumTrUi) 1 else 0)
+                hint(if (drumTrUi) "DRUMS SEQ ON" else "DRUMS SEQ OFF")
+                lcd.invalidate(); return
+            }
+            if (st.page == 1) {                                     // page LOOP : transport du looper
+                st.playing = !st.playing
+                ZtekAudio.loopPlay(if (st.playing) 1 else 0)
+                if (st.playing) ZuluLink.sendStart("TOUS") else ZuluLink.sendStop("TOUS")
+                hint(if (st.playing) "LOOP PLAY" else "LOOP STOP")
+                lcd.invalidate(); return
+            }
+            st.seqOn = !st.seqOn                                    // autres pages : sequenceur synth (idem bouton SEQ)
+            ZtekAudio.acidPlay(if (st.seqOn) 1 else 0)
+            hint(if (st.seqOn) "SEQ SYNTH ON" else "SEQ SYNTH OFF")
+            lcd.invalidate(); return
         }
         when (SurfaceView.BTN_LABELS[i]) {
             "PLAY" -> if (down) {
