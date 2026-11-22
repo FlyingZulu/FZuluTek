@@ -169,7 +169,7 @@ object Fm1Usb {
     private var midiIf: UsbInterface? = null
     private var link: UsbMidiLink? = null
     /** USB device ID owning the currently opened transport (worker thread). */
-    private var activeDeviceId: Int? = null
+    @Volatile private var activeDeviceId: Int? = null
     var transport: ZtfTransport? = null
         private set
 
