@@ -30,6 +30,7 @@ class MainActivity : Activity(), SurfaceListener {
     private lateinit var lcd: LcdView
     private lateinit var surface: SurfaceView
     private lateinit var rootLayout: android.widget.FrameLayout
+    private var lcdPlacementLogged = false
 
     private var root = 45
     private var scale = 0
@@ -65,7 +66,7 @@ class MainActivity : Activity(), SurfaceListener {
             (st.page == 0 || st.page == 1 || st.page == 2 || st.page == 3 || st.page == 15) && i == 0 ->
                 "SLOT ${st.selSlot + 1}"
             st.page == 16 && i == 0 ->
-                "OPT " + arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN")[st.optRow.coerceIn(0, 4)]
+                "OPT " + arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN", "ENGINE")[st.optRow.coerceIn(0, 5)]
             st.page == 17 && i == 0 -> "LIGNE ${st.linkSel + 1}"
             st.page == 17 && i == 1 ->
                 "TAB " + arrayOf("FM-1", "LOCAL", "PARAMS", "PRESETS")[st.linkTab.coerceIn(0, 3)]
@@ -175,8 +176,15 @@ class MainActivity : Activity(), SurfaceListener {
             if (st.page == 1) {   // page LOOP : rafraîchit PITCH/POS/MODE/MUT/SRC/VOL
                 for (k in 0 until 6) st.loopParam[k] = ZtekAudio.loopGetSp(st.selSlot, k)
             }
+            // Lecture légère des sources de modulation pour le VHS animé, indépendante de la page.
+            if (st.vhsOn) {
+                for (i in 0 until minOf(ZtekAudio.ZT_NSRC, st.srcVals.size))
+                    st.srcVals[i] = ZtekAudio.srcVal(i)
+            }
             if (st.page in 6..10) {
-                for (i in 0 until ZtekAudio.ZT_NSRC) st.srcVals[i] = ZtekAudio.srcVal(i)
+                if (!st.vhsOn) {
+                    for (i in 0 until ZtekAudio.ZT_NSRC) st.srcVals[i] = ZtekAudio.srcVal(i)
+                }
                 for (k in 0 until 5) st.seqkVals[k] = ZtekAudio.seqKnobGet(5 + k)
                 if (st.page == 9) {
                     st.asgSrc = ZtekAudio.assignSrc(st.sub)
@@ -326,18 +334,32 @@ class MainActivity : Activity(), SurfaceListener {
         super.onCreate(savedInstanceState)
         /* jeu tactile (Flying Zulu) : pas de vue verticale, on verrouille paysage, facade FM-1 */
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        ZtekAudio.start()
+        val audioStarted = ZtekAudio.start()
+        if (audioStarted) {
+            android.util.Log.i("ZuluTekAudio", "Oboe output stream started at ${ZtekAudio.SAMPLE_RATE} Hz")
+        } else {
+            android.util.Log.e("ZuluTekAudio", "Oboe output stream failed to start; synth controls will be inactive")
+            android.widget.Toast.makeText(
+                this,
+                "Audio indisponible : démarrage du moteur synthé échoué",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
         ZtekAudio.initPrefs(this)
-        // OPTIONS persistées (OBJ_OPTIONS côté FM-1) : ECO uniquement
+        // OPTIONS persistées (APK) : ECO et VHS sont indépendants
         // (CHOKE LDR est supprimé d'OPTIONS : remplacé par le LDR par tranche, page MIX)
         st.ecoOn = optsPrefs.getBoolean("eco", false)
+        st.vhsOn = optsPrefs.getBoolean("vhs", true)
         st.labelsZulu = optsPrefs.getBoolean("labels_zulu", false)
         st.viewMode = optsPrefs.getInt("vue", 0).coerceIn(0, 2)
         st.luxeOn = optsPrefs.getBoolean("luxe", false)
         st.skinMaison = optsPrefs.getBoolean("skin_maison", false)
         ZtekAudio.setEco(if (st.ecoOn) 1 else 0)
         ZtekAudio.setLuxe(if (st.luxeOn) 1 else 0)
-        ZtekAudio.setEngine(0)
+        curEngine = optsPrefs.getInt("engine", 0).coerceIn(0, 4)
+        st.engine = curEngine
+        st.curPart = if (curEngine == 0) 1 else 0
+        ZtekAudio.setEngine(curEngine)
         // page FINE (18) : options persistées (équivalent OBJ_OPTIONS côté FM-1, patch 0012)
         for (i in 0 until ZtekAudio.FINE_NOPT) {
             val fv = optsPrefs.getInt("fine_$i", -1)
@@ -382,7 +404,11 @@ class MainActivity : Activity(), SurfaceListener {
          * tempo ; on reçoit ses CC (74..80 voix/moteur, 20..37 FX, 102..115 boutons). */
         ZuluLink.onMessage = { msg -> handler.post { onZuluMessage(msg) } }
         ZuluLink.onPeersChanged = { handler.post { lcd.invalidate() } }
-        ZuluLink.start("zulu-apk", ZuluLink.Role.CONSOLE)
+        if (ZuluLink.start("zulu-apk", ZuluLink.Role.CONSOLE)) {
+            android.util.Log.i("ZuluLink", "UDP discovery/direct sockets started")
+        } else {
+            android.util.Log.e("ZuluLink", "UDP startup failed: ${ZuluLink.lastStartError}")
+        }
 
         /* liaison ZTF avec le FM-1 (page LINK 17) : callbacks worker -> UI via handler */
         Fm1Usb.init(this)
@@ -620,10 +646,16 @@ class MainActivity : Activity(), SurfaceListener {
 
     private fun linkScan() {
         st.linkStatus = "scan USB…"
+        // Permission grant and USB interface opening are asynchronous. Queue the
+        // first ZTF requests only after the transport reports that it is ready.
+        Fm1Usb.onConnected = {
+            handler.post {
+                Fm1Usb.ping()
+                Fm1Usb.refreshFiles()
+                linkWatchStart()
+            }
+        }
         Fm1Usb.scan()
-        Fm1Usb.ping()
-        Fm1Usb.refreshFiles()
-        linkWatchStart()
         linkRefreshLocal()
     }
 
@@ -784,8 +816,11 @@ class MainActivity : Activity(), SurfaceListener {
                 when {
                     msg.cc in 74..80 -> {
                         if (msg.cc == 80) {
-                            curEngine = (v * 4.999f).toInt().coerceIn(0, 4); ZtekAudio.setEngine(curEngine)
-                            st.engine = (v * 4.999f).toInt().coerceIn(0, 4)
+                            curEngine = (v * 4.999f).toInt().coerceIn(0, 4)
+                            st.engine = curEngine
+                            st.curPart = if (curEngine == 0) 1 else 0
+                            ZtekAudio.setEngine(curEngine)
+                            optsPrefs.edit().putInt("engine", curEngine).apply()
                         } else {
                             ZtekAudio.setParam(msg.cc - 74, v)
                             st.encVals[3 + (msg.cc - 74)] = v
@@ -828,20 +863,28 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- OPTIONS (page 16, liste) : SEL=navigue, ALG=valeur live, Shift=reset ----
     private fun optSet(row: Int, v: Float) {
-        when (row.coerceIn(0, 4)) {
+        when (row.coerceIn(0, 6)) {
             0 -> { st.ecoOn = v > 0.5f; ZtekAudio.setEco(if (st.ecoOn) 1 else 0); optsPrefs.edit().putBoolean("eco", st.ecoOn).apply() }
             1 -> { st.labelsZulu = v > 0.5f; optsPrefs.edit().putBoolean("labels_zulu", st.labelsZulu).apply(); surface.invalidate() }
             2 -> { st.viewMode = (v * 2.999f).toInt().coerceIn(0, 2); optsPrefs.edit().putInt("vue", st.viewMode).apply(); updateViewCompact() }
             3 -> { st.luxeOn = v > 0.5f; ZtekAudio.setLuxe(if (st.luxeOn) 1 else 0); optsPrefs.edit().putBoolean("luxe", st.luxeOn).apply() }
             4 -> { st.skinMaison = v > 0.5f; optsPrefs.edit().putBoolean("skin_maison", st.skinMaison).apply(); surface.invalidate() }
+            5 -> {
+                curEngine = (v * 4.999f).toInt().coerceIn(0, 4)
+                st.engine = curEngine
+                st.curPart = if (curEngine == 0) 1 else 0
+                ZtekAudio.setEngine(curEngine)
+                optsPrefs.edit().putInt("engine", curEngine).apply()
+            }
+            6 -> { st.vhsOn = v > 0.5f; optsPrefs.edit().putBoolean("vhs", st.vhsOn).apply() }
         }
         lcd.invalidate()
     }
     private fun optReset(row: Int) {   // Shift court = reset de la ligne courante
-        optSet(row, 0f)
-        hint("reset " + arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN")[row.coerceIn(0, 4)])
+        optSet(row, if (row == 6) 1f else 0f)
+        hint("reset " + arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN", "ENGINE", "VHS")[row.coerceIn(0, 6)])
     }
-    private fun optResetAll() { for (r in 0..4) optSet(r, 0f) }   // Shift long = reset all
+    private fun optResetAll() { for (r in 0..6) optSet(r, if (r == 6) 1f else 0f) }   // Shift long = reset all
 
     // ---- OPTIONS > VUE = PLEIN/CLAV/AUTO (APK only) : AUTO = CLAV si FM-1/ZTF ou peer ZuluLink up (+ pop singe 400 ms)
     private fun linkUpNow() = Fm1Usb.connected || ZuluLink.peersSnapshot().any { !it.lost }
@@ -856,6 +899,13 @@ class MainActivity : Activity(), SurfaceListener {
         lp.leftMargin = r[0].toInt()
         lp.topMargin = r[1].toInt()
         lcd.layoutParams = lp
+        if (!lcdPlacementLogged) {
+            lcdPlacementLogged = true
+            android.util.Log.i(
+                "ZuluTekLCD",
+                "placement surface=${surface.width}x${surface.height} rect=${r.joinToString()} lcd=${lp.width}x${lp.height} margin=${lp.leftMargin},${lp.topMargin}"
+            )
+        }
     }
 
     private fun updateViewCompact() {
@@ -867,7 +917,9 @@ class MainActivity : Activity(), SurfaceListener {
     }
 
     // ---- encoders ----
-    override fun onEncoderHold(i: Int) { if (i == 0) selHeld = true }
+    override fun onEncoderHold(i: Int) {
+        if (i == 0) selHeld = true
+    }
     override fun onEncoderPress(i: Int) {
         if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40) ; page PRESETS 10 : appui SEL = LOAD (confirme le choix)
             if (recHeld) st.page = if (st.page == 2) 0 else 2
@@ -1219,7 +1271,7 @@ class MainActivity : Activity(), SurfaceListener {
             return
         }
         if (st.page == 16) {                     // OPTIONS liste : SEL=navigue, ALG=valeur live
-            if (i == 0) st.optRow = (v * 4.999f).toInt().coerceIn(0, 4)
+            if (i == 0) st.optRow = (v * 6.999f).toInt().coerceIn(0, 6)
             if (i == 2) optSet(st.optRow, v)
             lcd.invalidate()
             return
@@ -1367,8 +1419,8 @@ class MainActivity : Activity(), SurfaceListener {
     private fun cyclePart() {   // HOME court : BASSE -> LEAD -> DRUMS(page 15) -> LOOP(page 1)
         st.curPart = (st.curPart + 1) % 4
         when (st.curPart) {
-            0 -> { if (curEngine == 0) { curEngine = 1; ZtekAudio.setEngine(1) }; st.page = 0 }  // BASSE (engines 1..4)
-            1 -> { curEngine = 0; ZtekAudio.setEngine(0); st.page = 0 }                          // LEAD (engine 0)
+            0 -> { if (curEngine == 0) { curEngine = 1; st.engine = curEngine; ZtekAudio.setEngine(curEngine) }; st.page = 0 }  // BASSE (engines 1..4)
+            1 -> { curEngine = 0; st.engine = curEngine; ZtekAudio.setEngine(curEngine); st.page = 0 }                          // LEAD (engine 0)
             2 -> st.page = 15                                                                    // DRUMS
             else -> st.page = 1                                                                  // LOOP
         }

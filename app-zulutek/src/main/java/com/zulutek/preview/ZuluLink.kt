@@ -106,24 +106,49 @@ object ZuluLink {
 
     // ---- Cycle de vie -----------------------------------------------------
 
-    fun start(name: String, asRole: Role) {
-        if (!running.compareAndSet(false, true)) return
+    @Volatile var lastStartError: String = ""
+        private set
+
+    fun start(name: String, asRole: Role): Boolean {
+        if (!running.compareAndSet(false, true)) return true
         localName = name.take(NAME_MAX)
         role = asRole
         peers.clear()
 
-        // Socket de découverte : écoute le broadcast, accepte d'émettre en broadcast
-        val ds = DatagramSocket(DISCOVERY_PORT)
-        ds.broadcast = true
-        discoverySocket = ds
+        var ds: DatagramSocket? = null
+        var dds: DatagramSocket? = null
+        try {
+            // Bind both ports before launching workers. If either bind fails, roll back
+            // completely so a later retry is possible and no half-open listener remains.
+            val discovery = DatagramSocket(DISCOVERY_PORT)
+            ds = discovery
+            discovery.broadcast = true
+            val direct = DatagramSocket(DIRECT_PORT)
+            dds = direct
+            discoverySocket = discovery
+            directSocket = direct
 
-        // Socket direct : les pairs nous envoient ici les CC/CLOCK/etc.
-        val dds = DatagramSocket(DIRECT_PORT)
-        directSocket = dds
-
-        listenThread = thread("zulu-link-listen") { listenLoop(ds) }
-        directListenThread = thread("zulu-link-direct") { directListenLoop(dds) }
-        announceThread = thread("zulu-link-hello") { announceLoop() }
+            listenThread = thread("zulu-link-listen") { listenLoop(discovery) }
+            directListenThread = thread("zulu-link-direct") { directListenLoop(direct) }
+            announceThread = thread("zulu-link-hello") { announceLoop() }
+            lastStartError = ""
+            return true
+        } catch (e: Exception) {
+            running.set(false)
+            try { ds?.close() } catch (_: Exception) {}
+            try { dds?.close() } catch (_: Exception) {}
+            discoverySocket = null
+            directSocket = null
+            listenThread?.interrupt()
+            directListenThread?.interrupt()
+            announceThread?.interrupt()
+            listenThread = null
+            directListenThread = null
+            announceThread = null
+            peers.clear()
+            lastStartError = e.message ?: e.javaClass.simpleName
+            return false
+        }
     }
 
     fun stop() {
@@ -190,6 +215,7 @@ object ZuluLink {
                     onPeersChanged?.invoke()
                 } else if (known.address != fromAddr) {
                     peers[name] = Peer(name, fromAddr, role, tempo, System.currentTimeMillis())
+                    onPeersChanged?.invoke()
                 } else {
                     known.role = role; known.tempo = tempo
                     known.lastSeen = System.currentTimeMillis()
@@ -221,7 +247,11 @@ object ZuluLink {
             }
             T_START, T_STOP -> onMessage?.invoke(RxMessage(b[4], from, fromAddr))
             T_TAP -> onMessage?.invoke(RxMessage(T_TAP, from, fromAddr))
-            T_PING -> { replyPong(fromAddr, b, len); onMessage?.invoke(RxMessage(T_PING, from, fromAddr)) }
+            T_PING -> {
+                if (len < 6 + 8 || decodeStamp(b, len) <= 0L) return
+                replyPong(fromAddr, b, len)
+                onMessage?.invoke(RxMessage(T_PING, from, fromAddr))
+            }
             T_PONG -> {
                 val stamp = decodeStamp(b, len)
                 if (stamp > 0L) sender.lastPingMs = System.currentTimeMillis() - stamp
@@ -328,6 +358,7 @@ object ZuluLink {
         val name = decodeName(b, len, 6) ?: return null
         val role = if (b[6 + NAME_MAX].toInt() == 1) Role.CONSOLE else Role.MODULE
         val tempo = ByteBuffer.wrap(b, 6 + NAME_MAX + 1, 8).double
+        if (!tempo.isFinite() || tempo !in 30.0..300.0) return null
         return Triple(name, role, tempo)
     }
 
@@ -341,7 +372,11 @@ object ZuluLink {
     private fun decodeCc(b: ByteArray, len: Int): Quad? {
         if (len < 6 + NAME_MAX + 3) return null
         val target = decodeName(b, len, 6) ?: return null
-        return Quad(target, b[6 + NAME_MAX].toInt() and 0xFF, b[6 + NAME_MAX + 1].toInt() and 0xFF, b[6 + NAME_MAX + 2].toInt() and 0xFF)
+        val cc = b[6 + NAME_MAX].toInt() and 0xFF
+        val ch = b[6 + NAME_MAX + 1].toInt() and 0xFF
+        val value = b[6 + NAME_MAX + 2].toInt() and 0xFF
+        if (cc !in 0..127 || ch !in 0..15 || value !in 0..127) return null
+        return Quad(target, cc, ch, value)
     }
     private data class Quad(val target: String, val cc: Int, val ch: Int, val v: Int)
 
@@ -356,6 +391,8 @@ object ZuluLink {
         val tempo = ByteBuffer.wrap(b, 6, 8).double
         val beat = ByteBuffer.wrap(b, 14, 8).double
         val stamp = ByteBuffer.wrap(b, 22, 8).long
+        if (!tempo.isFinite() || tempo !in 30.0..300.0 ||
+            !beat.isFinite() || beat < 0.0 || stamp < 0L) return null
         return Triple(tempo, beat, stamp)
     }
 

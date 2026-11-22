@@ -101,9 +101,20 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
                 val end = System.currentTimeMillis() + timeoutMs
                 while (System.currentTimeMillis() < end) {
                     val pkt = link.read(end - System.currentTimeMillis()) ?: break
-                    if (!ZtfCodec.isZtf(pkt)) continue
-                    // on dépile aussi les notifs companion en passant
+                    if (!ZtfCodec.isZtf(pkt)) {
+                        // Preserve live companion notifications arriving during a raw ZTF request.
+                        val companion = ZtfCodec.parseFrame(pkt) ?: continue
+                        if (companion.first == ZtfCodec.CMD_PARAMS &&
+                            companion.second.isNotEmpty() &&
+                            companion.second[0].toInt() == ZtfCodec.PQ_CHANGED) {
+                            noteChanged(companion.second)
+                        }
+                        continue
+                    }
                     val a = ZtfCodec.parseZtf(pkt) ?: continue
+                    // Ignore stale or unrelated ZTF replies; only the command we sent
+                    // may complete this request.
+                    if (a.first != cmd) continue
                     return a
                 }
             }
@@ -222,6 +233,8 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
     /** lit le fichier i en entier, vérifié contre le CRC-32 du device ; progress(done,total) */
     fun fileRead(i: Int, progress: ((Long, Long) -> Unit)? = null): ByteArray {
         val (size, crc) = fileSum(i)
+        if (size > Int.MAX_VALUE.toLong())
+            throw ZtfException("fichier trop volumineux pour Android: $size octets", ZtfException.SILENT)
         val data = ByteArray(size.toInt())
         var off = 0L
         while (off < size) {
@@ -233,6 +246,7 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
             val roff = ZtfCodec.get32(b, 0).toLong() and 0xFFFFFFFFL
             if (roff != off) throw ZtfException("read off $roff != $off", ZtfException.SILENT)
             val n = minOf(b.size - 4, (size - off).toInt())
+            if (n <= 0) throw ZtfException("read sans progression @$off", ZtfException.SILENT)
             System.arraycopy(b, 4, data, off.toInt(), n)
             off += n
             progress?.invoke(off, size)
@@ -252,6 +266,8 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
         val b = fileOp(ZtfCodec.OP_BEGIN, i, req)
         if (b.size < 4) throw ZtfException("begin court", ZtfException.SILENT)
         var next = ZtfCodec.get32(b, 0).toLong() and 0xFFFFFFFFL   // reprise si coupure
+        if (next > data.size.toLong())
+            throw ZtfException("offset begin invalide: $next/${data.size}", ZtfException.SILENT)
         while (next < data.size) {
             val n = minOf(chunk, data.size - next.toInt())
             val d = ByteArray(4 + n)
@@ -259,7 +275,10 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
             System.arraycopy(data, next.toInt(), d, 4, n)
             val rb = fileOp(ZtfCodec.OP_DATA, i, d, allowOrder = true)   // ST_ORDER = reprise acceptée
             if (rb.size < 4) throw ZtfException("data @ $next: réponse courte", ZtfException.SILENT)
+            val previous = next
             next = ZtfCodec.get32(rb, 0).toLong() and 0xFFFFFFFFL
+            if (next <= previous || next > data.size.toLong())
+                throw ZtfException("data sans progression ou offset invalide: $previous -> $next", ZtfException.SILENT)
             progress?.invoke(next, data.size.toLong())
         }
         fileOp(ZtfCodec.OP_COMMIT, i)

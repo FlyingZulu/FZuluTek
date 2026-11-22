@@ -294,6 +294,7 @@ Même contrat des deux côtés : **SEL = banc** (OSC / FILTRE / AMP), **K1..K4 =
   agrandis (layout `SurfaceView` selon `st.viewCompact`) ; AUTO = CLAV dès qu'un lien est up
   (`Fm1Usb.connected` ou peer ZuluLink vivant) + **pop singe 400 ms** à la connexion (LCD). Persistance :
   SharedPreferences (`vue`). Non porté côté FM-1 (écran 240×240 fixe).
+- **OPTIONS > VHS = OFF/ON** (**APK only**) : scanlines VHS appliquées uniquement au rendu LCD. Le réglage est indépendant de ECO (ECO ne change que le throttling/les animations), indépendant de LUXE, actif par défaut et persisté dans SharedPreferences (`vhs`). Shift court sur VHS réactive l’effet ; le reset global restaure également VHS=ON. Aucun effet sur le clavier, les zones tactiles ou le moteur audio. Non porté côté FM-1.\n- **OPTIONS > ENGINE = ATEK303 / PLUK / FM / SUB / 8BIT** (**APK only**) : sélection locale des cinq moteurs de voix. **SEL** choisit la ligne ENGINE, **ALG** choisit le moteur (0..4) ; la sélection est appliquée immédiatement, affichée sur le LCD et persistée dans SharedPreferences (`engine`). Engine 0 = ATEK303/LEAD ; engines 1..4 = PLUK/FM/SUB/8BIT (famille BASSE). HOME court conserve son cycle de parties BASSE/LEAD/DRUMS/LOOP ; ALG garde son rôle waveform sur MAIN. Shift court sur ENGINE remet ATEK303 ; reset global remet également le moteur 0. Non porté côté FM-1.
 - **OPTIONS > LUXE = OFF/ON** (**APK only**) : decay reverb Black Hole relevé à **0.99** (0.89 sinon),
   pre-delay max, BBD **stéréo**, swirl actif, drums **8 voix** — LUXE gagne sur ECO si les deux sont ON
   (`ztek_set_luxe`, `ztek_engine.cpp`). Build APK avec `-DZTEK_LUXE_BUF` (`app-zulutek/build.gradle`) :
@@ -318,3 +319,6 @@ préservées par snapshots/kits/undo. **Migration** : magic preset `ZTP1` → `Z
 `strip_par` au load/import (VOICE := ex-LEAD, DRUMS/LOOP décalés, SIREN neuf vol=`siren_lvl`) ;
 `ZTEK_NSTRIP` reste 4 donc la baie (52 ports) ne change pas. ZTF inchangé (aucun param
 renuméroté).
+
+
+- **VHS subtil et réactif (APK only)** : scanlines fines (pas 1/3 px logiques, opacité faible) et micro-artefacts horizontaux rares, positions/intensités randomisées à intervalles irréguliers. Leur présence/intensité varie avec l’activité agrégée des 16 sources de modulation lues via `ZtekAudio.srcVal` (LFO, enveloppes et tools) ; lecture Android côté UI à 250 ms, aucun calcul ni accès JNI ajouté au callback audio. VHS OFF coupe entièrement l’overlay ; ECO reste indépendant. Effet cosmétique seulement, sans altérer les données framebuffer ni le son. Validation build CI et appareil à confirmer.

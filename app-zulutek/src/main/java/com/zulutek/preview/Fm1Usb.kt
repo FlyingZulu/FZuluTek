@@ -58,7 +58,9 @@ private class UsbMidiLink(
             buf[0] = ((cin shl 4) or 0).toByte()   // câble 0
             System.arraycopy(pkt, off, buf, 1, take)
             val r = conn.bulkTransfer(epOut, buf, buf.size, 250)
-            if (r < 0) return false
+            // USB-MIDI event packets are indivisible 4-byte records. A short
+            // transfer must not be reported as a successfully sent SysEx chunk.
+            if (r != buf.size) return false
             off += take
         }
         return true
@@ -122,19 +124,36 @@ object Fm1Usb {
     var onProgress: (String) -> Unit = {}
     /** notifications de params (0x62 CHANGED) reçues en live quand watch est actif — miroir mode A */
     var onParams: (List<Pair<Int, Int>>) -> Unit = {}
+    /** appelé sur le worker uniquement après ouverture effective et transport prêt */
+    var onConnected: (() -> Unit)? = null
 
     private var watchThread: Thread? = null
 
     /** boucle de réception des notifications de params (démarrée à la connexion) */
     private fun startWatch() {
         watchThread = thread(name = "fm1-params-rx", start = true) {
-            while (connected) {
+            while (connected && !Thread.currentThread().isInterrupted) {
                 val t = transport
-                if (t == null) { Thread.sleep(300); continue }
+                if (t == null) {
+                    try { Thread.sleep(300) } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        return@thread
+                    }
+                    continue
+                }
                 try {
                     val ns = t.poll(300)
                     if (ns.isNotEmpty()) onParams(ns)
-                } catch (e: Exception) { Thread.sleep(500) }
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return@thread
+                } catch (_: Exception) {
+                    if (!connected || Thread.currentThread().isInterrupted) return@thread
+                    try { Thread.sleep(500) } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        return@thread
+                    }
+                }
             }
         }
     }
@@ -149,10 +168,23 @@ object Fm1Usb {
     private var device: UsbDevice? = null
     private var midiIf: UsbInterface? = null
     private var link: UsbMidiLink? = null
+    /** USB device ID owning the currently opened transport (worker thread). */
+    @Volatile private var activeDeviceId: Int? = null
     var transport: ZtfTransport? = null
         private set
 
     private val worker = Executors.newSingleThreadExecutor()
+
+    private val detachReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, intent: Intent) {
+            if (UsbManager.ACTION_USB_DEVICE_DETACHED != intent.action) return
+            val detached = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE) ?: return
+            if (detached.deviceId == device?.deviceId || detached.deviceId == activeDeviceId) {
+                onStatus("FM-1 débranché")
+                close()
+            }
+        }
+    }
 
     private val permReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
@@ -177,10 +209,17 @@ object Fm1Usb {
         else
             @Suppress("UnspecifiedRegisterReceiverFlag")
             appCtx.registerReceiver(permReceiver, filter)
+        val detachFilter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        if (Build.VERSION.SDK_INT >= 33)
+            appCtx.registerReceiver(detachReceiver, detachFilter, Context.RECEIVER_NOT_EXPORTED)
+        else
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            appCtx.registerReceiver(detachReceiver, detachFilter)
     }
 
     fun release() {
         try { appCtx.unregisterReceiver(permReceiver) } catch (_: Exception) {}
+        try { appCtx.unregisterReceiver(detachReceiver) } catch (_: Exception) {}
         close()
     }
 
@@ -233,6 +272,15 @@ object Fm1Usb {
         val itf = midiIf ?: return
         val mgr = usbManager ?: return
         worker.execute {
+            // A page re-entry or repeated scan must reuse the live transport. In
+            // particular, do not replace its reader/watch threads while connected.
+            if (connected && transport != null && activeDeviceId == dev.deviceId) {
+                onConnected?.invoke()
+                return@execute
+            }
+            // A newly enumerated USB device is not the same live transport, even
+            // if the previous connection still has a stale connected flag.
+            closeActiveNow()
             try {
                 val conn = mgr.openDevice(dev) ?: throw ZtfException("openDevice a échoué")
                 var claimed = false
@@ -252,9 +300,11 @@ object Fm1Usb {
                 val l = UsbMidiLink(conn, epOut, epIn, itf)
                 link = l
                 transport = ZtfTransport(l)
+                activeDeviceId = dev.deviceId
                 connected = true
                 startWatch()
                 onStatus("FM-1 connecté ($deviceName)")
+                onConnected?.invoke()
                 } catch (e: Exception) {
                     if (claimed) try { conn.releaseInterface(itf) } catch (_: Exception) {}
                     try { conn.close() } catch (_: Exception) {}
@@ -267,15 +317,18 @@ object Fm1Usb {
         }
     }
 
+    private fun closeActiveNow() {
+        connected = false
+        watchThread?.interrupt()
+        watchThread = null
+        link?.close()
+        link = null
+        transport = null
+        activeDeviceId = null
+    }
+
     fun close() {
-        worker.execute {
-            connected = false
-            watchThread?.interrupt()
-            watchThread = null
-            link?.close()
-            link = null
-            transport = null
-        }
+        worker.execute { closeActiveNow() }
     }
 
     /** exécute une op sur le worker ; les exceptions deviennent un statut */
@@ -286,16 +339,13 @@ object Fm1Usb {
         }
     }
 
-    fun ping(): Triple<String, Int, Long>? {
-        var out: Triple<String, Int, Long>? = null
+    /** Opération asynchrone : résultat livré via onStatus, jamais par valeur de retour. */
+    fun ping() {
         run("ping") {
             val t = transport!!.ztfPing()
-            if (t != null) {
-                out = t
-                onStatus("ZTF OK: ${t.first} v${t.second}, libre ${t.third / 1024} Ko")
-            } else onStatus("pas de réponse ZTF (pas companion ?)")
+            if (t != null) onStatus("ZTF OK: ${t.first} v${t.second}, libre ${t.third / 1024} Ko")
+            else onStatus("pas de réponse ZTF (pas companion ?)")
         }
-        return out
     }
 
     fun refreshFiles() {
@@ -306,58 +356,48 @@ object Fm1Usb {
         }
     }
 
-    /** tire le fichier i du FM-1 vers un fichier local ; retourne la taille lue */
-    fun pull(i: Int, dest: File, label: String = "PULL"): Long {
-        var size = 0L
+    /** Tire le fichier i vers le stockage local ; résultat asynchrone via onStatus/onProgress. */
+    fun pull(i: Int, dest: File, label: String = "PULL") {
         run(label) {
             val data = transport!!.fileRead(i) { done, total ->
                 onProgress("$label $done/$total")
             }
             dest.parentFile?.mkdirs()
             dest.writeBytes(data)
-            size = data.size.toLong()
             onStatus("$label -> ${dest.name} (${data.size} o)")
         }
-        return size
     }
 
-    /** pousse des octets vers le fichier i du FM-1 (begin/data/commit, CRC-32, reprise) */
-    fun push(i: Int, data: ByteArray, label: String = "PUSH"): Boolean {
-        var ok = false
+    /** Pousse des octets vers le fichier i ; résultat asynchrone via onStatus/onProgress. */
+    fun push(i: Int, data: ByteArray, label: String = "PUSH") {
         run(label) {
             transport!!.fileWrite(i, data) { done, total ->
                 onProgress("$label ${(done * 100 / total.coerceAtLeast(1))}%")
             }
-            ok = true
             onStatus("$label OK (${data.size} o, CRC ok)")
         }
-        return ok
     }
 
-    /** pousse vers un fichier nommé (ZSMP00..07 / ZLUP00..07 / ZMAC / ZPRE00..31 / ZKIT) */
-    fun pushNamed(name: String, data: ByteArray, label: String = "PUSH"): Boolean {
-        var ok = false
+    /** Pousse vers un fichier nommé ; résultat asynchrone via onStatus/onProgress. */
+    fun pushNamed(name: String, data: ByteArray, label: String = "PUSH") {
         run(label) {
             val f = transport!!.fileIndexOf(name)
             transport!!.fileWrite(f.index, data) { done, total ->
                 onProgress("$label ${(done * 100 / total.coerceAtLeast(1))}%")
             }
-            ok = true
             onStatus("$label $name OK (${data.size} o)")
         }
-        return ok
     }
 
-    fun pullNamed(name: String, dest: File, label: String = "PULL"): Long {
-        var size = 0L
+    /** Tire un fichier nommé ; résultat asynchrone via onStatus/onProgress. */
+    fun pullNamed(name: String, dest: File, label: String = "PULL") {
         run(label) {
             val f = transport!!.fileIndexOf(name)
             val data = transport!!.fileRead(f.index) { done, total -> onProgress("$label $done/$total") }
             dest.parentFile?.mkdirs()
             dest.writeBytes(data)
-            size = data.size.toLong()
+            onStatus("$label -> ${dest.name} (${data.size} o)")
         }
-        return size
     }
 
     fun load(i: Int) {
