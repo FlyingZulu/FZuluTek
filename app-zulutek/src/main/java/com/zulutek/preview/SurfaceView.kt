@@ -227,7 +227,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         kbTray[0] = p; kbTray[1] = kbTop; kbTray[2] = W - 2f * p; kbTray[3] = kbH
         val m = 0.012f * W
         val avail = kbTray[2] - 2f * m
-        wW = avail / 3.7f
+        wW = avail / 18.7f        // 16 pills + 15 gaps de 18% = 18.7 largeurs (3.7 = troncature 5x)
         val g = 0.18f * wW
         wDx = wW + g
         wX0 = p + m
