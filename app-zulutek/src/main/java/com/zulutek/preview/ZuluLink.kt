@@ -247,7 +247,11 @@ object ZuluLink {
             }
             T_START, T_STOP -> onMessage?.invoke(RxMessage(b[4], from, fromAddr))
             T_TAP -> onMessage?.invoke(RxMessage(T_TAP, from, fromAddr))
-            T_PING -> { replyPong(fromAddr, b, len); onMessage?.invoke(RxMessage(T_PING, from, fromAddr)) }
+            T_PING -> {
+                if (len < 6 + 8 || decodeStamp(b, len) <= 0L) return
+                replyPong(fromAddr, b, len)
+                onMessage?.invoke(RxMessage(T_PING, from, fromAddr))
+            }
             T_PONG -> {
                 val stamp = decodeStamp(b, len)
                 if (stamp > 0L) sender.lastPingMs = System.currentTimeMillis() - stamp
@@ -354,6 +358,7 @@ object ZuluLink {
         val name = decodeName(b, len, 6) ?: return null
         val role = if (b[6 + NAME_MAX].toInt() == 1) Role.CONSOLE else Role.MODULE
         val tempo = ByteBuffer.wrap(b, 6 + NAME_MAX + 1, 8).double
+        if (!tempo.isFinite() || tempo !in 30.0..300.0) return null
         return Triple(name, role, tempo)
     }
 
@@ -367,7 +372,11 @@ object ZuluLink {
     private fun decodeCc(b: ByteArray, len: Int): Quad? {
         if (len < 6 + NAME_MAX + 3) return null
         val target = decodeName(b, len, 6) ?: return null
-        return Quad(target, b[6 + NAME_MAX].toInt() and 0xFF, b[6 + NAME_MAX + 1].toInt() and 0xFF, b[6 + NAME_MAX + 2].toInt() and 0xFF)
+        val cc = b[6 + NAME_MAX].toInt() and 0xFF
+        val ch = b[6 + NAME_MAX + 1].toInt() and 0xFF
+        val value = b[6 + NAME_MAX + 2].toInt() and 0xFF
+        if (cc !in 0..127 || ch !in 0..15 || value !in 0..127) return null
+        return Quad(target, cc, ch, value)
     }
     private data class Quad(val target: String, val cc: Int, val ch: Int, val v: Int)
 
@@ -382,6 +391,8 @@ object ZuluLink {
         val tempo = ByteBuffer.wrap(b, 6, 8).double
         val beat = ByteBuffer.wrap(b, 14, 8).double
         val stamp = ByteBuffer.wrap(b, 22, 8).long
+        if (!tempo.isFinite() || tempo !in 30.0..300.0 ||
+            !beat.isFinite() || beat < 0.0 || stamp < 0L) return null
         return Triple(tempo, beat, stamp)
     }
 
