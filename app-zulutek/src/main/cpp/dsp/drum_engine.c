@@ -41,7 +41,10 @@ void drum_init(drum_t *d, float sr)
     /* choke désactivé par défaut (tout à 0) ; leader ON, pas de leader désigné */
     d->leader = 1;
     for (int g = 0; g < DR_NCHOKE; g++) d->lead[g] = -1;
+    d->run = 1;                                 /* autonome par défaut ; le moteur ZuluTek le pilote avec le play global */
 }
+
+void drum_set_run(drum_t *d, int on) { d->run = on ? 1 : 0; }
 
 void drum_set_choke(drum_t *d, int pad, int grp)
 {
@@ -195,6 +198,7 @@ static float voice_sample(drum_t *d, dr_voice_t *v)
 static void clock(drum_t *d, float dt)
 {
     if (d->oneshot_off) return;                 /* one-shot terminé : figé, les voix finissent de sonner */
+    if (!d->run) return;                        /* transport arrete (play global) : le seq ne bouge plus, les voix finissent */
     d->ph += dt;
     float stepDur = 60.0f / (d->bpm * 4.0f);              /* 16e de note */
     float off = (d->step % 2 == 1) ? d->swing * stepDur : 0.0f;
