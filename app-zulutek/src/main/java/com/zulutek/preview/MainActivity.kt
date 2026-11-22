@@ -414,6 +414,7 @@ class MainActivity : Activity(), SurfaceListener {
                     // BEND tactile conforme à la bible : REC maintenu + toucher le LCD.
                     // Prioritaire sur les gestes de page afin de rester global (hors capture SNAP).
                     if (recHeld && !st.snapArm) {
+                        bendTouchTracking = true
                         st.bendOn = true
                         st.bendX = bx.coerceIn(0f, 1f)
                         st.bendY = by.coerceIn(0f, 1f)
@@ -453,11 +454,13 @@ class MainActivity : Activity(), SurfaceListener {
                         lcd.invalidate()
                     }
                 }
-                MotionEvent.ACTION_MOVE -> if (st.bendOn) {
-                    st.bendX = bx.coerceIn(0f, 1f)
-                    st.bendY = by.coerceIn(0f, 1f)
-                    ZtekAudio.bend(1, st.bendX, st.bendY, st.bendMode)
-                    lcd.invalidate()
+                MotionEvent.ACTION_MOVE -> if (bendTouchTracking) {
+                    if (st.bendOn) {
+                        st.bendX = bx.coerceIn(0f, 1f)
+                        st.bendY = by.coerceIn(0f, 1f)
+                        ZtekAudio.bend(1, st.bendX, st.bendY, st.bendMode)
+                        lcd.invalidate()
+                    }
                 } else if (st.page == 4) {
                     st.xyX = bx.coerceIn(0f, 1f)
                     st.xyY = by.coerceIn(0f, 1f)
@@ -465,6 +468,7 @@ class MainActivity : Activity(), SurfaceListener {
                     lcd.invalidate()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (bendTouchTracking) bendTouchTracking = false
                     if (st.page == 4 && st.xyOn) {
                         st.xyOn = false
                         ZtekAudio.xySet(0, st.xyX, st.xyY)
@@ -481,6 +485,7 @@ class MainActivity : Activity(), SurfaceListener {
     }
 
     private var lastLcdTap = 0L
+    private var bendTouchTracking = false
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
