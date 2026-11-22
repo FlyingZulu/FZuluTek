@@ -1688,7 +1688,8 @@ class MainActivity : Activity(), SurfaceListener {
                 lcd.invalidate(); return
             }
         }
-        if (down && label == "PLAY" && shiftHeld && !st.smpPage) {   // SHIFT+PLAY : play/stop independant du sequenceur de la page (patch APK 0023)
+        if (down && label == "PLAY" && shiftHeld && !st.smpPage &&
+            (st.page == 6 || st.page == 15 || st.page == 1)) {   // SHIFT+PLAY : play/stop du sequenceur, UNIQUEMENT sur sa page (patch APK 0023)
             if (st.page == 15) {                                    // page DRUMS : transport de la boite a rythme
                 drumTrUi = !drumTrUi
                 ZtekAudio.drumTr(if (drumTrUi) 1 else 0)
@@ -1702,7 +1703,7 @@ class MainActivity : Activity(), SurfaceListener {
                 hint(if (st.playing) "LOOP PLAY" else "LOOP STOP")
                 lcd.invalidate(); return
             }
-            st.seqOn = !st.seqOn                                    // autres pages : sequenceur synth (idem bouton SEQ)
+            st.seqOn = !st.seqOn                                    // page SEQ synth (6) : idem bouton SEQ
             ZtekAudio.acidPlay(if (st.seqOn) 1 else 0)
             hint(if (st.seqOn) "SEQ SYNTH ON" else "SEQ SYNTH OFF")
             lcd.invalidate(); return
