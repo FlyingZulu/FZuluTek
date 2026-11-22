@@ -339,9 +339,10 @@ class MainActivity : Activity(), SurfaceListener {
             ).show()
         }
         ZtekAudio.initPrefs(this)
-        // OPTIONS persistées (OBJ_OPTIONS côté FM-1) : ECO uniquement
+        // OPTIONS persistées (APK) : ECO et VHS sont indépendants
         // (CHOKE LDR est supprimé d'OPTIONS : remplacé par le LDR par tranche, page MIX)
         st.ecoOn = optsPrefs.getBoolean("eco", false)
+        st.vhsOn = optsPrefs.getBoolean("vhs", true)
         st.labelsZulu = optsPrefs.getBoolean("labels_zulu", false)
         st.viewMode = optsPrefs.getInt("vue", 0).coerceIn(0, 2)
         st.luxeOn = optsPrefs.getBoolean("luxe", false)
@@ -845,7 +846,7 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- OPTIONS (page 16, liste) : SEL=navigue, ALG=valeur live, Shift=reset ----
     private fun optSet(row: Int, v: Float) {
-        when (row.coerceIn(0, 5)) {
+        when (row.coerceIn(0, 6)) {
             0 -> { st.ecoOn = v > 0.5f; ZtekAudio.setEco(if (st.ecoOn) 1 else 0); optsPrefs.edit().putBoolean("eco", st.ecoOn).apply() }
             1 -> { st.labelsZulu = v > 0.5f; optsPrefs.edit().putBoolean("labels_zulu", st.labelsZulu).apply(); surface.invalidate() }
             2 -> { st.viewMode = (v * 2.999f).toInt().coerceIn(0, 2); optsPrefs.edit().putInt("vue", st.viewMode).apply(); updateViewCompact() }
@@ -858,14 +859,15 @@ class MainActivity : Activity(), SurfaceListener {
                 ZtekAudio.setEngine(curEngine)
                 optsPrefs.edit().putInt("engine", curEngine).apply()
             }
+            6 -> { st.vhsOn = v > 0.5f; optsPrefs.edit().putBoolean("vhs", st.vhsOn).apply() }
         }
         lcd.invalidate()
     }
     private fun optReset(row: Int) {   // Shift court = reset de la ligne courante
-        optSet(row, 0f)
-        hint("reset " + arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN", "ENGINE")[row.coerceIn(0, 5)])
+        optSet(row, if (row == 6) 1f else 0f)
+        hint("reset " + arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN", "ENGINE", "VHS")[row.coerceIn(0, 6)])
     }
-    private fun optResetAll() { for (r in 0..5) optSet(r, 0f) }   // Shift long = reset all
+    private fun optResetAll() { for (r in 0..6) optSet(r, if (r == 6) 1f else 0f) }   // Shift long = reset all
 
     // ---- OPTIONS > VUE = PLEIN/CLAV/AUTO (APK only) : AUTO = CLAV si FM-1/ZTF ou peer ZuluLink up (+ pop singe 400 ms)
     private fun linkUpNow() = Fm1Usb.connected || ZuluLink.peersSnapshot().any { !it.lost }
@@ -1252,7 +1254,7 @@ class MainActivity : Activity(), SurfaceListener {
             return
         }
         if (st.page == 16) {                     // OPTIONS liste : SEL=navigue, ALG=valeur live
-            if (i == 0) st.optRow = (v * 5.999f).toInt().coerceIn(0, 5)
+            if (i == 0) st.optRow = (v * 6.999f).toInt().coerceIn(0, 6)
             if (i == 2) optSet(st.optRow, v)
             lcd.invalidate()
             return
