@@ -63,6 +63,13 @@
 - **Performance** : concevoir d'abord pour une APK Android stable, compatible autant que possible avec des appareils récents et plus anciens ; effets économes en CPU et mémoire, tampons limités, éviter les allocations dans le fil audio. ECO est un soutien, **pas une excuse pour une version normale instable**. Le portage FM-1 sera évalué séparément, effet par effet, avec mesures et aménagements possibles. **Faisabilité FM-1 et performances Android non encore vérifiées**.
 - **Point technique à inspecter plus tard** : moteurs et buffers audio disponibles, latence, polyphonie/voix, synchro BPM, charge maximale de plusieurs punch-in, impact ECO, faisabilité des traitements temporels. Les références artistiques et noms d'effets sont des pistes, pas des copies de traitements existants.
 
+## Visite MIX GLOBAL — description utilisateur, arbitrage requis (23 novembre 2026)
+
+- **Vision exprimée lors de la visite, non encore arbitrée contre le code/docs anciens** : quatre tranches **BASSE, LEAD, DRUMS, LOOPER**, plus MASTER. Sur chaque tranche : filtre traversant LP / centre neutre / HP en tête, puis panoramique ; départ auxiliaire PoW! avec dosage propre ; départ auxiliaire d'enregistrement LOOPER sur BASSE/LEAD/DRUMS uniquement ; **quatre départs auxiliaires vers quatre pedalboards** (chaque pedalboard comprend trois slots de pédales, routage à détailler plus tard) ; volume et solo/mute à retrouver/préciser.
+- **Proposition ergonomique à explorer, non encore validée dans ses détails** : PRESET et ALGORITHM déplaceraient la fenêtre des quatre knobs K1–K4 dans une grille de mixage : lecture **horizontale** (K1 BASSE, K2 LEAD, K3 DRUMS, K4 LOOPER pour un même paramètre) ou **verticale** (K1–K4 = quatre paramètres successifs d'une même tranche). Définir gestes exacts, transitions, gestion du MASTER et des cases sans AUX LOOP.
+- **Conflit documentaire explicite** : `docs/ZULUTEK.md` et `docs/ZULUTEK-MIX-SIREN.md` décrivent **VOICE / DRUMS / LOOP / SIREN**, VOICE réunissant BASSE et LEAD, avec interface SELECT/K1–K4 différente. Ce schéma est documenté comme ayant eu des PR d'implémentation. **Ne pas remplacer silencieusement** : demander si la vision actuelle rétablit BASSE/LEAD séparés, et ce qu'il advient de SIREN, puis inspecter le code APK/FM-1.
+- Ne pas traiter les quatre départs pedalboard comme déjà câblés : l'ancien mixeur ne mentionne que deux AUX libres assignables. Vérifier la faisabilité/routage plus tard.
+
 ## Inspection technique prioritaire
 
 1. Inspecter les handlers HOME, GLO, REC, SEQ, ARP, EDIT et leurs appuis courts/longs/doubles/triples sur APK et FM-1 ; dresser la matrice des conflits.
