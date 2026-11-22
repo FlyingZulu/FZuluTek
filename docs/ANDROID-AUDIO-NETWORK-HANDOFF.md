@@ -1,7 +1,7 @@
 # Android audio & network — handoff technique
 
 Dernière revue : 2026-11-22  
-Branche de travail : `fix/apk-audio-network-transport`  
+Branche de travail : `fix/android-native-audio-thread-safety`  
 Base : `fix/apk-touch-bend-rec` (inclut le correctif tactile REC/LCD de la PR #44)
 
 ## Règles impératives pour les prochains assistants
@@ -69,6 +69,14 @@ Le protocole ZTF est transporté sur USB-MIDI. Il ne s'agit pas d'un flux audio 
 ### Correctifs supplémentaires dans cette branche
 
 1. **Concurrence JNI/Oboe :** le moteur Android partage ses objets DSP entre les setters JNI et le callback Oboe. Un verrou récursif protège désormais les appels JNI de contrôle/lecture et le callback utilise exclusivement `try_lock()` : il ne bloque jamais le thread audio. Si un contrôle détient brièvement l'état, le callback de sortie émet un bloc silencieux (et le callback d'entrée abandonne le bloc) puis reprend au cycle suivant. `nativeStop` et `nativeDestroy` arrêtent/rejoignent le flux avant de prendre le verrou afin d'éviter un interblocage avec le callback. Cette protection est une première correction de cohérence ; elle doit être validée sur appareils et profilée pour mesurer les blocs audio abandonnés.
+
+### Observabilité du démarrage audio
+
+`MainActivity.onCreate()` appelle actuellement `ZtekAudio.start()` sans exploiter son booléen de retour. Si la création ou le démarrage Oboe échoue, l'interface continue de s'initialiser alors que le handle Kotlin peut rester nul et que les commandes audio deviennent des no-op. C'est un point de diagnostic à traiter : journaliser et rendre visible l'échec de démarrage, puis relever les propriétés réelles du flux et la réception des callbacks. Ce constat n'établit pas que le démarrage Oboe est la cause du son limité à un clic.
+
+### Cycle de vie des touches blanches
+
+`SurfaceView.onTouchEvent()` envoie le DOWN blanc immédiatement et le callback long après 500 ms. Le relâchement est maintenant toujours envoyé sur UP/CANCEL, même après l'action longue, afin de garantir note-off / OFF. Voir la section « Correctif clavier » ci-dessus. Ce correctif est commité, mais n'a pas encore été validé sur appareil.
 
 ### Risques / travaux encore ouverts
 
