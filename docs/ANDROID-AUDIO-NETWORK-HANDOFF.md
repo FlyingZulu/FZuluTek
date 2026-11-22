@@ -276,3 +276,15 @@ Objectif : transformer les symptômes « LCD blanc » et « audio clic seul » e
 - Aucune validation sur matériel USB/FM-1 ou réseau multi-appareils n'a été réalisée. Les correctifs sont des protections de protocole et de cycle de vie statiquement auditées, pas une preuve de fonctionnement matériel.
 - Les API haut niveau `Fm1Usb.ping()/pull()/push()` conservent encore leurs retours synchrones trompeurs alors que l'opération est mise en file sur le worker ; leur évolution vers des callbacks/résultats asynchrones reste à traiter séparément, après revue des appelants.
 - Aucun firmware FM-1, patch embarqué ni projet sans rapport n'a été modifié.
+
+
+## Cycle de connexion USB : synchronisation des premières requêtes (2026-11-22)
+
+- Défaut constaté dans `MainActivity.linkScan()` : après `Fm1Usb.scan()`, l'écran lançait immédiatement PING, refreshFiles et WATCH. Quand Android demandait encore la permission USB, ou que l'ouverture/claim de l'interface était en attente, ces requêtes pouvaient passer avant l'établissement de `transport` et échouer avec « FM-1 non connecté ».
+- Correction : `Fm1Usb.onConnected` est déclenché sur le worker après la création du lien, l'instanciation de `ZtfTransport` et le passage de `connected=true`. `MainActivity.linkScan()` poste alors PING, refreshFiles et WATCH après ce signal.
+- Les méthodes `ping/pull/push/pushNamed/pullNamed` ne renvoient plus de valeurs synchrones qui étaient en réalité des valeurs locales par défaut avant l'exécution du worker. Elles sont maintenant explicitement asynchrones ; résultat et progression passent par `onStatus`, `onProgress` et `onFiles`.
+- Revue des 11 fichiers Kotlin de l'application : les appelants trouvés ne consomment pas ces anciennes valeurs de retour ; les appels sont des commandes dont les résultats sont affichés via callbacks.
+- Commits : `088051da7f3b6cbbe05aca0e5e97b8431b2499c3` (callback ready), `7a3acd1cd00e615f662b84f747e20b4b0f64512a` (ordonnancement LINK), `774f685c35a12aae59fd0f6f70b111af09b9635d` (contrat API asynchrone).
+- Build #376 / run `44994960851` : succès sur le handoff précédent, artefact debug `zulu-apk-376` (6 319 448 octets).
+- Builds #377 / run `44995039610`, #378 / run `44995046947` et #379 / run `44995115379` : en cours au moment de cette mise à jour ; le #379 porte le head contenant les changements d'API asynchrone.
+- Aucun test matériel USB/FM-1 n'a été effectué. Vérifier sur appareil les scénarios permission accordée/refusée, connexion déjà autorisée, déconnexion pendant scan et nouvelle tentative.
