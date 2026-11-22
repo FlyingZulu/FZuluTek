@@ -22,6 +22,7 @@ import android.graphics.RectF
 import android.graphics.SweepGradient
 import android.graphics.Typeface
 import android.view.View
+import kotlin.random.Random
 
 class LcdState {
     var bpm = 120
@@ -439,8 +440,34 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
      * s'éclaircit en trame, l'encre blanche et les accents fluo restent intacts (charte :
      * « uniquement sur le noir »), et le flash inversé retourne avant ce dessin. */
     private val scanPaint = Paint().apply {
-        color = Color.argb(255, 24, 24, 28)
+        color = Color.argb(12, 24, 24, 28)
         xfermode = PorterDuffXfermode(PorterDuff.Mode.LIGHTEN)
+    }
+    private val glitchPaint = Paint().apply {
+        color = Color.argb(10, 30, 34, 40)
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.LIGHTEN)
+    }
+    private val vhsRandom = Random(System.nanoTime())
+    private var vhsNextChange = 0L
+    private var vhsOffset = 0
+    private var vhsLineAlpha = 10
+    private val vhsGlitchY = IntArray(2)
+    private val vhsGlitchX = IntArray(2)
+    private val vhsGlitchW = IntArray(2)
+    private var vhsGlitchCount = 0
+    private fun evolveVhs(now: Long, modulation: Float) {
+        if (now < vhsNextChange) return
+        vhsNextChange = now + 260L + vhsRandom.nextLong(0L, 220L)
+        vhsOffset = vhsRandom.nextInt(0, 3)
+        vhsLineAlpha = (8 + modulation * 7f + vhsRandom.nextInt(0, 4)).toInt().coerceIn(7, 19)
+        vhsGlitchCount = if (vhsRandom.nextFloat() < (0.12f + modulation * 0.24f)) 1 + vhsRandom.nextInt(2) else 0
+        for (i in 0 until vhsGlitchCount) {
+            vhsGlitchY[i] = vhsRandom.nextInt(H)
+            vhsGlitchX[i] = vhsRandom.nextInt(W)
+            vhsGlitchW[i] = 5 + vhsRandom.nextInt(22)
+        }
+        scanPaint.color = Color.argb(vhsLineAlpha, 24, 24, 28)
+        glitchPaint.color = Color.argb((7 + modulation * 9f).toInt().coerceIn(7, 16), 30, 34, 40)
     }
 
     /* décor PCB pixel art (généré en CI par tools/make_icon.py ; absent en build local nu :
@@ -682,11 +709,23 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         }
         // VHS couvre le LCD entier, y compris les pages qui quittent onDraw tôt.
         if (st.vhsOn) {
-            var yy = 2
+            // Modulation LFO/tools agit la trame visuelle uniquement : aucun accès audio ici.
+            var modulation = 0f
+            for (v in st.srcVals) modulation += kotlin.math.abs(v).coerceAtMost(1f)
+            modulation = (modulation / st.srcVals.size).coerceIn(0f, 1f)
+            val now = System.currentTimeMillis()
+            evolveVhs(now, modulation)
+            var yy = 1 + vhsOffset
             while (yy < H) {
                 val y = top + yy * s
-                screen.drawRect(left, y, left + W * s, y + s, scanPaint)
-                yy += 4
+                screen.drawRect(left, y, left + W * s, y + maxOf(0.55f, s * 0.22f), scanPaint)
+                yy += 3
+            }
+            for (i in 0 until vhsGlitchCount) {
+                val y = top + vhsGlitchY[i] * s
+                val x = left + vhsGlitchX[i] * s
+                screen.drawRect(x, y, minOf(left + W * s, x + vhsGlitchW[i] * s),
+                    y + maxOf(0.6f, s * 0.18f), glitchPaint)
             }
         }
     }
