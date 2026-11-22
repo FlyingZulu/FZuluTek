@@ -465,7 +465,7 @@ ztek_t *ztek_create(float sr)
         delete z; return NULL;
     }
     drum_init(&z->drum, sr);
-    z->drum_on = 1;                 /* la boite a rythme tourne d'emblee : kick 4OTF au demarrage de l'app (Flying Zulu, patch APK 0023) */
+    z->drum_on = 1;                 /* le drum est arme d'emblee (kick 4OTF) ; son horloge suit le play global comme le looper (patch APK 0023) */
     z->smp_len = 0; z->smp_wr = 0;
     z->smp_rec = 0; z->smp_play = 0;
     z->smp_start = 0.0f; z->smp_end = 1.0f; z->smp_vol = 0.8f; z->smp_pitch = 0.5f;
@@ -701,7 +701,7 @@ void ztek_punch(ztek_t *z, int on, int type, float a, float b, float mix)
 
 void ztek_punch_tail(ztek_t *z, float t) { (void)z; fx_punch_off_tail(t); }
 
-void ztek_loop_play(ztek_t *z, int on) { ml_play(&z->loop, on); }
+void ztek_loop_play(ztek_t *z, int on) { ml_play(&z->loop, on); if (on) drum_reset(&z->drum); }
 void ztek_loop_toggle(ztek_t *z, int slot) { ml_toggle(&z->loop, slot); }
 void ztek_loop_rec_start(ztek_t *z, int slot, int od) { ml_rec_start(&z->loop, slot, od); }
 void ztek_loop_rec_stop(ztek_t *z, int slot) { ml_rec_stop(&z->loop, slot); }
@@ -2823,13 +2823,13 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
             }
         }
 
-        /* 3c. DRUMS : bus propre rendu dans drumbuf (la tranche DRUMS du mixage en est la sortie) */
-        if (z->drum_on) {
-            memset(z->drumbuf, 0, blk * sizeof(float));
-            drum_render(&z->drum, z->drumbuf, (int)blk);
-        } else {
-            memset(z->drumbuf, 0, blk * sizeof(float));
-        }
+        /* 3c. DRUMS : bus propre rendu dans drumbuf (la tranche DRUMS du mixage en est la sortie).
+         * Le séquenceur dépend du play global comme celui du looper (patch APK 0023) :
+         * drum_on = marche/arret locale, l'horloge n'avance que si le transport joue ;
+         * les pads manuels et les fins de voix sonnent toujours. */
+        z->drum.run = (uint8_t)(z->drum_on && z->loop.playing ? 1 : 0);
+        memset(z->drumbuf, 0, blk * sizeof(float));
+        drum_render(&z->drum, z->drumbuf, (int)blk);
 
         /* 4. table de mixage : 4 tranches BASSE/LEAD/DRUMS/LOOP — chaîne par tranche :
          *    FILTRE traversant pré-fader (LP/neutre/HP + CUT) -> PAN pré-fader -> VOL -> MUT/SOLO,
