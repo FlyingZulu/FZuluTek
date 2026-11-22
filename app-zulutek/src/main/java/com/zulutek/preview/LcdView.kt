@@ -1329,7 +1329,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             val apkOnly = arrayOf(false, true, true, true, true, true, true)
             for (r in 0..6) {
                 val y = 36f + r * 27f
-                val sel = r == st.optRow.coerceIn(0, 5)
+                val sel = r == st.optRow.coerceIn(0, 6)
                 text(c, 6f, y, (if (sel) ">" else " ") + " " + names[r], if (sel) FLUO_YEL else INK, 10f)
                 text(c, 96f, y, vals[r], if (sel) FLUO_YEL else INK, 10f)
                 if (apkOnly[r]) text(c, 156f, y, "APK", DIM, 8f)
