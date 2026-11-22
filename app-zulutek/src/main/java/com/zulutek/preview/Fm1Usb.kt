@@ -120,6 +120,8 @@ object Fm1Usb {
     /** callbacks appelés depuis le thread worker — poster sur le looper UI si besoin */
     var onStatus: (String) -> Unit = {}
     var onFiles: (List<Fm1File>) -> Unit = {}
+    /** Émis une fois que l'interface USB est effectivement ouverte (thread worker). */
+    var onConnected: () -> Unit = {}
     var onProgress: (String) -> Unit = {}
     /** notifications de params (0x62 CHANGED) reçues en live quand watch est actif — miroir mode A */
     var onParams: (List<Pair<Int, Int>>) -> Unit = {}
@@ -263,6 +265,7 @@ object Fm1Usb {
                 connected = true
                 startWatch()
                 onStatus("FM-1 connecté ($deviceName)")
+                onConnected()
             } catch (e: Exception) {
                 try { newConn?.close() } catch (_: Exception) {}
                 connected = false
