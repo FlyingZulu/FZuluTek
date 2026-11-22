@@ -81,6 +81,39 @@ PRESET = niveau, K1 PITCH / K2 POS / K3 MODE rev-pingpong / K4 MUTATION), touche
 micro barré si aux à 0, mode SIREN (triple-tap GLO), option SIREN>POW!.
 - **Sirène FM-1 (patch 0015, PR en cours)** : triple-tap GLO = mode SIREN (auto-quit à tout changement de page, LED GLO clignotante, header « SIREN ») ; noires k=13/15/17/20 = les 4 types CLASSIQUE/CHOP/POLICE/LASER en momentané ; K1..K4 = WAVE/RATE/DEPTH/MIX ; persistance OBJ_OPTIONS (OPT6) + 4 params ZTF groupe SIREN. Côté APK : page 5 vue SIRENE (SEL=ON/OFF, ALG=type, K1..K4=RATE/DEPTH/FB/MIX).
 
+## Loop audio FLASH (patch 0025) — capture live en zone flash
+
+Nouveaux `dsp/ztek_flashloop.{c,h}` : le looper gagne des **slots audio live** à côté des
+slots MIDI, stockés dans la zone flash libre `0x97000..0xB0000` — **100 Ko** (correction :
+la zone entre la fin de l'app et le ZTF fait 0x19000, pas 132 Ko comme annoncé d'abord).
+**Mono µ-law G.711 12 kHz** (même companding que midi_looper.c) → capacité **102 144 o =
+8,51 s** : 1 boucle de 8 s ou 2 boucles de ~4 s.
+
+- **Sélection MIDI vs audio** : par la **source du slot (ALGO)**, comme le resample actuel —
+  un slot dont la source passe en RESAMPLE/AUDIO capture le bus au lieu d'événements MIDI.
+  Le slot garde le statut du resample (pas d'effacement dédié : l'armement REC 0025 remplace
+  l'armement simple) et le resample sert de **tampon momentané** au moment de l'inscription
+  en flash. Slots mixtes dans la même page LOOP : les LEDs du clavier FM-1 et les pills APK
+  **pulsent ~8 Hz** sur les slots audio (les slots MIDI restent fixes).
+- **Armement REC** : message préventif au 1er appui ; **la flash n'est effacée qu'au 2e appui
+  de confirmation** (double sécurité). Choix du layout **1×8 s ou 2×4 s** à l'armement.
+- **Pré-effacement progressif** : `fl_erase_step`, UN secteur 4 Ko par appel, jamais pendant
+  le rendu audio ; la capture écrit des pages de 256 o (~48 écritures/s à 12 kHz).
+- **Timing musical** : départ quantifié au beat/mesure, fin calée au wrap ; la longueur est
+  **conservée quantifiée aux beats** (table ml_quantize 1..128 beats, alignée aux pages,
+  quantize descendant) → couture parfaite ; capture plus courte qu'un beat = boucle brute
+  page-alignée.
+- **Manipulation « KP3 sous stéroïdes »** : pitch ±12 st, ONE-SHOT (arrêt au wrap, cohérent
+  SHIFT+SEQ 0023), **grille gate/stutter 16 steps** (PASS / MUTE figée / REV arrière) dans la
+  page DRUMS, séquencée ET jouable à la main ; choke à l'intégration.
+- **Conteneur** : header en page FL_BASE (magic « FL25 », nloops, longueurs big-endian) ;
+  lecture en double-tampon RAM 2×256 o, tête interpolée, coupe-bas doux en sortie.
+
+Validation sandbox : transcription Python fidèle + flash simulée à sémantique réelle
+(effacé = 0xFF, écriture AND interdite sans effacement) : **47/47 checks verts**. **Reste
+avant flash** : build JieLi + fm1-emu — l'émulateur ne simule pas les timings de la flash :
+le risque « écriture flash pendant le rendu audio » ne se tranche que sur le hardware.
+
 ## Charte graphique
 
 Voir `docs/ZULUTEK-UI-STYLE.md` (palette fluo rose/jaune/turquoise, pops 400 ms, témoins ZU/LU) — identique APK et firmware.
