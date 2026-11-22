@@ -181,3 +181,21 @@ Constat vérifié dans `MainActivity.kt` et `docs/ZULUTEK.md` :
 Conséquence : depuis les commandes tactiles APK actuelles, les moteurs 2 FM, 3 SUB et 4 8BIT ne disposent pas d'un sélecteur local dédié. Je ne détourne pas ALG (encodeur rotatif waveform sur MAIN) ni HOME long (LINK) pour éviter de casser le contrat documenté. Il faut définir un contrôle local compatible avec la bible avant de modifier le mapping.
 
 Validation : lecture statique uniquement ; aucun test appareil. Aucun code moteur modifié.
+
+
+
+## Sélecteur local des cinq moteurs de voix — 2026-11-22
+
+L'audit a montré que l'APK n'offrait localement que LEAD/engine 0 et BASSE/engine 1 ; le CC MIDI 80 était le seul chemin permettant d'atteindre 2 FM, 3 SUB et 4 8BIT. Le setter natif gérait déjà les cinq valeurs.
+
+Correction additive, sans détourner les commandes existantes :
+- page OPTIONS (16) : nouvelle ligne ENGINE ;
+- SEL choisit la ligne, ALG règle la valeur 0..4, selon le même modèle que les autres options ;
+- libellés : ATEK303, PLUK, FM, SUB, 8BIT ;
+- application immédiate à `ZtekAudio.setEngine()`, affichage via `LcdState.engineNames` et persistance SharedPreferences (`engine`);
+- CC80 distant met également à jour la préférence et la partie BASSE/LEAD ;
+- HOME court, HOME long/LINK et ALG waveform sur MAIN restent inchangés. Reset de la ligne ENGINE ou reset global = engine 0.
+
+Commits code : `c157c75a6f17ff010b64829b5048d77d0879f55c` (MainActivity), `69729922105169b115dfcb4739cfb29a543f81ad` (LcdView). Bible `docs/ZULUTEK.md` mise à jour dans 407e087e9e0bb405144c961b32bf16ad42bb6c81.
+
+Validation : inspection statique des plages, du setter, de la préférence et de l'affichage. Build du nouveau code et validation tactile sur appareil à effectuer ; aucun test appareil revendiqué.
