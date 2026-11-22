@@ -98,6 +98,15 @@
 - **Correction explicite de l'animation SNAP (utilisateur)** : l'ordre **flash puis appareil photo est erroné**. À **REC+PLAY**, montrer **d'abord une icône appareil photo** pour annoncer l'entrée en mode capture. Lorsque l'utilisateur navigue dans les pages de paramètres, rendre l'affichage normal avec une **petite icône appareil photo persistante dans un coin** pour signaler que le mode capture est toujours actif. **Chaque pression sur SHIFT qui capture un paramètre déclenche alors un bref flash d'écran**, sans masquer durablement le réglage. Métaphore retenue pour les captures accumulées : **pellicule photo** plutôt que panier ; forme exacte de son indicateur à concevoir. Sortie REC+PLAY = fin du mode et disparition du témoin.
 - **Règle UX transversale** : privilégier des pictogrammes immédiatement intelligibles **sans dépendance linguistique**, états visibles d'un coup d'œil ; « panneau d'autoroute à 130 km/h, compris en trois secondes ». Animations courtes, non intrusives et lisibles sur APK comme sur l'affichage FM-1 (à adapter aux capacités matérielles). Un compteur sur la pellicule a été proposé par l'assistant, **non validé**.
 
+## NO SNAP — retirer sélectivement des paramètres (23 novembre 2026)
+
+- **Concept utilisateur** : **NO SNAP** est le mode inverse de SNAP. Après avoir sélectionné la destination/collection de capture, on parcourt les paramètres pour **retirer individuellement** ceux déjà photographiés, plutôt que vider/recréer le SNAP.
+- **Entrée à retrouver** : l'utilisateur se souvient de SNAP/NO SNAP mais pas du raccourci exact ; propose à titre d'essai **un mouvement de l'encodeur SELECT** pour basculer en NO SNAP. **Ne pas considérer ce geste comme validé** ; rechercher une éventuelle implémentation antérieure.
+- **Pictogramme souhaité** : **appareil photo barré** (« photo interdite », comme dans un musée), plus universel que la main qui refuse une photo. Garder un indicateur persistant discret du mode, dans la logique de SNAP.
+- **APK** : les potentiomètres/paramètres déjà capturés doivent être **entourés ou surlignés**, pour choisir rapidement lesquels retirer. La relation à ZU/LOU doit être lisible.
+- **FM-1** : quand on touche/bouge un potentiomètre capturé, afficher un **petit témoin lumineux** indiquant à la fois **qu'il est capturé** et **à quel pôle ZU/LOU il est affecté** ; couleur du pôle si matériellement disponible, sinon alternative de codage à définir après inspection matérielle. Si un même paramètre est dans plusieurs snaps/pôles, la représentation reste à préciser.
+- Recherche documentaire ponctuelle dans `docs/ZULUTEK.md`, `docs/ZULUTEK-SEQ-PLUS.md` et ce journal : **aucune occurrence explicite NO SNAP trouvée**. Cela ne prouve pas l'absence dans le code.
+
 ## Inspection technique prioritaire
 
 1. Inspecter les handlers HOME, GLO, REC, SEQ, ARP, EDIT et leurs appuis courts/longs/doubles/triples sur APK et FM-1 ; dresser la matrice des conflits.
