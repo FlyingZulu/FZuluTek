@@ -124,6 +124,8 @@ object Fm1Usb {
     var onProgress: (String) -> Unit = {}
     /** notifications de params (0x62 CHANGED) reçues en live quand watch est actif — miroir mode A */
     var onParams: (List<Pair<Int, Int>>) -> Unit = {}
+    /** appelé sur le worker uniquement après ouverture effective et transport prêt */
+    var onConnected: (() -> Unit)? = null
 
     private var watchThread: Thread? = null
 
@@ -257,6 +259,7 @@ object Fm1Usb {
                 connected = true
                 startWatch()
                 onStatus("FM-1 connecté ($deviceName)")
+                onConnected?.invoke()
                 } catch (e: Exception) {
                     if (claimed) try { conn.releaseInterface(itf) } catch (_: Exception) {}
                     try { conn.close() } catch (_: Exception) {}
