@@ -423,6 +423,7 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
     }
 
     private var firstDrawTrace = false
+    private var firstBlitTrace = false
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -703,6 +704,17 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         fb.setPixels(fbBuf, 0, W, 0, 0, W, H)
         val left = transX() * s
         val top = transY() * s
+        if (!firstBlitTrace) {
+            firstBlitTrace = true
+            val litPixels = fbBuf.count { it != Color.BLACK }
+            val clip = android.graphics.Rect()
+            screen.getClipBounds(clip)
+            android.util.Log.i(
+                "ZuluTekLCD",
+                "first blit view=${width}x${height} canvas=${screen.width}x${screen.height} " +
+                    "scale=$s offset=$left,$top framebufferNonBlack=$litPixels/${fbBuf.size} clip=$clip"
+            )
+        }
         fbRect.set(left, top, left + W * s, top + H * s)
         screen.drawBitmap(fb, null, fbRect, blitPaint)
         if (st.vhsOn && vhsShiftOn) {
