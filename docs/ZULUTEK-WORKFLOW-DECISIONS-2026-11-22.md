@@ -126,3 +126,11 @@
 5. Inspecter ASSIGN, routage MIDI, LEDs OP et sauvegarde KIT.
 
 **Aucune modification de code fonctionnel n'est impliquée par cette note.**
+
+## KIT — entrée et duplication homogène avec SNAP (23 novembre 2026)
+
+- **Utilisateur valide REC+SAVE** comme raccourci d'accès/enregistrement des KITS (cohérent avec l'ancienne documentation). Un KIT représente une **capture complète de l'état global** à la manière des Parts Elektron : synthés et réglages sélectionnés, état/échantillon chargé du looper, tempo, SNAP, affectations et paramètres globaux pertinents. Préciser les données audio embarquées vs références persistées et contraintes FM-1 au moment de l'implémentation.
+- **Nouvelle intention validée** : offrir la **même duplication contextuelle rapide que SNAP**. Après sauvegarde/fermeture par REC+SAVE, réappuyer rapidement sur REC+SAVE pour reprendre le KIT juste enregistré, sélectionner un autre slot et en faire une **copie indépendante complète** ; ensuite pouvoir retoucher cette copie sans affecter la source. Le détail du geste final de confirmation de destination et du délai de réentrée reste à définir en cohérence avec SNAP.
+- **Slot de destination occupé** : reprendre le **même avertissement non bloquant d'une seconde** que SNAP ; SHIFT durant cette seconde = annuler, sinon écrasement automatique du KIT cible, même si l'utilisateur navigue ailleurs. Ce comportement est destructif ; examiner l'undo possible, non approuvé à ce stade.
+- **À réconcilier avec la spécification historique** : page KIT REC+SAVE, SAVE→slot→SAVE pour sauvegarder, tap pour charger, appui long pour effacer. La duplication contextuelle ne doit pas supprimer ces usages sans décision explicite.
+
