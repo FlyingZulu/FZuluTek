@@ -229,3 +229,11 @@ Inspection de `SurfaceView.kt` : les constantes `WHITE_KEY_TOP/BOT` (ivoire `#FF
 ## Audit tactile LCD — paramètres génériques non encore éditables
 
 Le listener `lcd.setOnTouchListener` de `MainActivity.kt` prend en charge le bend (REC maintenu), la baie PATCH (tap = PLAY/assignation) et le pad XY (tap/drag + HOLD/MOM). Les événements `ACTION_MOVE` sont exploités pour bend et XY. En dehors de ces cas, le listener retourne tout de même `true` et consomme le toucher, sans sélection/édition générique des paramètres dessinés sur MAIN ou les autres pages. Le sélecteur d’options et les encodeurs matériels restent opérationnels, mais ils ne constituent pas l’édition tactile demandée. Aucune interception générique n’a été ajoutée dans cette intervention pour éviter de détourner les gestes PATCH/XY/BEND ni d’inventer un mapping natif ; la suite doit établir, page par page, le lien entre chaque zone dessinée, son état UI, l’encodeur équivalent et le setter `ZtekAudio` correspondant, puis ajouter sélection + glisser sans casser les gestes existants.
+
+
+## VHS — validation CI et polling (2026-11-22)
+
+- Build #362 / run `44992316338` : succès sur le commit `fead29cd20935683454a553b2c020beba59bf28c`. Étapes de compilation des APK de test et publication réussies ; artefact `zulu-apk-362`, 6 317 504 octets. L'étape de génération de l'APK Release dédiée a été ignorée : ne pas confondre l'artefact CI avec une release signée.
+- Le commit suivant `96728ede72f0aed37d2ce51c2e05440a4c400f16` supprime la double lecture des 16 sources de modulation lorsque VHS est activé. Il n'est pas inclus dans le run #362 ; un build du head actuel reste nécessaire pour valider l'ensemble.
+- Aucun essai sur appareil Android physique n'a été effectué. La stabilité du rendu, le comportement tactile, la continuité audio et la mesure visuelle restent à valider sur appareil.
+- Périmètre inchangé : APK Android uniquement ; aucun firmware/patch embarqué FM-1 modifié.
