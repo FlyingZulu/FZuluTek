@@ -875,10 +875,10 @@ class MainActivity : Activity(), SurfaceListener {
     }
 
     private fun cycleSynthEngine() {
-        curEngine = (curEngine + 1) % ZtekAudio.ENGINE_NAMES.size
+        curEngine = (curEngine + 1) % st.engineNames.size
         st.engine = curEngine
         ZtekAudio.setEngine(curEngine)
-        hint("MOTEUR " + ZtekAudio.ENGINE_NAMES[curEngine])
+        hint("MOTEUR " + st.engineNames[curEngine])
         lcd.invalidate()
         surface.invalidate()
     }
