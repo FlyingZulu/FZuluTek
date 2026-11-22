@@ -247,6 +247,7 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
      *  Retourne true si tout a été commité. */
     fun fileWrite(i: Int, data: ByteArray, chunk: Int = ZtfCodec.WRITE_CHUNK,
                   progress: ((Long, Long) -> Unit)? = null): Boolean {
+        require(chunk > 0) { "taille de bloc d'écriture invalide: $chunk" }
         val crc = ZtfCodec.crc32(data)
         val req = ByteArray(8)
         ZtfCodec.put32(req, 0, data.size)
