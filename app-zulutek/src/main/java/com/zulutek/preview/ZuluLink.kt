@@ -101,6 +101,7 @@ object ZuluLink {
 
     // ---- Cycle de vie -----------------------------------------------------
 
+    @Synchronized
     fun start(name: String, asRole: Role) {
         if (!running.compareAndSet(false, true)) return
         localName = name.take(NAME_MAX)
@@ -132,11 +133,24 @@ object ZuluLink {
         }
     }
 
+    @Synchronized
     fun stop() {
         if (!running.compareAndSet(true, false)) return
         try { sendBye() } catch (_: Exception) {}
         discoverySocket?.close(); directSocket?.close()
         discoverySocket = null; directSocket = null
+        // Sur la JVM la fermeture du socket peut se terminer au retour de receive().
+        announceThread?.interrupt()
+        for (thread in listOfNotNull(listenThread, directListenThread, announceThread)) {
+            if (thread == Thread.currentThread()) continue
+            try {
+                thread.join(100)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+        }
+        listenThread = null; directListenThread = null; announceThread = null
         peers.clear()
         onPeersChanged?.invoke()
     }
