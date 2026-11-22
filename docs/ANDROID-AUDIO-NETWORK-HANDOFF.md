@@ -130,3 +130,14 @@ Conséquences possibles :
 Correction : le relâchement d'une touche blanche est maintenant toujours transmis sur `ACTION_UP` et `ACTION_CANCEL`, indépendamment de l'exécution du callback long. Le callback long conserve son rôle (ex. armement/enregistrement du slot looper) ; le mapping et les fonctions des touches ne changent pas.
 
 Validation : correction de code commitée sur la branche Android. Aucun build CI ni test tactile/audio sur appareil n'est encore revendiqué pour ce commit. À vérifier dans le prochain APK : appui bref et appui >500 ms sur une touche blanche en SIREN et LINK, puis vérifier que la note s'arrête au relâchement. Vérifier également que l'appui long d'un slot looper conserve son armement/enregistrement attendu.
+
+
+## Apparence du clavier APK — touches blanches et roses (2026-11-22)
+
+Le clavier tactile Android utilise désormais une palette dédiée, indépendante des skins DA ZULU / MAISON :
+- touches blanches : ivoire clair (`WHITE_KEY_TOP/BOT`) ;
+- touches noires : rose (`PINK_KEY_TOP/BOT`).
+
+Les états actifs continuent de recevoir la surbrillance ambre existante (touches jouées, slots actifs ou armés). Les dimensions, positions, zones de hit-test, notes MIDI, slots du looper, glissando et événements DOWN/UP ne sont pas modifiés par ce changement de palette.
+
+Commit : `f88d38a69bf5a846aefb2270db913f77b8ac7cd8`. Vérification statique des quatre couleurs et des deux chemins de dessin effectuée. Le rendu réel, le contraste et la lisibilité restent à confirmer sur appareil après génération de l'APK.
