@@ -154,3 +154,18 @@ Commit : `8ca0aaf54911a9bfe616823ffa2882e3046fe88b`.
 Validation : inspection statique du chemin `start()` et de la gestion du handle Kotlin. Le build de cette nouvelle modification n'a pas encore été exécuté au moment de cette note ; le run #337 réussi concerne le commit précédent `f88d38a69bf5a846aefb2270db913f77b8ac7cd8`. Aucun résultat de test appareil n'est revendiqué.
 
 Suite : compiler cette modification, puis sur Android provoquer/observer un démarrage normal et consulter Logcat (`ZuluTekAudio`). Si l'échec apparaît, relever la cause native Oboe (résultat d'ouverture / démarrage, fréquence, format, canaux) plutôt que modifier arbitrairement le gain. Si le flux démarre, instrumenter les callbacks et le niveau crête de sortie pour suivre une note depuis le toucher jusqu'au buffer Oboe.
+
+
+## Diagnostic du rendu LCD Android — 2026-11-22
+
+Le LCD reste signalé blanc par l'utilisateur. L'inspection statique confirme que `LcdView.onDraw()` remplit le Canvas écran et le framebuffer en noir avant de dessiner, puis blitte un bitmap RGB565. `MainActivity` superpose le `LcdView` au `SurfaceView` et positionne le LCD à partir de `surface.lcdRect()`. Cela ne suffit pas à identifier la cause visuelle : il faut mesurer les dimensions réelles, l'emplacement et vérifier que `onDraw()` s'exécute.
+
+Instrumentation ajoutée, sans changer le rendu :
+- tag Logcat `ZuluTekLCD` sur le premier changement de taille de la vue LCD ;
+- trace du premier `onDraw()` (taille, échelle, mode wide, visibilité) ;
+- trace unique du placement (dimensions SurfaceView, rectangle LCD, dimensions et marges du LCD).
+
+Commits : trace placement `7b34b62f5dfbba303b6780597c5fe18883e0e80a` ; trace taille/dessin `a4f3fa0d40528903e75204b6cc4b5c8c6bf39053`.
+
+Validation : instrumentation statique uniquement ; build CI #342 déclenché sur le head `a4f3fa0d40528903e75204b6cc4b5c8c6bf39053` et encore en attente au moment de cette note. Pas de test appareil. Prochaine observation sur téléphone : filtrer Logcat `ZuluTekLCD` ; absence de « first draw » = problème de visibilité/invalidation/lifecycle ; dimensions/placement incohérents = problème de layout ; traces correctes avec écran toujours blanc = poursuivre dans le blit/composition SurfaceView.
+
