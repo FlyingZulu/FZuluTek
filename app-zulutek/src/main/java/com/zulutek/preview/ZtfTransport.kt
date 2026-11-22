@@ -101,8 +101,16 @@ class ZtfTransport(private val link: ZtfLink, private val timeoutMs: Long = 1000
                 val end = System.currentTimeMillis() + timeoutMs
                 while (System.currentTimeMillis() < end) {
                     val pkt = link.read(end - System.currentTimeMillis()) ?: break
-                    if (!ZtfCodec.isZtf(pkt)) continue
-                    // on dépile aussi les notifs companion en passant
+                    if (!ZtfCodec.isZtf(pkt)) {
+                        // Preserve live companion notifications arriving during a raw ZTF request.
+                        val companion = ZtfCodec.parseFrame(pkt) ?: continue
+                        if (companion.first == ZtfCodec.CMD_PARAMS &&
+                            companion.second.isNotEmpty() &&
+                            companion.second[0].toInt() == ZtfCodec.PQ_CHANGED) {
+                            noteChanged(companion.second)
+                        }
+                        continue
+                    }
                     val a = ZtfCodec.parseZtf(pkt) ?: continue
                     // Ignore stale or unrelated ZTF replies; only the command we sent
                     // may complete this request.
