@@ -71,6 +71,12 @@
 - **Clarification utilisateur** : le regroupement BASSE+LEAD en VOICE dans l'ancienne version est **une adaptation FM-1 pour économiser les ressources** ; un seul des deux synthés y joue à la fois, ce compromis est accepté. La **vision de mixage APK** conserve BASSE, LEAD, DRUMS, LOOPER et envisage d'**ajouter SIRÈNE comme cinquième tranche, juste avant MASTER**. La sirène ne remplace donc pas une des quatre tranches d'origine dans cette vision. **Proposition favorable mais à confirmer comme schéma définitif**, notamment séparation effective des bus BASSE/LEAD côté APK et représentation/adaptation des cinq tranches côté FM-1. Ne pas déclarer l'architecture audio modifiée.
 - Ne pas traiter les quatre départs pedalboard comme déjà câblés : l'ancien mixeur ne mentionne que deux AUX libres assignables. Vérifier la faisabilité/routage plus tard.
 
+## Principe transversal — navigation bidirectionnelle des paramètres (23 novembre 2026)
+
+- **Intention approuvée** : généraliser à toutes les parties pertinentes de ZuluTek le principe d'une **fenêtre de quatre paramètres K1–K4**, parcourable dans deux orientations via les encodeurs **PRESET et ALGORITHM** : par **ligne** (même paramètre sur quatre sources/voies) et par **colonne/tranche** (quatre paramètres successifs d'une même source). Vise à rendre les réglages accessibles sans multiplier les sous-pages.
+- **À concevoir page par page**, sans imposer artificiellement une grille aux fonctions qui ne s'y prêtent pas et **sans écraser les gestes déjà validés** (ATEK303 SEQ K1 STEPS/K2 SCALE/K3 TEMPO/K4 ROOT, édition des pas, PoW! maintien+tournage K1–K4, etc.).
+- **Points non arrêtés** : affectation exacte PRESET/ALGORITHM aux axes, geste de bascule de l'orientation, comportement aux frontières de groupes de quatre, paramètres manquants (AUX LOOP sur LOOPER), MASTER, rappel des sélections, affichage/LEDs, et compatibilité avec les fonctions natives de PRESET/ALGORITHM. Ne pas déclarer ces choix résolus.
+
 ## Inspection technique prioritaire
 
 1. Inspecter les handlers HOME, GLO, REC, SEQ, ARP, EDIT et leurs appuis courts/longs/doubles/triples sur APK et FM-1 ; dresser la matrice des conflits.
