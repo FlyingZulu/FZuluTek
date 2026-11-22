@@ -4,7 +4,7 @@
  *
  * Le FM-1 énumère en USB-MIDI (interface classe 0x01, sous-classe 0x03 MIDISTREAMING,
  * endpoints bulk IN/OUT) — on filtre par classe, pas de VID/PID. Chaque paquet USB-MIDI
- * fait 4 octets d'en-tête (CIN<<4 | câble) + jusqu'à 3 octets de données ; un SysEx est
+ * fait 4 octets : 1 octet d'en-tête (câble<<4 | CIN) + 3 octets de données ; un SysEx est
  * découpé en blocs de 3 (CIN 0x4 continue, 0x5/0x6/0x7 fin à 1/2/3 octets) et réassemblé
  * à la réception. Au-dessus : ZtfTransport (companion 0x60/61/62 + commandes ZTF).
  *
@@ -57,7 +57,7 @@ private class UsbMidiLink(
             // Un événement USB-MIDI fait exactement 4 octets : header + 3 données.
             // Les octets non utilisés du dernier événement restent à zéro.
             val buf = ByteArray(4)
-            buf[0] = (cin shl 4).toByte()   // câble 0
+            buf[0] = cin.toByte()   // câble 0 (nibble haut), CIN (nibble bas)
             System.arraycopy(pkt, off, buf, 1, take)
             val r = conn.bulkTransfer(epOut, buf, buf.size, 250)
             if (r != buf.size) return false
@@ -75,8 +75,8 @@ private class UsbMidiLink(
             if (r <= 0) continue
             var p = 0
             while (p + 4 <= r) {
-                val cin = (buf[p].toInt() ushr 4) and 0xF
-                val cable = buf[p].toInt() and 0xF
+                val cin = buf[p].toInt() and 0xF
+                val cable = (buf[p].toInt() ushr 4) and 0xF
                 if (cable != 0) { p += 4; continue }
                 when (cin) {
                     0x4, 0x5, 0x6, 0x7 -> {
