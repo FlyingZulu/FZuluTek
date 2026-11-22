@@ -867,7 +867,21 @@ class MainActivity : Activity(), SurfaceListener {
     }
 
     // ---- encoders ----
-    override fun onEncoderHold(i: Int) { if (i == 0) selHeld = true }
+    override fun onEncoderHold(i: Int) {
+        when (i) {
+            0 -> selHeld = true
+            2 -> if (st.page == 0) cycleSynthEngine() // appui long ALG : sélecteur local des 5 moteurs
+        }
+    }
+
+    private fun cycleSynthEngine() {
+        curEngine = (curEngine + 1) % ZtekAudio.ENGINE_NAMES.size
+        st.engine = curEngine
+        ZtekAudio.setEngine(curEngine)
+        hint("MOTEUR " + ZtekAudio.ENGINE_NAMES[curEngine])
+        lcd.invalidate()
+        surface.invalidate()
+    }
     override fun onEncoderPress(i: Int) {
         if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40) ; page PRESETS 10 : appui SEL = LOAD (confirme le choix)
             if (recHeld) st.page = if (st.page == 2) 0 else 2
@@ -1367,8 +1381,8 @@ class MainActivity : Activity(), SurfaceListener {
     private fun cyclePart() {   // HOME court : BASSE -> LEAD -> DRUMS(page 15) -> LOOP(page 1)
         st.curPart = (st.curPart + 1) % 4
         when (st.curPart) {
-            0 -> { if (curEngine == 0) { curEngine = 1; ZtekAudio.setEngine(1) }; st.page = 0 }  // BASSE (engines 1..4)
-            1 -> { curEngine = 0; ZtekAudio.setEngine(0); st.page = 0 }                          // LEAD (engine 0)
+            0 -> { if (curEngine == 0) { curEngine = 1; st.engine = curEngine; ZtekAudio.setEngine(curEngine) }; st.page = 0 }  // BASSE (engines 1..4)
+            1 -> { curEngine = 0; st.engine = curEngine; ZtekAudio.setEngine(curEngine); st.page = 0 }                          // LEAD (engine 0)
             2 -> st.page = 15                                                                    // DRUMS
             else -> st.page = 1                                                                  // LOOP
         }
