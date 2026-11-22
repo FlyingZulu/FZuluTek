@@ -54,7 +54,8 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
 
     ml_t loop;
     drum_t drum;                    /* boîte à rythmes (source DRUMS), bus propre z->drumbuf */
-    int drum_on;
+    int drum_on;                    /* marche/arrêt locale (PLAY page DRUMS) */
+    int drum_tr;                    /* transport drums indépendant (SHIFT+PLAY page DRUMS, patch 0023) */
     float *drumbuf;                 /* ZTEK_MAX_BLOCK, heap */
 
     /* table de mixage principale : 4 tranches BASSE/LEAD/DRUMS/LOOP */
@@ -465,7 +466,8 @@ ztek_t *ztek_create(float sr)
         delete z; return NULL;
     }
     drum_init(&z->drum, sr);
-    z->drum_on = 1;                 /* le drum est arme d'emblee (kick 4OTF) ; son horloge suit le play global comme le looper (patch APK 0023) */
+    z->drum_on = 1;                 /* le drum est armé d'emblee (kick 4OTF) ; transport indépendant : SHIFT+PLAY page DRUMS (patch APK 0023) */
+    z->drum_tr = 1;
     z->smp_len = 0; z->smp_wr = 0;
     z->smp_rec = 0; z->smp_play = 0;
     z->smp_start = 0.0f; z->smp_end = 1.0f; z->smp_vol = 0.8f; z->smp_pitch = 0.5f;
@@ -701,7 +703,7 @@ void ztek_punch(ztek_t *z, int on, int type, float a, float b, float mix)
 
 void ztek_punch_tail(ztek_t *z, float t) { (void)z; fx_punch_off_tail(t); }
 
-void ztek_loop_play(ztek_t *z, int on) { ml_play(&z->loop, on); if (on) drum_reset(&z->drum); }
+void ztek_loop_play(ztek_t *z, int on) { ml_play(&z->loop, on); }   /* transport du looper ; drums et acid ont le leur (patch 0023) */
 void ztek_loop_toggle(ztek_t *z, int slot) { ml_toggle(&z->loop, slot); }
 void ztek_loop_rec_start(ztek_t *z, int slot, int od) { ml_rec_start(&z->loop, slot, od); }
 void ztek_loop_rec_stop(ztek_t *z, int slot) { ml_rec_stop(&z->loop, slot); }
@@ -1251,6 +1253,8 @@ void ztek_drum_master(ztek_t *z, float m) { drum_set_master(&z->drum, m); }
 int  ztek_drum_step(const ztek_t *z) { return drum_get_step(&z->drum); }
 void ztek_drum_set_oneshot(ztek_t *z, int on) { drum_set_oneshot(&z->drum, on); }   /* one-shot (liaison APK/FM-1, patch 0023) */
 int  ztek_drum_get_oneshot(const ztek_t *z)   { return drum_get_oneshot(&z->drum); }
+void ztek_drum_tr_set(ztek_t *z, int on) { z->drum_tr = on ? 1 : 0; if (on) drum_reset(&z->drum); }   /* transport drums indépendant (SHIFT+PLAY page DRUMS) */
+int  ztek_drum_tr_get(const ztek_t *z)   { return z->drum_tr; }
 void ztek_drum_set_choke(ztek_t *z, int pad, int grp) { drum_set_choke(&z->drum, pad, grp); }
 int  ztek_drum_get_choke(const ztek_t *z, int pad) { return drum_get_choke(&z->drum, pad); }
 int  ztek_drum_choke_master(const ztek_t *z, int grp) { return drum_choke_master(&z->drum, grp); }
@@ -2740,8 +2744,10 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
         /* 1. the looper's clock; its events fire the synth through the callbacks */
         ml_render(&z->loop, blk);
 
-        /* 2. the acid sequencer, one 1/64 bar at a time */
-        if (z->acid_on && z->loop.playing) {
+        /* 2. the acid sequencer, one 1/64 bar at a time — transport indépendant du looper
+         * (bouton SEQ = acid_on, SHIFT+PLAY hors pages DRUMS/LOOP = pareil) : le synth seq
+         * a sa propre marche/arrêt, il ne suit plus le play du looper (patch APK 0023) */
+        if (z->acid_on) {
             float rate = z->bpm * 16.0f / 60.0f / z->sr;   /* 1/64 bar per sample */
             uint32_t i;
             for (i = 0; i < blk; i++) {
@@ -2824,10 +2830,10 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
         }
 
         /* 3c. DRUMS : bus propre rendu dans drumbuf (la tranche DRUMS du mixage en est la sortie).
-         * Le séquenceur dépend du play global comme celui du looper (patch APK 0023) :
-         * drum_on = marche/arret locale, l'horloge n'avance que si le transport joue ;
-         * les pads manuels et les fins de voix sonnent toujours. */
-        z->drum.run = (uint8_t)(z->drum_on && z->loop.playing ? 1 : 0);
+         * Le séquenceur drums a son PROPRE transport (SHIFT+PLAY page DRUMS, patch APK 0023) :
+         * drum_tr = transport (reset au passage à ON), drum_on = mute locale (PLAY page DRUMS) ;
+         * l'horloge n'avance que si transport on, les pads manuels et les fins de voix sonnent toujours. */
+        z->drum.run = (uint8_t)(z->drum_tr && z->drum_on ? 1 : 0);
         memset(z->drumbuf, 0, blk * sizeof(float));
         drum_render(&z->drum, z->drumbuf, (int)blk);
 
