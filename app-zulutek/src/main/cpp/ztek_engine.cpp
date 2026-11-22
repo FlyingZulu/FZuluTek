@@ -22,6 +22,8 @@ extern "C" {
 #include <new>
 #include <memory>
 #include <mutex>
+#include <atomic>
+#include <android/log.h>
 #include <oboe/Oboe.h>
 
 #define ZTEK_MAX_BLOCK 4096
@@ -30,6 +32,9 @@ extern "C" {
  * The recursive gate also permits render-side looper callbacks to reuse
  * public setters. Realtime callbacks only try-lock; they never wait. */
 static std::recursive_mutex g_ztek_state_mutex;
+static std::atomic<bool> g_audio_callback_logged{false};
+static std::atomic<bool> g_audio_signal_logged{false};
+static std::atomic<bool> g_audio_lock_miss_logged{false};
 
 void ztek_control_lock(void) { g_ztek_state_mutex.lock(); }
 int ztek_audio_try_lock(void) { return g_ztek_state_mutex.try_lock() ? 1 : 0; }
@@ -253,11 +258,20 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
         /* UI/JNI may update shared DSP state. Never block the realtime thread:
          * emit a silent output block or drop this input block, then resume next callback. */
         if (!ztek_audio_try_lock()) {
+            if (!g_audio_lock_miss_logged.exchange(true, std::memory_order_relaxed))
+                __android_log_print(ANDROID_LOG_WARN, "ZuluTekAudio",
+                    "realtime state lock busy; one output block may be silenced");
             if (stream == out.get() && audioData && numFrames > 0)
                 memset(audioData, 0, (size_t)numFrames * 2u * sizeof(float));
             return oboe::DataCallbackResult::Continue;
         }
         if (stream == out.get()) {
+            if (!g_audio_callback_logged.exchange(true, std::memory_order_relaxed)) {
+                __android_log_print(ANDROID_LOG_INFO, "ZuluTekAudio",
+                    "first callback frames=%d rate=%d channels=%d format=%d device=%d burst=%d",
+                    numFrames, stream->getSampleRate(), stream->getChannelCount(),
+                    (int)stream->getFormat(), stream->getDeviceId(), stream->getFramesPerBurst());
+            }
             float *o = static_cast<float *>(audioData);
             uint32_t done = 0;
             while (done < (uint32_t)numFrames) {
@@ -266,6 +280,19 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
                 memset(lbuf, 0, blk * sizeof(float));
                 memset(rbuf, 0, blk * sizeof(float));
                 ztek_render(this, lbuf, rbuf, blk);
+                if (!g_audio_signal_logged.load(std::memory_order_relaxed)) {
+                    float peak = 0.0f;
+                    for (uint32_t i = 0; i < blk; i++) {
+                        float al = lbuf[i] < 0.0f ? -lbuf[i] : lbuf[i];
+                        float ar = rbuf[i] < 0.0f ? -rbuf[i] : rbuf[i];
+                        if (al > peak) peak = al;
+                        if (ar > peak) peak = ar;
+                    }
+                    if (peak > 0.00001f &&
+                        !g_audio_signal_logged.exchange(true, std::memory_order_relaxed))
+                        __android_log_print(ANDROID_LOG_INFO, "ZuluTekAudio",
+                            "first non-silent render peak=%g frames=%u", peak, blk);
+                }
                 for (uint32_t i = 0; i < blk; i++) {
                     o[(done + i) * 2] = lbuf[i];
                     o[(done + i) * 2 + 1] = rbuf[i];
