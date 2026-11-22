@@ -345,6 +345,8 @@ void ztek_drum_master(ztek_t *z, float m);
 int  ztek_drum_step(const ztek_t *z);
 void ztek_drum_set_oneshot(ztek_t *z, int on);                /* one-shot : le seq s'arrête au dernier step relevé (liaison APK/FM-1) */
 int  ztek_drum_get_oneshot(const ztek_t *z);
+void ztek_drum_tr_set(ztek_t *z, int on);                     /* transport drums indépendant (SHIFT+PLAY page DRUMS) : reset du pattern au ON */
+int  ztek_drum_tr_get(const ztek_t *z);
 /* choke des séquenceurs (style Koala, mode leader/hybride ou normal) */
 void ztek_drum_set_choke(ztek_t *z, int pad, int grp);   /* grp 0..6 ; 1er assigné = master */
 int  ztek_drum_get_choke(const ztek_t *z, int pad);
