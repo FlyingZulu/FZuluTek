@@ -86,6 +86,13 @@
 - **Réaffectation d'appartenance** : pendant la capture, avant de quitter, possibilité d'affecter un slot physiquement situé dans l'un des groupes au **pôle opposé** (exemple utilisateur : OCT+ pour LOU puis sélection d'un slot situé de l'autre côté). Le slot prend la **couleur du groupe d'affectation** dans l'APK ; sur FM-1, faute de couleurs, **la touche du slot déplacé clignote** pour indiquer cette exception. Le geste exact de réaffectation, la priorité OCT+/OCT− dans le contexte SNAP, la gestion des groupes et les LEDs sont à préciser, sans inventer de raccourci.
 - **Point à inspecter** : anciens documents mentionnent REC+SEL pour page SNAP, REC+PLAY pour capture ; vérifier les handlers existants, les 16 slots, le moteur de morphing, la persistance KIT/SNAP, la signification de « dry » et les interactions avec ASSIGN/automation. **Cette note est une spécification de la visite, pas une preuve d'implémentation.**
 
+## FLY — compagnon du morphing SNAP (23 novembre 2026)
+
+- L'utilisateur précise que **Zoé et Lou** sont accompagnées du gnome **Fly**, qui module **le comportement du morph entre les deux pôles**, et non simplement une transposition : trajectoire **linéaire**, **erratique**, **élastique** (atteint une valeur puis revient légèrement vers le côté opposé), autres modes à explorer sans les figer.
+- **Souhait actuel** : envisager **K1 pour piloter Fly** ; déterminer s'il choisit le mode, l'intensité ou un autre paramètre, et où se trouve alors le morph principal.
+- **Concordance / conflit documentaire vérifié** dans `docs/ZULUTEK.md` : page SNAP ancienne **K1 = fader ZU↔LU**, **K2/K3 libres**, **K4 = FLY whammy ±12 demi-tons** (voir passages en tête de document et vers lignes 263–265). L'idée de Fly existe donc, mais **son rôle ancien ne correspond pas à la nouvelle intention**. Ne pas présenter l'ancien whammy comme validé pour la nouvelle ergonomie.
+- À préciser : paramètre piloté par K1, place du contrôle de morph permanent, choix des modes Fly, restitution des paramètres SNAP et impact sur moteur/automation ; aucune implémentation modifiée.
+
 ## Inspection technique prioritaire
 
 1. Inspecter les handlers HOME, GLO, REC, SEQ, ARP, EDIT et leurs appuis courts/longs/doubles/triples sur APK et FM-1 ; dresser la matrice des conflits.
