@@ -217,3 +217,7 @@ Commits code : LcdView `81352ba2c67949e42fb9e871a8d84f46105cf4d5`, MainActivity 
 Validation : contrôles statiques des indices OPTIONS (0..6), affichage de la septième ligne, chargement/défaut/persistance, reset et condition de dessin VHS. Build CI et test tactile sur appareil restent à effectuer ; aucun test appareil revendiqué.
 
 Complément de revue statique : la borne de surbrillance de la ligne sélectionnée a également été étendue à l’index 6 (commit LcdView `fe0838d47d65ce86a868dc39d52730720a2d014d`) ; sans cette correction, la ligne VHS aurait été affichée mais pas sélectionnable visuellement.
+
+## VHS — couverture de toutes les pages LCD
+
+Revue du chemin de rendu : la majorité des pages appellent `blitTo()` puis quittent `onDraw()` par un `return`. Les scanlines dessinées uniquement à la fin de `onDraw()` ne couvraient donc que le chemin de rendu sans retour anticipé ; OPTIONS et plusieurs autres pages n’étaient pas couvertes. Correction : déplacer l’application des scanlines dans `blitTo()`, après le blit du framebuffer et la grille, en coordonnées écran calculées depuis le rectangle LCD. Le réglage `st.vhsOn` s’applique désormais à chaque page qui passe par le blit commun. Commit LcdView : `0297db2a17e8b729e8d81c1bd35dce78caa7312f`.
