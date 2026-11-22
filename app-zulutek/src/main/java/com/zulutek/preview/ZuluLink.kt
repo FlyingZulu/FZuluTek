@@ -108,17 +108,26 @@ object ZuluLink {
         peers.clear()
 
         // Socket de découverte : écoute le broadcast, accepte d'émettre en broadcast
-        val ds = DatagramSocket(DISCOVERY_PORT)
-        ds.broadcast = true
-        discoverySocket = ds
+        var ds: DatagramSocket? = null
+        var dds: DatagramSocket? = null
+        try {
+            ds = DatagramSocket(DISCOVERY_PORT)
+            ds.broadcast = true
+            dds = DatagramSocket(DIRECT_PORT)
+            discoverySocket = ds
+            directSocket = dds
 
-        // Socket direct : les pairs nous envoient ici les CC/CLOCK/etc.
-        val dds = DatagramSocket(DIRECT_PORT)
-        directSocket = dds
-
-        listenThread = thread("zulu-link-listen") { listenLoop(ds) }
-        directListenThread = thread("zulu-link-direct") { directListenLoop(dds) }
-        announceThread = thread("zulu-link-hello") { announceLoop() }
+            listenThread = thread("zulu-link-listen") { listenLoop(ds) }
+            directListenThread = thread("zulu-link-direct") { directListenLoop(dds) }
+            announceThread = thread("zulu-link-hello") { announceLoop() }
+        } catch (e: Exception) {
+            running.set(false)
+            ds?.close()
+            dds?.close()
+            discoverySocket = null
+            directSocket = null
+            throw e
+        }
     }
 
     fun stop() {
@@ -174,6 +183,7 @@ object ZuluLink {
 
     /** Traite un paquet de découverte (HELLO/BYE venant du port broadcast). */
     private fun handleIncoming(b: ByteArray, len: Int, fromAddr: String) {
+        if (!validHeader(b, len)) return
         when (b[4]) {
             T_HELLO -> {
                 val (name, role, tempo) = decodeHello(b, len) ?: return
@@ -197,7 +207,9 @@ object ZuluLink {
 
     /** Traite un message direct (CC, CLOCK, START/STOP, TAP, SNAP, PING/PONG, BYE). */
     private fun handleDirect(b: ByteArray, len: Int, fromAddr: String) {
-        val from = peers[fromAddr]?.name ?: "?"   // un inconnu peut nous parler ; on écoute quand même
+        if (!validHeader(b, len)) return
+        val peer = peers.values.firstOrNull { it.address == fromAddr }
+        val from = peer?.name ?: "?"   // un inconnu peut nous parler ; on écoute quand même
         when (b[4]) {
             T_CC -> {
                 val (target, cc, ch, v) = decodeCc(b, len) ?: return
@@ -213,7 +225,6 @@ object ZuluLink {
             T_PING -> { replyPong(fromAddr, b, len); onMessage?.invoke(RxMessage(T_PING, from, fromAddr)) }
             T_PONG -> {
                 val stamp = decodeStamp(b, len)
-                val peer = peers[fromAddr]
                 if (peer != null && stamp > 0L) {
                     peer.lastPingMs = System.currentTimeMillis() - stamp
                 }
@@ -292,6 +303,11 @@ object ZuluLink {
             directSocket?.send(DatagramPacket(pkt, pkt.size, addr, DIRECT_PORT))
         } catch (_: Exception) {}
     }
+
+    /** Rejette les datagrammes hors protocole avant toute action réseau ou transport. */
+    private fun validHeader(b: ByteArray, len: Int): Boolean =
+        len >= 6 && b[0] == MAGIC[0] && b[1] == MAGIC[1] &&
+            b[2] == MAGIC[2] && b[3] == MAGIC[3] && b[5] == VERSION
 
     // ---- Encodage binaire (petit, fixe, comme la spécification) -------------
 
