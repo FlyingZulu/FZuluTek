@@ -963,10 +963,10 @@ void ztek_smp_play(ztek_t *z, int on)
         z->smp_delay = 0;
         if (z->smp_mode == 1 && z->loop.playing) {
             /* BEAT : démarre sur le prochain temps (1/16) de l'horloge du looper */
-            float beat64 = 16.0f * 60.0f / z->bpm;            /* 1/64 bar en samples */
-            float next = (fm_floorf(z->loop.clk / 16.0f) + 1.0f) * 16.0f;   /* next beat, in 1/64 */
-            float d = (next - z->loop.clk) * beat64 / 16.0f;
-            z->smp_delay = (int32_t)(d > 0.0f ? d : beat64);
+            float unitsPerBeat = 16.0f;
+            float next = (fm_floorf(z->loop.clk / unitsPerBeat) + 1.0f) * unitsPerBeat;
+            float samplesPerUnit = z->sr * 60.0f / (z->bpm * unitsPerBeat);
+            z->smp_delay = (int32_t)((next - z->loop.clk) * samplesPerUnit);
         }
         z->smp_play = 1;
     } else {
@@ -2824,7 +2824,7 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
                 if (z->smp_delay > 0) { z->smp_delay--; continue; }
                 uint32_t pp = (uint32_t)z->smp_pos;
                 if (pp >= span) { z->smp_play = 0; break; }
-                float fr = (float)pp - fm_floorf((float)pp);
+                float fr = (float)(z->smp_pos - pp);
                 uint32_t p1 = pp + 1 < span ? pp + 1 : pp;
                 float x = z->smp[s0 + pp] + (z->smp[s0 + p1] - z->smp[s0 + pp]) * fr;
                 z->mono[i] += x * z->smp_vol * 0.9f;
@@ -2943,7 +2943,7 @@ void ztek_render(ztek_t *z, float *outL, float *outR, uint32_t n)
                 if (z->smp_delay > 0) { z->smp_delay--; continue; }
                 uint32_t p = (uint32_t)z->smp_pos;
                 if (p >= span) { z->smp_play = 0; break; }
-                float fr = (float)p - fm_floorf((float)p);
+                float fr = (float)(z->smp_pos - p);
                 uint32_t p1 = p + 1 < span ? p + 1 : p;
                 float x = z->smp[s0 + p] + (z->smp[s0 + p1] - z->smp[s0 + p]) * fr;
                 x *= z->smp_vol * 0.9f;

@@ -97,3 +97,7 @@ fréquent, et à chaque session : README + mode d'emploi à jour + sauvegarde No
 (BIBLE ZULU). Voir les pages « ⚠️ RÈGLES ANTI-PERTE » et « 🧭 Sessions parallèles — qui fait
 quoi » dans Notion : une branche = un périmètre, PR draft ouverte tôt, log Notion de la
 tâche en cours, revue croisée des PR entre sessions.
+
+## APK Android — branche d’audit (22 novembre 2026)
+
+Suivi des corrections Android dans la [PR #48](https://github.com/FlyingZulu/FZuluTek/pull/48) et le [rapport d’audit](docs/AUDIT-APK-2026-11-22.md). Une seule [recette musicale](docs/RECETTE-APK.md) couvre le téléphone et les liaisons externes.

@@ -121,7 +121,7 @@ object ZuluLink {
 
             listenThread = thread("zulu-link-listen") { listenLoop(discovery) }
             directListenThread = thread("zulu-link-direct") { directListenLoop(direct) }
-            announceThread = thread("zulu-link-hello") { announceLoop() }
+            announceThread = thread("zulu-link-hello") { announceLoop(discovery) }
         } catch (e: Exception) {
             running.set(false)
             ds?.close()
@@ -143,12 +143,12 @@ object ZuluLink {
 
     // ---- Boucles réseau ---------------------------------------------------
 
-    private fun announceLoop() {
+    private fun announceLoop(socket: DatagramSocket) {
         val hello = encodeHello()
-        while (running.get()) {
+        while (!socket.isClosed) {
             try {
                 val addr = InetAddress.getByName("255.255.255.255")
-                discoverySocket?.send(DatagramPacket(hello, hello.size, addr, DISCOVERY_PORT))
+                socket.send(DatagramPacket(hello, hello.size, addr, DISCOVERY_PORT))
                 prunePeers()
             } catch (e: Exception) {
                 // socket fermée ou réseau absent : on retentera au prochain tour
@@ -159,26 +159,26 @@ object ZuluLink {
 
     private fun listenLoop(socket: DatagramSocket) {
         val buf = ByteArray(256)
-        while (running.get()) {
+        while (!socket.isClosed) {
             val packet = DatagramPacket(buf, buf.size)
             try {
                 socket.receive(packet)
                 if (packet.length >= 6) handleIncoming(buf, packet.length, packet.address.hostAddress ?: continue)
             } catch (e: Exception) {
-                if (!running.get()) return
+                if (socket.isClosed) return
             }
         }
     }
 
     private fun directListenLoop(socket: DatagramSocket) {
         val buf = ByteArray(512)
-        while (running.get()) {
+        while (!socket.isClosed) {
             val packet = DatagramPacket(buf, buf.size)
             try {
                 socket.receive(packet)
                 if (packet.length >= 6) handleDirect(buf, packet.length, packet.address.hostAddress ?: continue)
             } catch (e: Exception) {
-                if (!running.get()) return
+                if (socket.isClosed) return
             }
         }
     }
