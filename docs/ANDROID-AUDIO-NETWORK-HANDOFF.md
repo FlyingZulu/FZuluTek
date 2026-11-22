@@ -315,3 +315,12 @@ Objectif : transformer les symptômes « LCD blanc » et « audio clic seul » e
 - Audit approfondi : `UsbMidiLink.read(timeoutMs)` utilise une file bloquante interruptible. `ZtfTransport.poll()` peut donc propager `InterruptedException`. L'ancien watcher interceptait toute exception puis dormait 500 ms ; une reconnexion rapide pouvait réactiver ce thread quand `connected` repassait à true.
 - Correction code `fc9cfbb86ef992f027e41234b51aec3c2d22049d` : boucle du watcher vérifie l'état d'interruption ; traite `InterruptedException` séparément et termine immédiatement ; le délai de reprise après erreur ordinaire reste conditionné à une connexion active et à l'absence d'interruption.
 - Build de cette dernière correction à surveiller. Aucun test matériel ; aucun firmware/patch embarqué touché.
+
+
+## USB detach / re-enumeration audit — 22/11/2026
+
+- Audit found that a stale `connected` flag could make a scan after USB unplug/re-enumeration reuse the previous transport. The connected fast path now also requires the active USB device ID to match the newly selected device.
+- Registered a USB detach receiver. Detaching the active/scanned device queues teardown on the serialized worker; teardown interrupts the parameter watcher, closes the MIDI reader/connection, and clears transport/device identity before a subsequent open.
+- Code commits: `b883f1fe8722194b191011473742a97740b17538`, `556f65de08db939b9a519788733e16cc4f1fa2f3`.
+- CI validation pending. No physical FM-1 test is claimed. Repeated scan, unplug while transfer is active, and immediate replug still need hardware validation.
+- No firmware, embedded patches, or unrelated projects changed; PR #46 remains open and unmerged.
