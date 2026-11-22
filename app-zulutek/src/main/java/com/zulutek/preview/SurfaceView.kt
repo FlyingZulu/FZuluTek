@@ -57,6 +57,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         val I2M = intArrayOf(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 1)  // listener index -> matrix id
         // 27 keys F3..G5: white keys (16) carry slot indices, black keys (11) MIDI notes
         val BLACK_NOTES = intArrayOf(54, 56, 58, 61, 63, 66, 68, 70, 73, 75, 78)
+        val WHITE_NOTES = intArrayOf(53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79)
 
         /* Deux palettes (Flying Zulu) :
          * DA ZULU : fond noir charte, bonbons/pills turquoise fluo, marque rose fluo.

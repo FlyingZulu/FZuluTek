@@ -1711,9 +1711,9 @@ class MainActivity : Activity(), SurfaceListener {
         when (SurfaceView.BTN_LABELS[i]) {
             "PLAY" -> if (down) {
                 if (st.page == 15) {                        // page DRUMS : PLAY = marche/arret de la boite a rythme
-                    st.drumOnUi = !st.drumOnUi
-                    ZtekAudio.drumPlay(if (st.drumOnUi) 1 else 0)
-                    hint(if (st.drumOnUi) "DRUMS ON" else "DRUMS OFF")
+                    drumOnUi = !drumOnUi
+                    ZtekAudio.drumPlay(if (drumOnUi) 1 else 0)
+                    hint(if (drumOnUi) "DRUMS ON" else "DRUMS OFF")
                 } else {
                     st.playing = !st.playing
                     ZtekAudio.loopPlay(if (st.playing) 1 else 0)
