@@ -36,7 +36,8 @@ import kotlin.concurrent.thread
 private class UsbMidiLink(
     private val conn: UsbDeviceConnection,
     private val epOut: UsbEndpoint,
-    private val epIn: UsbEndpoint
+    private val epIn: UsbEndpoint,
+    private val intf: UsbInterface
 ) : ZtfLink {
 
     private val queue: BlockingQueue<ByteArray> = LinkedBlockingQueue()
@@ -53,9 +54,9 @@ private class UsbMidiLink(
             val take = minOf(3, rem)
             val last = off + take >= n
             val cin = if (!last) 0x4 else when (take) { 3 -> 0x7; 2 -> 0x6; else -> 0x5 }
-            val buf = ByteArray(4 + take)
+            val buf = ByteArray(4)
             buf[0] = ((cin shl 4) or 0).toByte()   // câble 0
-            System.arraycopy(pkt, off, buf, 4, take)
+            System.arraycopy(pkt, off, buf, 1, take)
             val r = conn.bulkTransfer(epOut, buf, buf.size, 250)
             if (r < 0) return false
             off += take
@@ -79,7 +80,7 @@ private class UsbMidiLink(
                     0x4, 0x5, 0x6, 0x7 -> {
                         val nb = when (cin) { 0x4, 0x7 -> 3; 0x6 -> 2; else -> 1 }
                         for (k in 0 until nb) {
-                            if (p + 4 + k < r && sxLen < sx.size) sx[sxLen++] = buf[p + 4 + k]
+                            if (p + 1 + k < r && sxLen < sx.size) sx[sxLen++] = buf[p + 1 + k]
                         }
                         if (cin != 0x4) {   // fin de SysEx -> trame complète
                             queue.offer(sx.copyOf(sxLen))
@@ -98,6 +99,9 @@ private class UsbMidiLink(
     override fun close() {
         running = false
         reader.interrupt()
+        try { reader.join(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+        try { conn.releaseInterface(intf) } catch (_: Exception) {}
+        try { conn.close() } catch (_: Exception) {}
         queue.clear()
     }
 }
@@ -231,7 +235,10 @@ object Fm1Usb {
         worker.execute {
             try {
                 val conn = mgr.openDevice(dev) ?: throw ZtfException("openDevice a échoué")
+                var claimed = false
+                try {
                 if (!conn.claimInterface(itf, true)) throw ZtfException("claimInterface a échoué")
+                claimed = true
                 var epIn: UsbEndpoint? = null
                 var epOut: UsbEndpoint? = null
                 for (e in 0 until itf.endpointCount) {
@@ -242,12 +249,17 @@ object Fm1Usb {
                 }
                 if (epIn == null || epOut == null) throw ZtfException("endpoints bulk manquants")
                 link?.close()
-                val l = UsbMidiLink(conn, epOut, epIn)
+                val l = UsbMidiLink(conn, epOut, epIn, itf)
                 link = l
                 transport = ZtfTransport(l)
                 connected = true
                 startWatch()
                 onStatus("FM-1 connecté ($deviceName)")
+                } catch (e: Exception) {
+                    if (claimed) try { conn.releaseInterface(itf) } catch (_: Exception) {}
+                    try { conn.close() } catch (_: Exception) {}
+                    throw e
+                }
             } catch (e: Exception) {
                 connected = false
                 onStatus("connexion: ${e.message}")
