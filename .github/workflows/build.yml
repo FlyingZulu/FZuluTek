@@ -1,4 +1,7 @@
 name: Build APK
+permissions:
+  contents: write
+
 
 on:
   push:
@@ -38,3 +41,12 @@ jobs:
             app-linktest/build/outputs/apk/debug/*.apk
             app-drums/build/outputs/apk/debug/*.apk
             app-zulutek/build/outputs/apk/debug/*.apk
+
+      - name: Release APK ZuluTek (SHA visible dans le nom du fichier)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA8=$(echo $GITHUB_SHA | cut -c1-8)
+          cp app-zulutek/build/outputs/apk/debug/ZuluTek-debug.apk ZuluTek-debug-$SHA8.apk
+          gh release create apk-$SHA8 ZuluTek-debug-$SHA8.apk --title "ZuluTek $SHA8" --notes "APK du commit $SHA8. Le badge B$SHA8 s'affiche 6 s au lancement du LCD." --latest
