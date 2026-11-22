@@ -169,3 +169,15 @@ Commits : trace placement `7b34b62f5dfbba303b6780597c5fe18883e0e80a` ; trace tai
 
 Validation : instrumentation statique uniquement ; build CI #342 déclenché sur le head `a4f3fa0d40528903e75204b6cc4b5c8c6bf39053` et encore en attente au moment de cette note. Pas de test appareil. Prochaine observation sur téléphone : filtrer Logcat `ZuluTekLCD` ; absence de « first draw » = problème de visibilité/invalidation/lifecycle ; dimensions/placement incohérents = problème de layout ; traces correctes avec écran toujours blanc = poursuivre dans le blit/composition SurfaceView.
 
+
+
+## Audit de sélection des moteurs de voix — 2026-11-22
+
+Constat vérifié dans `MainActivity.kt` et `docs/ZULUTEK.md` :
+- HOME court fait défiler les parties BASSE / LEAD / DRUMS / LOOP ; il ne propose que LEAD (engine 0) et BASSE (engine 1) depuis l'interface locale.
+- Le seul chemin observé qui sélectionne explicitement les cinq moteurs 0..4 est le CC MIDI 80 reçu via ZuluLink.
+- Le moteur natif accepte bien 0..4 (`ztek_set_engine()` borne l'index à `AT_NENGINES`), donc le manque observé est côté commande locale APK, pas dans le setter natif.
+
+Conséquence : depuis les commandes tactiles APK actuelles, les moteurs 2 FM, 3 SUB et 4 8BIT ne disposent pas d'un sélecteur local dédié. Je ne détourne pas ALG (encodeur rotatif waveform sur MAIN) ni HOME long (LINK) pour éviter de casser le contrat documenté. Il faut définir un contrôle local compatible avec la bible avant de modifier le mapping.
+
+Validation : lecture statique uniquement ; aucun test appareil. Aucun code moteur modifié.
