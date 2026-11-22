@@ -168,10 +168,23 @@ object Fm1Usb {
     private var device: UsbDevice? = null
     private var midiIf: UsbInterface? = null
     private var link: UsbMidiLink? = null
+    /** USB device ID owning the currently opened transport (worker thread). */
+    private var activeDeviceId: Int? = null
     var transport: ZtfTransport? = null
         private set
 
     private val worker = Executors.newSingleThreadExecutor()
+
+    private val detachReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, intent: Intent) {
+            if (UsbManager.ACTION_USB_DEVICE_DETACHED != intent.action) return
+            val detached = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE) ?: return
+            if (detached.deviceId == device?.deviceId || detached.deviceId == activeDeviceId) {
+                onStatus("FM-1 débranché")
+                close()
+            }
+        }
+    }
 
     private val permReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
@@ -196,10 +209,17 @@ object Fm1Usb {
         else
             @Suppress("UnspecifiedRegisterReceiverFlag")
             appCtx.registerReceiver(permReceiver, filter)
+        val detachFilter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        if (Build.VERSION.SDK_INT >= 33)
+            appCtx.registerReceiver(detachReceiver, detachFilter, Context.RECEIVER_NOT_EXPORTED)
+        else
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            appCtx.registerReceiver(detachReceiver, detachFilter)
     }
 
     fun release() {
         try { appCtx.unregisterReceiver(permReceiver) } catch (_: Exception) {}
+        try { appCtx.unregisterReceiver(detachReceiver) } catch (_: Exception) {}
         close()
     }
 
@@ -254,10 +274,13 @@ object Fm1Usb {
         worker.execute {
             // A page re-entry or repeated scan must reuse the live transport. In
             // particular, do not replace its reader/watch threads while connected.
-            if (connected && transport != null) {
+            if (connected && transport != null && activeDeviceId == dev.deviceId) {
                 onConnected?.invoke()
                 return@execute
             }
+            // A newly enumerated USB device is not the same live transport, even
+            // if the previous connection still has a stale connected flag.
+            closeActiveNow()
             try {
                 val conn = mgr.openDevice(dev) ?: throw ZtfException("openDevice a échoué")
                 var claimed = false
@@ -277,6 +300,7 @@ object Fm1Usb {
                 val l = UsbMidiLink(conn, epOut, epIn, itf)
                 link = l
                 transport = ZtfTransport(l)
+                activeDeviceId = dev.deviceId
                 connected = true
                 startWatch()
                 onStatus("FM-1 connecté ($deviceName)")
@@ -293,15 +317,18 @@ object Fm1Usb {
         }
     }
 
+    private fun closeActiveNow() {
+        connected = false
+        watchThread?.interrupt()
+        watchThread = null
+        link?.close()
+        link = null
+        transport = null
+        activeDeviceId = null
+    }
+
     fun close() {
-        worker.execute {
-            connected = false
-            watchThread?.interrupt()
-            watchThread = null
-            link?.close()
-            link = null
-            transport = null
-        }
+        worker.execute { closeActiveNow() }
     }
 
     /** exécute une op sur le worker ; les exceptions deviennent un statut */
