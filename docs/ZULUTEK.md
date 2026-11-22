@@ -319,3 +319,6 @@ préservées par snapshots/kits/undo. **Migration** : magic preset `ZTP1` → `Z
 `strip_par` au load/import (VOICE := ex-LEAD, DRUMS/LOOP décalés, SIREN neuf vol=`siren_lvl`) ;
 `ZTEK_NSTRIP` reste 4 donc la baie (52 ports) ne change pas. ZTF inchangé (aucun param
 renuméroté).
+
+
+- **VHS subtil et réactif (APK only)** : scanlines fines (pas 1/3 px logiques, opacité faible) et micro-artefacts horizontaux rares, positions/intensités randomisées à intervalles irréguliers. Leur présence/intensité varie avec l’activité agrégée des 16 sources de modulation lues via `ZtekAudio.srcVal` (LFO, enveloppes et tools) ; lecture Android côté UI à 250 ms, aucun calcul ni accès JNI ajouté au callback audio. VHS OFF coupe entièrement l’overlay ; ECO reste indépendant. Effet cosmétique seulement, sans altérer les données framebuffer ni le son. Validation build CI et appareil à confirmer.
