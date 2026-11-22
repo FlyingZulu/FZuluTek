@@ -1,4 +1,6 @@
 diff --git a/atek303/app/dsp/fx.c b/atek303/app/dsp/fx.c
+--- a/atek303/app/dsp/fx.c
++++ b/atek303/app/dsp/fx.c
 @@ -1,7 +1,7 @@
  /* SPDX-License-Identifier: GPL-3.0-or-later
   * Copyright (C) 2026 Javier (Animatek)
@@ -194,6 +196,8 @@ diff --git a/atek303/app/dsp/fx.c b/atek303/app/dsp/fx.c
          /* PUNCH-IN (PoW!): the ring always records; while a slot is held its effect is in, mixed by K4 */
          {
 diff --git a/atek303/app/dsp/fx.h b/atek303/app/dsp/fx.h
+--- a/atek303/app/dsp/fx.h
++++ b/atek303/app/dsp/fx.h
 @@ -13,8 +13,9 @@
   *   DELAY   ping-pong bucket-brigade (BBD): TIME is free, 10..~600 ms, not synced to the tempo; the
   *           delay steps in 4096 "stages" like an MN3005 and the clock hisses a little; each repeat
@@ -216,6 +220,8 @@ diff --git a/atek303/app/dsp/fx.h b/atek303/app/dsp/fx.h
  void fx_tempo(float sixteenth_s);      /* kept for the API; the delay is free now, no sync */
  float fx_dly_ms(float t01);            /* BBD TIME 0..1 -> free ms, 10..~600 */
 diff --git a/atek303/app/app.c b/atek303/app/app.c
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
 @@ -34,7 +34,7 @@
   *                     6 CHORUS  TYPE (CHORUS, FLANGER), RATE, DEPTH, MIX
   *                     7 DRIVE   TYPE (OFF, OVERDRIVE, RAT, FUZZ), DRIVE, TONE, LEVEL
@@ -226,6 +232,8 @@ diff --git a/atek303/app/app.c b/atek303/app/app.c
   *   SAVE            the SAVE screen: a PRESET is everything (pattern, voice, effects, tempo, scale, root).
   *                   It opens on the preset loaded (the list's cursor, or the first empty slot); PRESETS picks
 diff --git a/atek303/app/fm1.toml b/atek303/app/fm1.toml
+--- a/atek303/app/fm1.toml
++++ b/atek303/app/fm1.toml
 @@ -23,5 +23,5 @@
  licence = "GPL-3.0-or-later"
  credits = "Built on fm1-base (Charles Vestal) and felucca-bsp (Hügelton Instruments). The voice is ATEK303 by Animatek, on Open303 by Robin Schmidt."

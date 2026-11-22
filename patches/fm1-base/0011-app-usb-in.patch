@@ -1,0 +1,20 @@
+diff --git a/device/uac_mix.h b/device/uac_mix.h
+index 4c1596f..c089c54 100644
+--- a/device/uac_mix.h
++++ b/device/uac_mix.h
+@@ -23,6 +23,15 @@ static inline void uac_mix(int32_t *o, uint32_t n, uint32_t gain, uint32_t maste
+     uac_tap(o, n);                                  /* the USB audio input: the app's output, before the computer's */
+ #endif
+ #if FELUCCA_UAC_OUT
++#if defined(APP_USB_IN)
++    extern uint32_t uac_in_peek(int32_t *dst, uint32_t n);   /* patch felucca-bsp: copie sans consommer */
++    {                                                        /* audio entrant USB -> hook app (échantillonnage) */
++        static int32_t tb[512];                              /* patch audit 2026-11-22: .bss, pas la pile ISR audio (sstack 8 Ko partagée avec tout app_render) */
++        uint32_t got = uac_in_peek(tb, n > 256u ? 256u : n);
++        if (got)
++            app_usb_in(tb, got);
++    }
++#endif
+     uac_play(o, n, full ? play_q12 : (master * master >> 12) * play_q12 >> 12);   /* the computer's audio, at MASTER */
+ #else
+     (void)master, (void)play_q12;
