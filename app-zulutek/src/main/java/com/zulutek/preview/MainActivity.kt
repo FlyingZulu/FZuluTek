@@ -411,6 +411,16 @@ class MainActivity : Activity(), SurfaceListener {
             val by = (ev.y / s - lcd.transY()) / LcdView.H
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    // BEND tactile conforme à la bible : REC maintenu + toucher le LCD.
+                    // Prioritaire sur les gestes de page afin de rester global (hors capture SNAP).
+                    if (recHeld && !st.snapArm) {
+                        st.bendOn = true
+                        st.bendX = bx.coerceIn(0f, 1f)
+                        st.bendY = by.coerceIn(0f, 1f)
+                        ZtekAudio.bend(1, st.bendX, st.bendY, st.bendMode)
+                        lcd.invalidate()
+                        return@setOnTouchListener true
+                    }
                     if (st.page == 12) {          // baie v3 : tap = raccourci tactile (= PLAY sur la ligne)
                         val py = by * LcdView.H
                         when (st.patchView) {
@@ -443,7 +453,12 @@ class MainActivity : Activity(), SurfaceListener {
                         lcd.invalidate()
                     }
                 }
-                MotionEvent.ACTION_MOVE -> if (st.page == 4) {
+                MotionEvent.ACTION_MOVE -> if (st.bendOn) {
+                    st.bendX = bx.coerceIn(0f, 1f)
+                    st.bendY = by.coerceIn(0f, 1f)
+                    ZtekAudio.bend(1, st.bendX, st.bendY, st.bendMode)
+                    lcd.invalidate()
+                } else if (st.page == 4) {
                     st.xyX = bx.coerceIn(0f, 1f)
                     st.xyY = by.coerceIn(0f, 1f)
                     ZtekAudio.xySet(1, st.xyX, st.xyY)
