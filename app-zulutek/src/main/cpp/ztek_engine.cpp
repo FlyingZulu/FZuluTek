@@ -34,6 +34,7 @@ extern "C" {
 static std::recursive_mutex g_ztek_state_mutex;
 static std::atomic<bool> g_audio_callback_logged{false};
 static std::atomic<bool> g_audio_signal_logged{false};
+static std::atomic<bool> g_audio_signal_probe_requested{false};
 static std::atomic<bool> g_audio_lock_miss_logged{false};
 
 void ztek_control_lock(void) { g_ztek_state_mutex.lock(); }
@@ -280,7 +281,8 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
                 memset(lbuf, 0, blk * sizeof(float));
                 memset(rbuf, 0, blk * sizeof(float));
                 ztek_render(this, lbuf, rbuf, blk);
-                if (!g_audio_signal_logged.load(std::memory_order_relaxed)) {
+                if (!g_audio_signal_logged.load(std::memory_order_relaxed) &&
+                    g_audio_signal_probe_requested.exchange(false, std::memory_order_relaxed)) {
                     float peak = 0.0f;
                     for (uint32_t i = 0; i < blk; i++) {
                         float al = lbuf[i] < 0.0f ? -lbuf[i] : lbuf[i];
@@ -288,10 +290,9 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
                         if (al > peak) peak = al;
                         if (ar > peak) peak = ar;
                     }
-                    if (peak > 0.00001f &&
-                        !g_audio_signal_logged.exchange(true, std::memory_order_relaxed))
-                        __android_log_print(ANDROID_LOG_INFO, "ZuluTekAudio",
-                            "first non-silent render peak=%g frames=%u", peak, blk);
+                    g_audio_signal_logged.store(true, std::memory_order_relaxed);
+                    __android_log_print(ANDROID_LOG_INFO, "ZuluTekAudio",
+                        "first note render peak=%g frames=%u", peak, blk);
                 }
                 for (uint32_t i = 0; i < blk; i++) {
                     o[(done + i) * 2] = lbuf[i];
@@ -584,6 +585,7 @@ void ztek_destroy(ztek_t *z)
 
 static void ztek_note_on_int(ztek_t *z, int note, int vel, int accent, int slide, int record)
 {
+    g_audio_signal_probe_requested.store(true, std::memory_order_relaxed);
     int cls = z->engine == 0 ? 0 : 1;           /* 0 bass, 1 synth (midi_looper.h) */
     if (record) ml_note_in(&z->loop, note, vel, 4, cls);
     if (z->lfo_trig) {                          /* LFO TRIG: retrigger the 4 LFOs + 2 ENVs */
