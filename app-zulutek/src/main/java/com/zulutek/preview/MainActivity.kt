@@ -404,7 +404,11 @@ class MainActivity : Activity(), SurfaceListener {
          * tempo ; on reçoit ses CC (74..80 voix/moteur, 20..37 FX, 102..115 boutons). */
         ZuluLink.onMessage = { msg -> handler.post { onZuluMessage(msg) } }
         ZuluLink.onPeersChanged = { handler.post { lcd.invalidate() } }
-        ZuluLink.start("zulu-apk", ZuluLink.Role.CONSOLE)
+        if (ZuluLink.start("zulu-apk", ZuluLink.Role.CONSOLE)) {
+            android.util.Log.i("ZuluLink", "UDP discovery/direct sockets started")
+        } else {
+            android.util.Log.e("ZuluLink", "UDP startup failed: ${ZuluLink.lastStartError}")
+        }
 
         /* liaison ZTF avec le FM-1 (page LINK 17) : callbacks worker -> UI via handler */
         Fm1Usb.init(this)
