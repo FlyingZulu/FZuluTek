@@ -1316,17 +1316,18 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         // ---- page OPTIONS (16) : liste — SEL=navigue, ALG=valeur live, REC/tout bouton=quitte, Shift=reset ----
         if (st.page == 16) {
             title(c, 6f, 15f, "OPTIONS", FLUO_TURQ)
-            val names = arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN")
+            val names = arrayOf("ECO", "LABELS", "VUE", "LUXE", "SKIN", "ENGINE")
             val vals = arrayOf(
                 if (st.ecoOn) "ON" else "OFF",
                 if (st.labelsZulu) "ZULU" else "FM1",
                 arrayOf("PLEIN", "CLAV", "AUTO")[st.viewMode.coerceIn(0, 2)],
                 if (st.luxeOn) "ON" else "OFF",
-                if (st.skinMaison) "MAISON" else "DA ZULU")
-            val apkOnly = arrayOf(false, true, true, true, true)
-            for (r in 0..4) {
+                if (st.skinMaison) "MAISON" else "DA ZULU",
+                st.engineNames[st.engine.coerceIn(0, st.engineNames.lastIndex)])
+            val apkOnly = arrayOf(false, true, true, true, true, true)
+            for (r in 0..5) {
                 val y = 44f + r * 30f
-                val sel = r == st.optRow.coerceIn(0, 4)
+                val sel = r == st.optRow.coerceIn(0, 5)
                 text(c, 6f, y, (if (sel) ">" else " ") + " " + names[r], if (sel) FLUO_YEL else INK, 10f)
                 text(c, 96f, y, vals[r], if (sel) FLUO_YEL else INK, 10f)
                 if (apkOnly[r]) text(c, 156f, y, "APK", DIM, 8f)
