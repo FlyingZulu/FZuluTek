@@ -21,9 +21,19 @@ extern "C" {
 #include <string.h>
 #include <new>
 #include <memory>
+#include <mutex>
 #include <oboe/Oboe.h>
 
 #define ZTEK_MAX_BLOCK 4096
+
+/* Mutable DSP state is shared by JNI control calls and Oboe callbacks.
+ * The recursive gate also permits render-side looper callbacks to reuse
+ * public setters. Realtime callbacks only try-lock; they never wait. */
+static std::recursive_mutex g_ztek_state_mutex;
+
+void ztek_control_lock(void) { g_ztek_state_mutex.lock(); }
+int ztek_audio_try_lock(void) { return g_ztek_state_mutex.try_lock() ? 1 : 0; }
+void ztek_control_unlock(void) { g_ztek_state_mutex.unlock(); }
 
 /* bitset des assignations : ZTEK_AWORDS x uint64 par source, ZTEK_NDST ports au total */
 static inline void ztek_bit_set(uint64_t *bm, int p, int on)
@@ -240,6 +250,13 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
 
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) override
     {
+        /* UI/JNI may update shared DSP state. Never block the realtime thread:
+         * emit a silent output block or drop this input block, then resume next callback. */
+        if (!ztek_audio_try_lock()) {
+            if (stream == out.get() && audioData && numFrames > 0)
+                memset(audioData, 0, (size_t)numFrames * 2u * sizeof(float));
+            return oboe::DataCallbackResult::Continue;
+        }
         if (stream == out.get()) {
             float *o = static_cast<float *>(audioData);
             uint32_t done = 0;
@@ -263,6 +280,7 @@ struct ztek_s : public oboe::AudioStreamDataCallback {
             }
             if (smp_wr >= smp_cap) smp_wr = 0;   /* ring: overwrite the oldest */
         }
+        ztek_control_unlock();
         return oboe::DataCallbackResult::Continue;
     }
 };
