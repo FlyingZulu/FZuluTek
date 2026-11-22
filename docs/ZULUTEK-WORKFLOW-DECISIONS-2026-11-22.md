@@ -9,7 +9,7 @@
 - **REC + SEQ** ouvre **LOOP**.
 - **REC + EDIT** ouvre **MACRO**.
 - **EDIT court** ouvre/ferme la page **XY**. Fermer la page ne désactive pas XY HOLD ni les effets.
-- **EDIT long (~0,8 s)** active/désactive l'édition des pas du séquenceur Zulu commun à DRUMS et LOOPER (ONE SHOT / LOOP). EDIT fixe en édition, clignotant sur page XY. Priorité LED en cas de chevauchement à préciser.
+- **EDIT long (~0,8 s)** active/désactive l'édition des pas **uniquement si une page de séquenceur Zulu est déjà ouverte** (DRUMS ou LOOPER, ONE SHOT / LOOP). Hors d'une page de séquenceur, EDIT long ne déclenche pas l'édition et ne navigue pas. EDIT fixe en édition, clignotant sur page XY. Priorité LED en cas de chevauchement à préciser.
 - En édition des pas : 16 pas sélectionnables ; K1–K4 éditent quatre paramètres ; SELECT change la page de quatre paramètres ; changer de pas conserve la page de paramètres ; EDIT court quitte l'édition.
 - **SEQ seul** conserve son rôle de demande/génération de nouveau pattern acid ATEK303, avec nouveau timing d'application défini plus bas.
 - **ARP seul** conserve sa fonction ATEK303.
