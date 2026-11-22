@@ -27,7 +27,7 @@ jobs:
         run: python3 tools/make_icon.py
 
       - name: Construire les APK de test
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon -PBUILD_SHA=$(echo $GITHUB_SHA | cut -c1-8)
 
       - name: Publier les APK
         uses: actions/upload-artifact@v4

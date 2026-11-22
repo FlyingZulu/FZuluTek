@@ -353,6 +353,11 @@ class MainActivity : Activity(), SurfaceListener {
         ZtekAudio.setParam(ZtekAudio.AT_DECAY, st.encVals[6])
 
         lcd = LcdView(this, st)
+
+        // badge de build (anti-confusion d'artefacts) : SHA court du commit injecté par la CI via -PBUILD_SHA
+        st.buildTag = try { getString(R.string.build_sha).take(8) } catch (e: Exception) { "" }
+        if (st.buildTag.isNotEmpty() && st.buildTag != "local") st.buildUntil = System.currentTimeMillis() + 6000
+
         surface = SurfaceView(this, st, this)
 
         /* Le LCD vit dans l'emplacement dedie de la facade : SurfaceView dessine le bezel

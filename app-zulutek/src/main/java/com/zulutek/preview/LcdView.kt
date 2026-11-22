@@ -157,6 +157,9 @@ class LcdState {
     var viewMode = 0                                // OPTIONS > VUE (APK only) : 0 PLEIN, 1 CLAV, 2 AUTO
     var viewCompact = false                         // vue CLAV résolue (PLEIN/CLAV/AUTO + link up)
     var luxeOn = false                              // OPTIONS > LUXE ON (APK only)
+    var buildTag = ""                                // badge de build : SHA court du commit (injecté par la CI, vide en local)
+    var buildUntil = 0L                              // le badge s'affiche jusqu'à cette date (6 s au lancement)
+
     var skinMaison = false                          // OPTIONS > SKIN = MAISON (APK only) : facade du FM-1 custom maison
     var monkeyUntil = 0L                            // pop singe 400 ms à la connexion link (VUE=AUTO)
     var optRow = 0                                  // page OPTIONS (16) : ligne sélectionnée (SEL)
@@ -692,6 +695,15 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
             c.restore()
             blitTo(screen, s)
             return
+        }
+
+
+        // badge de build 6 s (anti-confusion d'artefacts) : SHA court du commit qui a produit cet APK
+        if (now < st.buildUntil && st.buildTag.isNotEmpty()) {
+            mono.textSize = 8f
+            mono.color = Color.argb(255, 160, 160, 160)
+            c.drawText("B" + st.buildTag, 2f, 237f, mono)
+            mono.color = INK
         }
 
         // icône caméra (capture SNAP REC+PLAY / proc REC+GLO) : plein cadre, puis rétrécit vers le fond en 400 ms (charte)
