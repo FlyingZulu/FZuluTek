@@ -386,6 +386,8 @@ class MainActivity : Activity(), SurfaceListener {
 
         /* liaison ZTF avec le FM-1 (page LINK 17) : callbacks worker -> UI via handler */
         Fm1Usb.init(this)
+        // Lancer les requêtes seulement après permission USB et claimInterface réussis.
+        Fm1Usb.onConnected = { Fm1Usb.ping(); Fm1Usb.refreshFiles() }
         Fm1Usb.onStatus = { s -> handler.post { st.linkStatus = s; lcd.invalidate() } }
         Fm1Usb.onProgress = { s -> handler.post { st.linkProg = s; lcd.invalidate() } }
         Fm1Usb.onFiles = { fs -> handler.post {
@@ -601,8 +603,6 @@ class MainActivity : Activity(), SurfaceListener {
     private fun linkScan() {
         st.linkStatus = "scan USB…"
         Fm1Usb.scan()
-        Fm1Usb.ping()
-        Fm1Usb.refreshFiles()
         linkWatchStart()
         linkRefreshLocal()
     }
