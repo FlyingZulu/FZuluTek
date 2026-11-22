@@ -132,13 +132,28 @@ object Fm1Usb {
     /** boucle de réception des notifications de params (démarrée à la connexion) */
     private fun startWatch() {
         watchThread = thread(name = "fm1-params-rx", start = true) {
-            while (connected) {
+            while (connected && !Thread.currentThread().isInterrupted) {
                 val t = transport
-                if (t == null) { Thread.sleep(300); continue }
+                if (t == null) {
+                    try { Thread.sleep(300) } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        return@thread
+                    }
+                    continue
+                }
                 try {
                     val ns = t.poll(300)
                     if (ns.isNotEmpty()) onParams(ns)
-                } catch (e: Exception) { Thread.sleep(500) }
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return@thread
+                } catch (_: Exception) {
+                    if (!connected || Thread.currentThread().isInterrupted) return@thread
+                    try { Thread.sleep(500) } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        return@thread
+                    }
+                }
             }
         }
     }
