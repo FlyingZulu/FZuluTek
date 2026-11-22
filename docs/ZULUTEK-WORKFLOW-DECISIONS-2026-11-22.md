@@ -77,6 +77,15 @@
 - **À concevoir page par page**, sans imposer artificiellement une grille aux fonctions qui ne s'y prêtent pas et **sans écraser les gestes déjà validés** (ATEK303 SEQ K1 STEPS/K2 SCALE/K3 TEMPO/K4 ROOT, édition des pas, PoW! maintien+tournage K1–K4, etc.).
 - **Points non arrêtés** : affectation exacte PRESET/ALGORITHM aux axes, geste de bascule de l'orientation, comportement aux frontières de groupes de quatre, paramètres manquants (AUX LOOP sur LOOPER), MASTER, rappel des sélections, affichage/LEDs, et compatibilité avec les fonctions natives de PRESET/ALGORITHM. Ne pas déclarer ces choix résolus.
 
+## SNAP — capture sélective et morphing ZOU / LOU (23 novembre 2026)
+
+- **REC + PLAY** entre en mode capture SNAP et en ressort après la session ; il ne faut pas confondre ce geste avec un déclenchement de lecture. En capture, choisir un slot de destination parmi **16 touches blanches** (huit physiques à gauche, huit à droite) puis **SHIFT confirme** ce slot.
+- Ensuite, comme en ASSIGN, naviguer librement entre les pages, toucher/tourner un paramètre cible et **appuyer sur SHIFT pour capturer explicitement chaque paramètre** ; répéter autant que souhaité. **REC + PLAY** termine la capture. Préciser lors de l'inspection la valeur exacte mémorisée, le comportement d'un slot déjà rempli et l'indication de capture.
+- Les slots sont initialement répartis **8 ZOU (gauche) / 8 LOU (droite)**, avec couleur distincte pour chaque camp dans l'APK. Ces groupes sont des **pôles de morphing**, pas des limites rigides de stockage.
+- Le **potentiomètre de morphing reste disponible après la sortie du mode SNAP**. **OCT−** active/désactive le pôle ZOU ; **OCT+** active/désactive LOU (hors geste contextuel de réaffectation en capture, à préciser). Deux pôles actifs : interpolation ZOU ↔ LOU ; un seul actif : interpolation entre ce pôle et l'absence de contribution snapshot (« dry ») ; aucun actif : déplacement du potentiomètre sans effet, mais **réactivation applique immédiatement la position courante**, saut éventuel assumé.
+- **Réaffectation d'appartenance** : pendant la capture, avant de quitter, possibilité d'affecter un slot physiquement situé dans l'un des groupes au **pôle opposé** (exemple utilisateur : OCT+ pour LOU puis sélection d'un slot situé de l'autre côté). Le slot prend la **couleur du groupe d'affectation** dans l'APK ; sur FM-1, faute de couleurs, **la touche du slot déplacé clignote** pour indiquer cette exception. Le geste exact de réaffectation, la priorité OCT+/OCT− dans le contexte SNAP, la gestion des groupes et les LEDs sont à préciser, sans inventer de raccourci.
+- **Point à inspecter** : anciens documents mentionnent REC+SEL pour page SNAP, REC+PLAY pour capture ; vérifier les handlers existants, les 16 slots, le moteur de morphing, la persistance KIT/SNAP, la signification de « dry » et les interactions avec ASSIGN/automation. **Cette note est une spécification de la visite, pas une preuve d'implémentation.**
+
 ## Inspection technique prioritaire
 
 1. Inspecter les handlers HOME, GLO, REC, SEQ, ARP, EDIT et leurs appuis courts/longs/doubles/triples sur APK et FM-1 ; dresser la matrice des conflits.
