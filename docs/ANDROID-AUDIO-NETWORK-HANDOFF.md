@@ -141,3 +141,16 @@ Le clavier tactile Android utilise désormais une palette dédiée, indépendant
 Les états actifs continuent de recevoir la surbrillance ambre existante (touches jouées, slots actifs ou armés). Les dimensions, positions, zones de hit-test, notes MIDI, slots du looper, glissando et événements DOWN/UP ne sont pas modifiés par ce changement de palette.
 
 Commit : `f88d38a69bf5a846aefb2270db913f77b8ac7cd8`. Vérification statique des quatre couleurs et des deux chemins de dessin effectuée. Le rendu réel, le contraste et la lisibilité restent à confirmer sur appareil après génération de l'APK.
+
+
+## Démarrage audio Android observable — 2026-11-22
+
+Constat : `MainActivity.onCreate()` appelait `ZtekAudio.start()` sans examiner son booléen de retour. En cas d'échec de `nativeCreate()` ou `nativeStart()`, l'interface continuait donc à s'initialiser alors que les commandes audio Kotlin étaient ensuite des no-op (handle nul).
+
+Correction : le résultat est maintenant contrôlé. Le succès est journalisé sous `ZuluTekAudio` avec la fréquence demandée ; l'échec est journalisé en erreur et affiche un Toast explicite « Audio indisponible : démarrage du moteur synthé échoué ». Aucun changement du DSP, des gains, du routage, des événements clavier ou du firmware.
+
+Commit : `8ca0aaf54911a9bfe616823ffa2882e3046fe88b`.
+
+Validation : inspection statique du chemin `start()` et de la gestion du handle Kotlin. Le build de cette nouvelle modification n'a pas encore été exécuté au moment de cette note ; le run #337 réussi concerne le commit précédent `f88d38a69bf5a846aefb2270db913f77b8ac7cd8`. Aucun résultat de test appareil n'est revendiqué.
+
+Suite : compiler cette modification, puis sur Android provoquer/observer un démarrage normal et consulter Logcat (`ZuluTekAudio`). Si l'échec apparaît, relever la cause native Oboe (résultat d'ouverture / démarrage, fréquence, format, canaux) plutôt que modifier arbitrairement le gain. Si le flux démarre, instrumenter les callbacks et le niveau crête de sortie pour suivre une note depuis le toucher jusqu'au buffer Oboe.
