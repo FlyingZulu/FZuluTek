@@ -176,6 +176,11 @@ class MainActivity : Activity(), SurfaceListener {
             if (st.page == 1) {   // page LOOP : rafraîchit PITCH/POS/MODE/MUT/SRC/VOL
                 for (k in 0 until 6) st.loopParam[k] = ZtekAudio.loopGetSp(st.selSlot, k)
             }
+            // Lecture légère des sources de modulation pour le VHS animé, indépendante de la page.
+            if (st.vhsOn) {
+                for (i in 0 until minOf(ZtekAudio.ZT_NSRC, st.srcVals.size))
+                    st.srcVals[i] = ZtekAudio.srcVal(i)
+            }
             if (st.page in 6..10) {
                 for (i in 0 until ZtekAudio.ZT_NSRC) st.srcVals[i] = ZtekAudio.srcVal(i)
                 for (k in 0 until 5) st.seqkVals[k] = ZtekAudio.seqKnobGet(5 + k)
