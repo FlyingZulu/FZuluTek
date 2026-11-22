@@ -53,11 +53,13 @@ private class UsbMidiLink(
             val take = minOf(3, rem)
             val last = off + take >= n
             val cin = if (!last) 0x4 else when (take) { 3 -> 0x7; 2 -> 0x6; else -> 0x5 }
-            val buf = ByteArray(4 + take)
-            buf[0] = ((cin shl 4) or 0).toByte()   // câble 0
-            System.arraycopy(pkt, off, buf, 4, take)
+            // Un événement USB-MIDI fait exactement 4 octets : header + 3 données.
+            // Les octets non utilisés du dernier événement restent à zéro.
+            val buf = ByteArray(4)
+            buf[0] = (cin shl 4).toByte()   // câble 0
+            System.arraycopy(pkt, off, buf, 1, take)
             val r = conn.bulkTransfer(epOut, buf, buf.size, 250)
-            if (r < 0) return false
+            if (r != buf.size) return false
             off += take
         }
         return true
@@ -79,7 +81,7 @@ private class UsbMidiLink(
                     0x4, 0x5, 0x6, 0x7 -> {
                         val nb = when (cin) { 0x4, 0x7 -> 3; 0x6 -> 2; else -> 1 }
                         for (k in 0 until nb) {
-                            if (p + 4 + k < r && sxLen < sx.size) sx[sxLen++] = buf[p + 4 + k]
+                            if (p + 1 + k < r && sxLen < sx.size) sx[sxLen++] = buf[p + 1 + k]
                         }
                         if (cin != 0x4) {   // fin de SysEx -> trame complète
                             queue.offer(sx.copyOf(sxLen))
