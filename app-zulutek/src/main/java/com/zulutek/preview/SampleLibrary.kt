@@ -77,7 +77,10 @@ object SampleLibrary {
                         else -> r.skipBytes(sz.toInt() + (if (sz % 2 == 1L) 1 else 0).toInt())
                     }
                 }
-                if (dataOff < 0) null else Wav(sr, ch, bits, fmt, dataOff, dataLen, f)
+                if (dataOff < 0 || ch !in 1..32 || sr !in 8000..384000 ||
+                    bits !in listOf(8, 16, 24, 32) ||
+                    (fmt == 3 && bits != 32) || (fmt != 1 && fmt != 3)) null
+                else Wav(sr, ch, bits, fmt, dataOff, dataLen, f)
             }
         } catch (e: Exception) { null }
     }
@@ -89,13 +92,17 @@ object SampleLibrary {
         return try {
             RandomAccessFile(f, "r").use { r ->
                 r.seek(w.dataOff)
-                val nBytes = w.dataLen.toInt().coerceAtMost((r.length() - w.dataOff).toInt())
+                val available = minOf(w.dataLen, r.length() - w.dataOff)
+                // Refuser les WAV démesurés : évite overflow Long->Int et OOM lors du décodage.
+                if (available <= 0 || available > 64L * 1024 * 1024) return null
+                val nBytes = available.toInt()
                 val raw = ByteArray(nBytes)
                 r.readFully(raw)
                 val bytesPerSample = w.bits / 8
                 if (bytesPerSample <= 0) return null
                 val frameBytes = bytesPerSample * w.channels
                 val nFrames = nBytes / frameBytes
+                if (nFrames == 0 || targetSr <= 0) return null
                 val mono = FloatArray(nFrames)
                 for (i in 0 until nFrames) {
                     var acc = 0f
@@ -122,7 +129,9 @@ object SampleLibrary {
                 }
                 // resample linéaire mono -> targetSr
                 if (w.sampleRate == targetSr) mono else {
-                    val outN = (nFrames.toLong() * targetSr / w.sampleRate).toInt()
+                    val outSize = nFrames.toLong() * targetSr / w.sampleRate
+                    if (outSize <= 0 || outSize > 16_000_000L) return null
+                    val outN = outSize.toInt()
                     val out = FloatArray(outN)
                     for (i in 0 until outN) {
                         val pos = i.toDouble() * w.sampleRate / targetSr
