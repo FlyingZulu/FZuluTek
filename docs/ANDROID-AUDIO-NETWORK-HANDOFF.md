@@ -297,3 +297,12 @@ Objectif : transformer les symptômes « LCD blanc » et « audio clic seul » e
 - Commit : `5331cb00924fb14820fe9cd6af08f38002a83cf9`.
 - Build #381 / run `44995223691` : en cours au dernier contrôle ; il compile cette correction.
 - Toujours aucun test matériel USB/FM-1. Le comportement des notifications pendant transfert/commande reste à vérifier sur appareil.
+
+
+## Audit cycle de vie USB FM-1 — 22/11/2026
+
+- Un scan déclenché à chaque entrée dans la page LINK pouvait réouvrir un transport alors que le FM-1 était déjà connecté. Cela risquait de remplacer les références du lecteur USB et du watcher sans arrêter l'ancien watcher.
+- Correction dans `Fm1Usb.openNow()` : le worker détecte une liaison existante (`connected && transport != null`), la réutilise et réémet `onConnected`. Pas de deuxième ouverture ni de second watcher pour les scans répétés pendant une session active.
+- Commit : `d6feaae17f7d01470352d8e63da7183c483318a1`. Build #384 / run [45009852514](https://github.com/FlyingZulu/FZuluTek/actions/runs/45009852514) à confirmer.
+- L'accès aux trames companion, ZTF et aux notifications watch est sérialisé par le même verrou dans `ZtfTransport`. Aucun défaut additionnel confirmé dans la revue statique de ZuluLink.
+- Validation uniquement statique/CI en attente ; test réel de reconnexion, permission et débranchement USB nécessaire. Aucun changement firmware/patch embarqué.
