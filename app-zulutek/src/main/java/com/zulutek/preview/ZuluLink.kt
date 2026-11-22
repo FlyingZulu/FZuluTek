@@ -106,24 +106,47 @@ object ZuluLink {
 
     // ---- Cycle de vie -----------------------------------------------------
 
-    fun start(name: String, asRole: Role) {
-        if (!running.compareAndSet(false, true)) return
+    @Volatile var lastStartError: String = ""
+        private set
+
+    fun start(name: String, asRole: Role): Boolean {
+        if (!running.compareAndSet(false, true)) return true
         localName = name.take(NAME_MAX)
         role = asRole
         peers.clear()
 
-        // Socket de découverte : écoute le broadcast, accepte d'émettre en broadcast
-        val ds = DatagramSocket(DISCOVERY_PORT)
-        ds.broadcast = true
-        discoverySocket = ds
+        var ds: DatagramSocket? = null
+        var dds: DatagramSocket? = null
+        try {
+            // Bind both ports before launching workers. If either bind fails, roll back
+            // completely so a later retry is possible and no half-open listener remains.
+            ds = DatagramSocket(DISCOVERY_PORT)
+            ds.broadcast = true
+            dds = DatagramSocket(DIRECT_PORT)
+            discoverySocket = ds
+            directSocket = dds
 
-        // Socket direct : les pairs nous envoient ici les CC/CLOCK/etc.
-        val dds = DatagramSocket(DIRECT_PORT)
-        directSocket = dds
-
-        listenThread = thread("zulu-link-listen") { listenLoop(ds) }
-        directListenThread = thread("zulu-link-direct") { directListenLoop(dds) }
-        announceThread = thread("zulu-link-hello") { announceLoop() }
+            listenThread = thread("zulu-link-listen") { listenLoop(ds) }
+            directListenThread = thread("zulu-link-direct") { directListenLoop(dds) }
+            announceThread = thread("zulu-link-hello") { announceLoop() }
+            lastStartError = ""
+            return true
+        } catch (e: Exception) {
+            running.set(false)
+            try { ds?.close() } catch (_: Exception) {}
+            try { dds?.close() } catch (_: Exception) {}
+            discoverySocket = null
+            directSocket = null
+            listenThread?.interrupt()
+            directListenThread?.interrupt()
+            announceThread?.interrupt()
+            listenThread = null
+            directListenThread = null
+            announceThread = null
+            peers.clear()
+            lastStartError = e.message ?: e.javaClass.simpleName
+            return false
+        }
     }
 
     fun stop() {
@@ -190,6 +213,7 @@ object ZuluLink {
                     onPeersChanged?.invoke()
                 } else if (known.address != fromAddr) {
                     peers[name] = Peer(name, fromAddr, role, tempo, System.currentTimeMillis())
+                    onPeersChanged?.invoke()
                 } else {
                     known.role = role; known.tempo = tempo
                     known.lastSeen = System.currentTimeMillis()
