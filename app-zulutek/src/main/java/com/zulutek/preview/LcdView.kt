@@ -420,6 +420,13 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
         val AMBER = Color.argb(255, 255, 200, 60)
     }
 
+    private var firstDrawTrace = false
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        android.util.Log.i("ZuluTekLCD", "view size=${w}x${h} previous=${oldw}x${oldh}")
+    }
+
     private val mono = Paint().apply {
         typeface = Typeface.MONOSPACE
         isAntiAlias = false
@@ -676,6 +683,13 @@ class LcdView(ctx: Context, val st: LcdState) : View(ctx) {
 
     override fun onDraw(screen: Canvas) {
         super.onDraw(screen)
+        if (!firstDrawTrace) {
+            firstDrawTrace = true
+            android.util.Log.i(
+                "ZuluTekLCD",
+                "first draw size=${width}x${height} scale=${scaleF()} wide=${st.wide} visible=${visibility == View.VISIBLE}"
+            )
+        }
         val s = scaleF()
         screen.drawColor(BG)
         val c = fbC
