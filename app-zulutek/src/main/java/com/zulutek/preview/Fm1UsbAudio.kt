@@ -99,7 +99,11 @@ object Fm1UsbAudio {
 
     fun stopCapture() {
         captureOn = false
-        capThread?.join(300)
+        val rec = record
+        // AudioRecord.read(READ_BLOCKING) peut attendre : stop() le débloque.
+        try { rec?.stop() } catch (_: Exception) {}
+        try { capThread?.join(1000) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+        try { rec?.release() } catch (_: Exception) {}
         capThread = null
         record = null
     }
