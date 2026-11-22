@@ -646,10 +646,16 @@ class MainActivity : Activity(), SurfaceListener {
 
     private fun linkScan() {
         st.linkStatus = "scan USB…"
+        // Permission grant and USB interface opening are asynchronous. Queue the
+        // first ZTF requests only after the transport reports that it is ready.
+        Fm1Usb.onConnected = {
+            handler.post {
+                Fm1Usb.ping()
+                Fm1Usb.refreshFiles()
+                linkWatchStart()
+            }
+        }
         Fm1Usb.scan()
-        Fm1Usb.ping()
-        Fm1Usb.refreshFiles()
-        linkWatchStart()
         linkRefreshLocal()
     }
 
