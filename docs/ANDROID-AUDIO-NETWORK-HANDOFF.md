@@ -6,8 +6,8 @@ Base : `fix/apk-touch-bend-rec` (inclut le correctif tactile REC/LCD de la PR #4
 
 ## Règles impératives pour les prochains assistants
 
-- **Périmètre autorisé : APK Android/Kotlin uniquement.**
-- Ne pas modifier le firmware FM-1, les patches embarqués, les sources C/C++ du moteur audio, ni les autres projets/modules sans demande explicite.
+- **Périmètre autorisé : APK Android, Kotlin et moteur natif C/C++ embarqué dans l'APK.** L'utilisateur a explicitement demandé les corrections nécessaires et la documentation. Le firmware FM-1, les patches embarqués et les autres projets restent strictement hors périmètre.
+- Ne jamais modifier le firmware FM-1, les patches embarqués ni les autres projets/modules. Les sources C/C++ du moteur Android sont dans le périmètre de correction autorisé.
 - Ne pas tenter de « corriger » un risque de concurrence du moteur natif depuis Kotlin : le signaler et proposer une interface native dédiée seulement si l'utilisateur autorise ultérieurement ce périmètre.
 - Dans la nomenclature de l'utilisateur, **SCL signifie SEL**. Ce n'est pas un bug à renommer ni à corriger.
 - Préserver les modifications de la branche `fix/apk-touch-bend-rec` ; travailler sur une branche dédiée issue de celle-ci.
@@ -60,9 +60,13 @@ Le protocole ZTF est transporté sur USB-MIDI. Il ne s'agit pas d'un flux audio 
 3. **Permission micro :** `linkAudioToggle()` ne démarre plus `AudioRecord` avant le retour de la permission Android. Le callback de permission reprend l'action si elle est accordée.
 4. **Cycle de vie capture :** `stopCapture()` appelle `AudioRecord.stop()` pour débloquer une lecture bloquante, attend le thread et libère l'enregistreur.
 
+### Correctifs supplémentaires dans cette branche
+
+10. **Concurrence JNI/Oboe :** le moteur Android partage ses objets DSP entre les setters JNI et le callback Oboe. Un verrou récursif protège désormais les appels JNI de contrôle/lecture et le callback utilise exclusivement `try_lock()` : il ne bloque jamais le thread audio. Si un contrôle détient brièvement l'état, le callback de sortie émet un bloc silencieux (et le callback d'entrée abandonne le bloc) puis reprend au cycle suivant. `nativeStop` et `nativeDestroy` arrêtent/rejoignent le flux avant de prendre le verrou afin d'éviter un interblocage avec le callback. Cette protection est une première correction de cohérence ; elle doit être validée sur appareils et profilée pour mesurer les blocs audio abandonnés.
+
 ### Risques / travaux encore ouverts
 
-1. **Concurrence moteur natif :** les appels JNI de contrôle et le callback Oboe semblent accéder à des états communs. Aucun mécanisme lock-free/atomique n'a été confirmé dans cet audit. Correction hors périmètre (C/C++).
+1. **Concurrence moteur natif :** le verrouillage JNI/Oboe est maintenant en place dans cette branche. Il reste à valider la latence et l'absence de glitches sur appareils Android variés ; un modèle de commandes lock-free serait préférable si le profilage montre des blocs abandonnés.
 2. **Capture USB sans destination PCM :** callback non raccordé au sampler. Ne pas prétendre que FM-1 → Android → sampler fonctionne de bout en bout.
 3. **Sélection UAC :** `findUsbDevice()` prend le premier périphérique audio USB exposé par Android, pas nécessairement celui du FM-1. Tester les cas avec plusieurs périphériques USB et envisager une association plus fiable.
 4. **Opérations asynchrones Fm1Usb :** `ping()`, `pull()` et `push()` renvoient actuellement des valeurs locales avant l'exécution du worker ; leurs retours synchrones sont donc trompeurs. Préférer des callbacks, futures ou résultats livrés par le worker avant d'exposer ces valeurs.
@@ -90,7 +94,7 @@ Le protocole ZTF est transporté sur USB-MIDI. Il ne s'agit pas d'un flux audio 
 - `app-zulutek/src/main/java/com/zulutek/preview/ZtfTransport.kt`
 - `app-zulutek/src/main/java/com/zulutek/preview/Fm1UsbAudio.kt`
 - `app-zulutek/src/main/java/com/zulutek/preview/ZuluLink.kt`
-- `app-zulutek/src/main/cpp/ztek_engine.cpp` (lecture/audit seulement dans le périmètre actuel)
+- `app-zulutek/src/main/cpp/ztek_engine.cpp` et `jni_bridge.cpp` (moteur natif Android ; le firmware reste non modifié)
 
 ## Historique de cette branche
 
