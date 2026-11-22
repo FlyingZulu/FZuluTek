@@ -288,3 +288,12 @@ Objectif : transformer les symptômes « LCD blanc » et « audio clic seul » e
 - Build #376 / run `44994960851` : succès sur le handoff précédent, artefact debug `zulu-apk-376` (6 319 448 octets).
 - Builds #377 / run `44995039610`, #378 / run `44995046947` et #379 / run `44995115379` : en cours au moment de cette mise à jour ; le #379 porte le head contenant les changements d'API asynchrone.
 - Aucun test matériel USB/FM-1 n'a été effectué. Vérifier sur appareil les scénarios permission accordée/refusée, connexion déjà autorisée, déconnexion pendant scan et nouvelle tentative.
+
+
+## Notifications companion pendant les requêtes ZTF brutes (2026-11-22)
+
+- Dernière lacune identifiée : `ZtfTransport.request()` conservait les notifications PQ_CHANGED reçues pendant une requête companion, mais `zrequest()` (commandes ZTF brutes) ignorait toutes les trames non-ZTF. Une opération PING/LOAD/paramètre pouvait donc faire perdre des notifications de paramètres en direct.
+- Correction : `zrequest()` analyse désormais les trames companion reçues pendant l'attente et place les messages `CMD_PARAMS / PQ_CHANGED` dans la même file `notes`, sans les confondre avec la réponse ZTF attendue.
+- Commit : `5331cb00924fb14820fe9cd6af08f38002a83cf9`.
+- Build #381 / run `44995223691` : en cours au dernier contrôle ; il compile cette correction.
+- Toujours aucun test matériel USB/FM-1. Le comportement des notifications pendant transfert/commande reste à vérifier sur appareil.
