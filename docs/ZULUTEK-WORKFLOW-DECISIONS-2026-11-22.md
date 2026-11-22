@@ -115,6 +115,8 @@
 
 - **Destination de duplication déjà occupée — décision utilisateur** : afficher immédiatement une **alerte visuelle de remplacement**. Fenêtre très courte d'environ **1 seconde** : **SHIFT = NON / annuler le remplacement** ; **absence d'action à l'expiration = confirmer automatiquement la copie et écraser le SNAP de destination**. Éviter une validation positive supplémentaire pour garder le geste rapide. Le détail du pictogramme et de l'indicateur de temps est à concevoir. **Attention** : cette validation par défaut est destructive ; proposition de l'assistant, non approuvée, d'un undo/restauration après écrasement. Vérifier également que SHIFT n'est pas ambigu avec son rôle normal de capture pendant cette fenêtre.
 
+- **Clarification impérative utilisateur : avertissement NON BLOQUANT**. La fenêtre d'environ une seconde n'est **pas une modale** et **ne retient pas l'utilisateur** : il peut changer de page, jouer, naviguer et poursuivre toute autre action immédiatement. L'absence de veto SHIFT pendant le délai vaut confirmation, **y compris s'il est déjà parti ailleurs** ; à l'expiration, le contenu précédent du slot cible est effectivement écrasé par la copie. L'avertissement ne doit ni prendre le focus ni imposer un temps d'attente. À concevoir : la portée exacte de SHIFT=annuler pendant cette seconde sans intercepter de manière gênante ses usages dans les autres pages.
+
 ## Inspection technique prioritaire
 
 1. Inspecter les handlers HOME, GLO, REC, SEQ, ARP, EDIT et leurs appuis courts/longs/doubles/triples sur APK et FM-1 ; dresser la matrice des conflits.
