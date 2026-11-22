@@ -1473,7 +1473,14 @@ class MainActivity : Activity(), SurfaceListener {
     override fun onButton(i: Int, down: Boolean) {
         val label = SurfaceView.BTN_LABELS[i]
         if (!down) {
-            if (label == "REC") recHeld = false
+            if (label == "REC") {
+                recHeld = false
+                if (st.bendOn) {
+                    st.bendOn = false
+                    ZtekAudio.bend(0, st.bendX, st.bendY, st.bendMode)
+                    lcd.invalidate()
+                }
+            }
             if (label == "GLO") gloDown = false
             if (label == "HOME" && homeDownAt > 0) {
                 if (!homeCombo && System.currentTimeMillis() - homeDownAt < 600) cyclePart()
