@@ -51,9 +51,10 @@ typedef struct {
     uint8_t  eco;       /* MODE ECO : polyphonie 8 -> 5 (la plus vieille voix est coupée) */
     uint8_t  oneshot;      /* 1 = le seq s'arrête une fois le dernier step (15) relevé, pas de wrap */
     uint8_t  oneshot_off; /* interne : 1 = one-shot terminé, horloge figée (les voix finissent de sonner) */
+    uint8_t  run;          /* transport (play global, comme le looper) : l'horloge du seq n'avance que si run ; les pads manuels et les fins de voix sonnent toujours */
 } drum_t;
 
-void drum_init(drum_t *d, float sr);                 /* patterns 4-on-the-floor par défaut */
+void drum_init(drum_t *d, float sr);                 /* pattern kick 4-on-the-floor seul par défaut */
 void drum_render(drum_t *d, float *out, int n);      /* mono, sommé dans out */
 void drum_hit(drum_t *d, int pad);                   /* déclenche un pad (mute si inactif) */
 void drum_set_pat(drum_t *d, int pad, int step, int on);
@@ -68,6 +69,7 @@ int  drum_get_step(const drum_t *d);
 void drum_reset(drum_t *d);                          /* remet le seq au step 0 */
 void drum_set_oneshot(drum_t *d, int on);             /* one-shot : le seq s'arrête une fois le dernier step relevé */
 int  drum_get_oneshot(const drum_t *d);
+void drum_set_run(drum_t *d, int on);                 /* transport : le seq avance seulement si run (pads manuels toujours audibles) */
 
 void drum_set_choke(drum_t *d, int pad, int grp);    /* grp 0..6 ; 1er assigné = master */
 int  drum_get_choke(const drum_t *d, int pad);
