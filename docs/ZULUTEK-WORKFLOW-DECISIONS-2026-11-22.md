@@ -879,3 +879,10 @@
 - **Indépendance transport** : LOOPER MIDI est une **page globale** ; PLAY/STOP seul commande toujours le **transport général**, pas un transport LOOPER local. SOLO/MUTE ne change pas les états PLAY/STOP des autres parties.
 - **À résoudre avant codage** : touches de sélection des pistes LOOPER, arbitrage des combos MONO/POLY contre gestes CHOKE GROUPS déjà documentés, persistance des masques et politique des pistes simultanément SOLO/MUTE. Vérifier l'absence de note-on coincé lors d'un MUTE/SOLO MIDI (note-off/flush).
 - **Statut** : exigence fonctionnelle confirmée, non implémentée/compilée/testée ici.
+
+## DRUMS + LOOPER — CHOKE GROUPS et SOLO/MUTE : séparation des contextes (23 novembre 2026)
+
+- **Clarification suite à objection utilisateur** : DRUMS et LOOPER partagent le même modèle de séquenceur ; les **six CHOKE GROUPS (+ OFF)** doivent être accessibles **dans les deux**, tout comme SOLO/MUTE. Le signalement précédent d'un « conflit » était une **collision de gestes MONO/POLY**, pas une incompatibilité fonctionnelle ni une raison de retirer les CHOKE GROUPS d'un séquenceur.
+- **Solution d'interface proposée** : en contexte jeu/séquenceur, **MONO + piste/pad = SOLO**, **POLY + piste/pad = MUTE** ; dans un **contexte/page d'édition CHOKE GROUP**, sélectionner la piste/voix puis régler son groupe OFF/1..6 avec les commandes d'édition, sans réutiliser MONO/POLY+pad au même niveau. Même logique métier CHOKE réutilisée, présentation adaptée DRUMS/LOOPER.
+- **Attention technique** : le partage de modèle/interface ne prouve pas que les deux moteurs DSP/MIDI ont le même code ni que les CHOKE sont déjà implémentés dans le LOOPER. En MIDI, CHOKE doit notamment gérer les note-off/voix en cours et ses règles leader/mutuel. Vérifier code et tests avant toute affirmation d'intégration.
+- **Statut** : principe de séparation des contextes proposé et consigné, emplacement exact de l'éditeur CHOKE à confirmer ; aucun code modifié/testé.
