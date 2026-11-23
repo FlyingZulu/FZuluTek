@@ -756,3 +756,10 @@
 - **Intention utilisateur** : lors de la sauvegarde d'un preset de la section PEDALBOARD, reprendre le **nom du KIT associé** avec une différenciation explicite de type `BOARD` pour ne pas confondre preset de pedalboard et KIT complet. Exemple de convention proposée : KIT `ALBERT 3` → `ALBERT 3 · BOARD` ; si quatre boards sont sauvegardés séparément, `ALBERT 3 · BOARD 1` à `ALBERT 3 · BOARD 4`.
 - Le PEDALBOARD **n'utilise pas de nouveau nom aléatoire** et ne fait pas avancer le compteur des noms KITS. Le suffixe exact, la granularité (un preset pour l'ensemble des quatre aux vs un par board), le comportement en cas de renommage ultérieur du KIT, et la gestion de presets PEDALBOARD indépendants réutilisables restent **à confirmer**.
 - **Statut** : principe de nommage en conception, aucune implémentation ni test.
+
+## PEDALBOARD — suffixe B1..B4 et compteur de sauvegardes (23 novembre 2026)
+
+- **Précision explicite utilisateur** : ZuluTek a **quatre PEDALBOARD**, numérotés **B1, B2, B3, B4**. Le nom automatique d'une sauvegarde de board doit reprendre le nom du KIT associé, puis **B[numéro de board]-[numéro d'itération de sauvegarde]**, avec **tiret obligatoire**. Exemple pour KIT `ALBERT 3` : `ALBERT 3 B1-1`, `ALBERT 3 B1-2`, `ALBERT 3 B2-1`, `ALBERT 3 B2-2`, `ALBERT 3 B3-1`, `ALBERT 3 B4-1`.
+- **Sémantique** : le chiffre immédiatement après B désigne **le board physique/logique parmi les quatre**, celui après le tiret désigne **l'itération de sauvegarde** de ce board. Compteur propre à chaque board (interprétation directe du format, à vérifier pour sa portée par KIT vs globale). Pas de nouvelle racine aléatoire pour une sauvegarde PEDALBOARD.
+- **Remplace** la convention illustrative précédente `ALBERT 3 · BOARD 1` etc. Les questions de propagation d'un renommage du KIT et de portée exacte des compteurs restent ouvertes.
+- **Statut** : spécification documentaire ; non implémenté/testé.
