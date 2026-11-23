@@ -621,3 +621,9 @@
 - **Proposition à valider** pour ZuluTek : contrôle **LO-FI = profil + intensité 0..100**, avec état CLEAN/bypass et profils de travail WARM, 60, 404 FILTER, 404 VINYL, 1200, 8-BIT, SK-5. Reproduire des familles de caractères par nos propres DSP, **sans prétendre à une émulation fidèle ni copier les algorithmes propriétaires**.
 - Appliquer la valeur de base par pad DRUMS / piste LOOPER, avec override P-LOCK par pas et retour au réglage de base. Sur FM-1, mesurer le coût DSP et envisager des variantes légères si nécessaire.
 - **Statut** : découverte de référence et proposition de conception, **catalogue final, DSP et interface non validés ni implémentés**.
+
+## LO-FI — référence Lo-Fly Dirt confirmée explicitement (23 novembre 2026)
+
+- **Confirmation utilisateur** : l'application de référence recherchée est **Lo-Fly Dirt de MSXII Sound Design** (même développeur que Fly Tape 2), et non Fly Tape 2 elle-même.
+- La référence porte sur **l'ergonomie et le principe** : plusieurs saveurs LO-FI / profils de coloration de samplers anciens et un réglage de dosage pour chacun. **Ne pas supposer que la liste proposée précédemment est automatiquement le catalogue final ZuluTek**.
+- Contrôle cible : LO-FI par voix/pad DRUMS, profil et intensité ; valeurs de base et P-LOCK indépendants par pas, également pour LOOPER. DSP et interface à concevoir et tester, sans copier les algorithmes propriétaires de l'application de référence.
