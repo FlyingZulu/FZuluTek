@@ -269,3 +269,10 @@
 - **Décision utilisateur** : les paramètres **FLY** sont **exclus par défaut** de la capture SNAP, mais un réglage explicite dans **GLOBAL** peut les rendre capturables pour les usages créatifs. Proposition de libellé : **GLOBAL → SNAP → CAPTURE FLY : OFF / ON**, valeur initiale **OFF**.
 - Même avec CAPTURE FLY=ON, maintenir les protections anti-récursion : aucun SNAP ne peut modifier le knob ZULU, les pôles ZU/LU, le déclenchement/la sélection de SNAP ni les commandes de capture. Autoriser seulement les **valeurs de paramètres FLY** et non les actions de pilotage du système SNAP. Distinguer la valeur du paramètre et ses effets indirects dans le moteur ; vérifier capture et application.
 - **À préciser ultérieurement** : si changer CAPTURE FLY dans GLOBAL affecte seulement les nouvelles captures ou aussi la lecture de SNAP déjà enregistrés avec FLY ; proposition prudente : n'affecter que les nouvelles captures, avec protections anti-boucle permanentes.
+
+## RECTIFICATION IMPORTANTE — nature exacte d'un SNAP (23 novembre 2026)
+
+- **Correction explicite de l'utilisateur** : un **SNAP n'enregistre PAS de son, ni d'audio**. C'est une **mémoire sélective de l'état/valeur de commandes et paramètres à un instant donné**, comparable aux **scènes de l'Elektron Octatrack**. Dans ZuluTek, l'utilisateur choisit explicitement les paramètres à mémoriser, un par un, avec SHIFT en mode capture ; le knob ZULU sert ensuite au morphing des valeurs entre les pôles ZU et LU.
+- **Ne plus écrire « SNAP capture le son »** : cette formulation est conceptuellement fausse. Parler de **capture de valeurs de paramètres**, et non de capture audio. Le son peut évoluer en conséquence, mais n'est pas le contenu enregistré.
+- **Restrictions de capturabilité confirmées** : OCT−/OCT+ (contrôle des pôles) et knob ZULU (contrôle du morphing) **jamais capturables** ; valeurs de paramètres FLY **exclues par défaut**, capturables seulement si l'option GLOBAL est activée. Interdiction des boucles SNAP → contrôle SNAP, indépendamment de cette option.
+- Cette rectification **prime sur toute formulation antérieure contradictoire** dans le journal et dans les échanges.
