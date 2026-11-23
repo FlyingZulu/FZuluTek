@@ -1092,3 +1092,9 @@
 - Chacun doit conserver son **état indépendant** (note active, oscillateur/engine, filtre, enveloppe, réglages, séquenceur/contrôle), et les deux sorties doivent pouvoir être sommées au mix. Le partage éventuel de FX/bus globaux est compatible avec cette indépendance ; ne pas confondre partage des traitements et partage d'une unique instance de synthèse.
 - **Impact attendu** : cette limite à deux voix mono rend la faisabilité sur JieLi AC791N sensiblement plus plausible, mais **aucune mesure CPU/RAM ni test matériel n'a encore été réalisé** ; il faut encore tenir compte de DRUMS, LOOPER, FX, latence et éventuels pics de calcul.
 - **À retenir pour la suite** : ne plus décrire BASSE ou LEAD comme des synthés polyphoniques, ni invoquer leur polyphonie comme principal obstacle à l'indépendance.
+
+## Rectification de polyphonie — BASSE mono, LEAD idéalement 4 voix (23 novembre 2026)
+
+- **Correction explicite utilisateur de l'entrée précédente** : **BASSE strictement monophonique (1 voix)** ; **LEAD idéalement polyphonique jusqu'à 4 voix simultanées**, notamment pour plaquer des accords de quatre notes. Ne plus traiter LEAD comme obligatoirement mono.
+- **Objectif simultané maximal de synthèse** : **1 voix BASSE + 4 voix LEAD = 5 voix audio de synthèse**, indépendantes des voix DRUMS et autres traitements. Les quatre voix LEAD ne sont pas utilisées en permanence ; la charge maximale doit néanmoins être dimensionnée/testée pour les accords soutenus.
+- **Statut** : souhait de conception, **pas faisabilité prouvée sur FM-1**. Prioriser mesure CPU/RAM et rendu audio avec BASSE+LEAD poly4+DRUMS+LOOPER+FX. Explorer polyphonie LEAD configurable ou limitation ECO seulement si les mesures l'exigent, sans présumer que 4 voix sont garanties.
