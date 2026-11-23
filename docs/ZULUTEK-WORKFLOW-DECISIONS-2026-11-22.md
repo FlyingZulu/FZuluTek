@@ -1105,3 +1105,10 @@
 - Conserver les mêmes pages, engines, paramètres et gestes : le mode de performance modifie **le budget de voix**, pas l'identité ergonomique du LEAD.
 - Prévoir une transition NORMAL → ECO pendant un accord en cours (choix de la note conservée, extinction douce des autres voix, sans clic), ainsi que ECO → NORMAL ; politique exacte à définir et tester.
 - **Statut** : règle de conception validée ; faisabilité de NORMAL 4 voix sur FM-1, interaction avec DRUMS/LOOPER/FX, et code non vérifiés. Ne pas présenter la polyphonie comme implémentée.
+
+## Correction — polyphonie LEAD ECO à mesurer, cible au moins 2 voix (23 novembre 2026)
+
+- **Rectification explicite de la décision précédente** : **LEAD ECO ne doit pas être fixé d'office à MONO**. L'utilisateur souhaite **au moins deux notes simultanées en ECO**, si possible davantage. **LEAD NORMAL = objectif 4 voix**, BASSE = 1 voix mono dans tous les modes.
+- **Règle de conception** : comme pour les DRUMS, la réduction de polyphonie en ECO doit être justifiée par des **mesures CPU/RAM/latence et des tests audio en charge réelle**. Tester LEAD 4 voix en ECO d'abord ; si la charge est acceptable, **garder 4 voix même en ECO**. Sinon évaluer 3 puis 2 voix et choisir selon l'impact mesuré. **Deux voix ECO sont un souhait minimum, non une garantie matérielle établie**.
+- **Référence DRUMS FM-1 en conception** : NORMAL 4 voix / ECO 3 voix, sans prétendre que c'est déjà implémenté. Les budgets de synthèse et de DRUMS doivent être testés ensemble avec LOOPER et FX.
+- **Statut** : correction de spécification, pas de code ni mesures effectués. Cette note remplace explicitement la règle antérieure LEAD ECO = 1 voix.
