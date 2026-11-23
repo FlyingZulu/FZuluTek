@@ -863,3 +863,11 @@
 - **Priorité des combos** : HOME+PLAY/STOP ne doit ni changer la page via HOME ni actionner par erreur le transport local. Détection du maintien HOME avant l'action PLAY/STOP et consommation de l'événement HOME associé.
 - **Règle persistante** : `effective_play[part] = global_play && local_play[part]`. STOP général suspend tous les séquenceurs ; retour PLAY général relance seulement ceux dont le transport local est en PLAY. BPM commun, lancement local libre en contretemps.
 - **À auditer avant codage** : collisions éventuelles HOME+PLAY/STOP dans les mappings FM-1/APK, sémantique des phases à la reprise, accès global depuis d'autres pages, et comportement des queues sonores. **Statut : conception retenue, non implémentée/compilée/testée.**
+
+## Classification des pages — PLAY/STOP local seulement sur trois instruments (23 novembre 2026)
+
+- **Décision explicite utilisateur** : les **seules trois pages instrumentales** bénéficiant du PLAY/STOP local sont **BASSE, LEAD et DRUMS**. Sur ces pages, PLAY/STOP seul = transport local de l'instrument ; HOME+PLAY/STOP = transport général.
+- **Pages globales confirmées** : **SNAP, KIT, LOOPER MIDI, PEDALBOARD et MIXER**. Sur celles-ci, **PLAY/STOP seul = transport général**, pas de transport local déduit de la page. Les autres pages non instrumentales suivent par défaut le comportement global, sauf décision ultérieure.
+- Le **LOOPER MIDI est explicitement une page globale** même s'il contient des pistes/contrôles locaux ; ne pas confondre les opérations sur pistes LOOPER avec le transport PLAY/STOP de façade.
+- HOME+PLAY/STOP n'a **pas de rôle distinct nécessaire** sur les pages globales ; ne pas lui attribuer une autre fonction sans décision. Maintenir les règles de priorité des combos sur les trois pages instrumentales.
+- **Statut** : conception validée ; aucun câblage ni test FM-1/APK effectué dans cette mise à jour.
