@@ -975,3 +975,10 @@
 - **ZuluTek APK** : garder le **même comportement fixe/clignotant** pour parité FM-1, et ajouter **deux couleurs distinctes** pour voix et bloc. Cyan fixe vs orange clignotant est une **suggestion d'interface non encore figée**, pas une exigence utilisateur sur les teintes exactes.
 - Les raccourcis **SHIFT + blanche 15 = −16 pas**, **SHIFT + blanche 16 = +16 pas (avec duplication du bloc précédent ou bloc vide à préciser)**, **SHIFT + rotation SELECT = longueur fine** restent distincts de ces indicateurs.
 - **Statut** : spécification UX confirmée, non implémentée, non testée FM-1/APK.
+
+## Extension de séquence +16 — modes COPY / FREE, COPY par défaut (23 novembre 2026)
+
+- **Décision explicite utilisateur** : le comportement par défaut de **SHIFT + dernière touche blanche (16)** dans l'éditeur de pas est **COPY** : allonger la séquence de 16 pas en recopiant **automatiquement et intégralement** le bloc précédent (déclenchements/placements et paramètres de pas disponibles), sans demander de confirmation à chaque ajout. L'utilisateur doit pouvoir **choisir FREE** pour ajouter à la place un bloc de 16 pas **vide**. Les deux noms de mode demandés sont exactement **COPY** et **FREE**.
+- **SHIFT + avant-dernière blanche (15)** reste la réduction de 16 pas ; **SHIFT + rotation SELECT** reste le réglage fin de longueur. Longueur max cible 128 pas. Ne pas confondre COPY/FREE avec sauvegarde de pattern.
+- **Encore à définir** : commande précise pour choisir COPY ou FREE, emplacement et persistance du réglage (global, par voix ou par piste), comportement lorsque LENGTH n'est pas un multiple de 16, et conservation des données des pas masqués lors d'une réduction. Ne pas inventer ces modalités.
+- **Statut** : choix COPY/FREE et défaut COPY confirmés en conception, pas d'implémentation ni de test.
