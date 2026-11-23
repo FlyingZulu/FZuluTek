@@ -613,3 +613,11 @@
 - Chaque pad a son **LO-FI de base indépendant**, y compris lorsque plusieurs pads utilisent le même type d'instrument (par ex. deux KICK).
 - Le séquenceur peut **verrouiller un réglage LO-FI différent par pas (P-LOCK)**, puis retrouver la valeur de base de la voix ; cohérence des noms et des saveurs LO-FI avec le LOOPER.
 - Les modes exacts du bloc LO-FI historique restent à retrouver et confirmer ; ne pas inventer la liste des émulations. **Statut : conception documentée, pas de code modifié ni testé.**
+
+## LO-FI — référence identifiée : MSXII Lo-Fly Dirt (23 novembre 2026)
+
+- Recherche externe : le développeur de Fly Tape 2 est **MSXII Sound Design** ; l'application qui correspond plus précisément à la description « un gros bouton, plusieurs saveurs inspirées de samplers vintage » est **Lo-Fly Dirt** du même développeur. Référence officielle : https://www.msxaudio.com/pages/loflydirt-new ; https://www.airmusictech.com/effects/lo-fly-dirt/ .
+- Les **sept profils de référence** de Lo-Fly Dirt sont MSXII/default, 60 (MPC60), 404 Filter, 404 Vinyl, 1200 (SP1200), 8-BIT et SK-5. Ils combinent, selon le profil, saturation, réduction de bits, filtrage, compression légère, bruit/vinyle et accentuation spectrale. **Ce sont des références externes, pas la liste historique ZuluTek retrouvée dans le dépôt**.
+- **Proposition à valider** pour ZuluTek : contrôle **LO-FI = profil + intensité 0..100**, avec état CLEAN/bypass et profils de travail WARM, 60, 404 FILTER, 404 VINYL, 1200, 8-BIT, SK-5. Reproduire des familles de caractères par nos propres DSP, **sans prétendre à une émulation fidèle ni copier les algorithmes propriétaires**.
+- Appliquer la valeur de base par pad DRUMS / piste LOOPER, avec override P-LOCK par pas et retour au réglage de base. Sur FM-1, mesurer le coût DSP et envisager des variantes légères si nécessaire.
+- **Statut** : découverte de référence et proposition de conception, **catalogue final, DSP et interface non validés ni implémentés**.
