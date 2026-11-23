@@ -1070,3 +1070,10 @@
 - **Page 2 / réglages complémentaires** : **TUNE sur K1** (hypothèse de l'échange précédent) ; **TYPE DE DRIVE** accessible sur cette deuxième page. L'emplacement exact du type de drive (p. ex. K2) **n'a pas été explicitement arrêté** ; autres paramètres à définir.
 - **Différence fonctionnelle** : DRIVE MIX est une commande continue de quantité/mélange en performance ; DRIVE TYPE choisit le caractère/l'algorithme et peut rester sur une banque secondaire.
 - **Statut** : proposition de mapping UX précisée en discussion, pas encore éprouvée en jeu ni implémentée/testée.
+
+## BASSE et LEAD : même famille, architecture commune (23 novembre 2026)
+
+- **Décision utilisateur** : remettre à plus tard l'affectation détaillée des paramètres K1–K4 et des banques. Il s'agit surtout de déplacer/réaffecter les fonctionnalités existantes aux potards appropriés ; ne pas bloquer la conception de la voix LEAD pour finaliser ces mappings.
+- **Architecture voulue** : la voix **LEAD** sera **quasiment une copie structurelle de BASSE**. BASSE et LEAD sont de la **même famille de synthèse**, avec **exactement la même structure générale** et une ergonomie commune. Les différences portent principalement sur les **engines/moteurs de synthèse** et **quelques paramètres spécifiques à ces engines**.
+- **Conséquences** : mutualiser autant que possible les composants, le parcours de navigation, les familles de paramètres et les comportements de contrôle ; prévoir une extension ou adaptation par engine plutôt que deux architectures parallèles. Le mapping de travail page 1 FILTER / RESONANCE / DECAY / DRIVE MIX et page 2 TUNE / DRIVE TYPE reste provisoire, à reprendre ultérieurement.
+- **Statut** : décision d'architecture de conception, non assimilable à du code déjà refactorisé, compilé ou testé.
