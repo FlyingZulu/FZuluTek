@@ -913,7 +913,18 @@ void ztek_acid_generate(ztek_t *z, uint32_t seed)
     z->dst_base[ZT_SEQ_DST0 + 0] = (float)z->pat.time_length / 64.0f;
 }
 
-void ztek_acid_play(ztek_t *z, int on) { z->acid_on = on ? 1 : 0; }
+void ztek_acid_play(ztek_t *z, int on)
+{
+    /* The acid transport owns seq_note. Stop must release it immediately;
+     * routing through ztek_note_off would wrongly touch MIDI-loop recording
+     * and, when ARP is active, could swallow the note-off. */
+    if (!on && z->seq_note >= 0) {
+        if (z->engine == 0) at_gate(&z->voice, 0, z->seq_note, 0, 0);
+        else bass_gate(&z->bass, 0, z->seq_note, 0, 0);
+        z->seq_note = -1;
+    }
+    z->acid_on = on ? 1 : 0;
+}
 
 void ztek_acid_knob(ztek_t *z, int which, float v)
 {
@@ -1398,12 +1409,17 @@ static void ztek_acid_step(ztek_t *z)
         int note = z->root + semi;
         if (note < 0) note = 0;
         if (note > 127) note = 127;
-        if (z->seq_note >= 0 && z->seq_note != note) ztek_note_off(z, z->seq_note);
+        if (z->seq_note >= 0 && z->seq_note != note) {
+            /* Acid-generated notes must not enter the keyboard/ARP/loop note-off path. */
+            if (z->engine == 0) at_gate(&z->voice, 0, z->seq_note, 0, 0);
+            else bass_gate(&z->bass, 0, z->seq_note, 0, 0);
+        }
         ztek_note_on_int(z, note, z->grid.accent[s] ? 110 : 90,
                          z->grid.accent[s] ? 1 : 0, z->grid.slide[s] ? 1 : 0, 0);   /* généré par le seq acid : pas enregistré dans le looper */
         z->seq_note = note;
     } else if (z->seq_note >= 0 && !z->grid.tie[s]) {
-        ztek_note_off(z, z->seq_note);
+        if (z->engine == 0) at_gate(&z->voice, 0, z->seq_note, 0, 0);
+        else bass_gate(&z->bass, 0, z->seq_note, 0, 0);
         z->seq_note = -1;
     }
 }
