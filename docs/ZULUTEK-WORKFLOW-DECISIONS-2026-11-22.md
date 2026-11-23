@@ -806,3 +806,10 @@
 - **Nouvelle idée utilisateur, à confirmer comme choix final** : remplacer le clignotement périodique de SHIFT en FINGER DRUMMING par un **témoin lumineux réactif au jeu** : luminosité faible au repos, éclat renforcé lors de chaque frappe sur un pad, puis retour rapide vers le niveau de repos. En VOICE SELECT, pas d'animation de finger drumming.
 - **Recommandation technique** : piloter le témoin par les **événements de déclenchement des pads**, plutôt que par une analyse du flux audio ; coût CPU minime et réactivité directe. Vérifier la capacité matérielle de variation de luminosité de la LED SHIFT du FM-1. Si LED binaire seulement, envisager un flash ON/OFF sur FM-1 et une décroissance douce sur APK.
 - Le motif de **double flash périodique** précédemment proposé n'est **pas validé** et pourrait être remplacé par ce comportement événementiel. Ne pas présenter cette idée comme codée/testée.
+
+## DRUMS — décision finale : SHIFT réactif aux frappes, pas de clignotement périodique (23 novembre 2026)
+
+- **Confirmation explicite utilisateur** : le témoin **SHIFT en mode FINGER DRUMMING** doit être **réactif aux frappes des huit pads**, et **remplace** le clignotement périodique précédemment évoqué. SHIFT faiblement éclairé au repos, éclat plus fort à chaque déclenchement de pad, puis retour rapide vers la luminosité de repos. Plusieurs frappes successives relancent l'animation.
+- **VOICE SELECT** : aucune animation réactive aux frappes ; comportement normal de SHIFT. Le **double-tap SHIFT** reste le geste de bascule persistant entre modes.
+- **Technique privilégiée** : déclencher le feedback à partir des événements pads, sans analyse audio coûteuse. **Réserve matérielle** : vérifier si la LED SHIFT FM-1 supporte la variation d'intensité ; sinon prévoir une variante binaire clairement identifiable, et conserver l'animation douce sur l'APK. Les temps/intensités exacts restent à calibrer.
+- Cette décision **supplante** les propositions antérieures de clignotement continu/double flash. **Statut : conception validée, non implémentée/compilée/testée.**
