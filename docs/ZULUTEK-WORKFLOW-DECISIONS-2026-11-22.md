@@ -1013,3 +1013,11 @@
 - **Attention** : ces conventions ne signifient PAS que toute LED clignotante de ZuluTek a toujours le même rôle, ni que toutes les pages doivent afficher des popups 300 ms. Définir chaque adaptation par page, vérifier les conflits SHIFT et préserver les différences instrument/global, la lisibilité et la performance live.
 - **Proposition à étudier** : sur LOOPER MIDI, afficher brièvement le nom de la piste sélectionnée, sur le modèle du popup DRUMS ; conserver une identité visuelle propre à la page. Pour BASSE/LEAD, réutiliser des confirmations comparables uniquement si utiles.
 - **Statut** : principe de design confirmé, adaptations concrètes hors DRUMS encore à préciser ; pas d'implémentation ni de test.
+
+## Principe fondateur UX — ritualisation et mémoire musculaire FM-1 / APK (23 novembre 2026)
+
+- **Intention explicite utilisateur** : la cohérence des gestes et de l'affichage entre pages vise d'abord la **ritualisation, l'apprentissage et le développement d'une mémoire musculaire** : la main doit aller spontanément au bon emplacement, sans recherche consciente. C'est essentiel sur la surface physique du FM-1, et **encore plus sur la surface tactile lisse de l'APK**, qui n'offre pas les repères tactiles du matériel.
+- **Règle de conception** : pour une même fonction, privilégier **le même emplacement physique/à l'écran, le même geste et le même retour visuel**, d'une page à l'autre et autant que possible entre FM-1 et APK. Éviter de déplacer ou réordonner les contrôles selon la page, le KIT ou le type de son ; garder des cibles tactiles suffisamment grandes et stables.
+- **Différenciation maîtrisée** : les pages BASSE, LEAD, DRUMS, LOOPER MIDI, etc. conservent leurs identités et fonctions spécifiques ; la grammaire d'interaction reste commune. Les couleurs liées aux types d'instruments DRUMS peuvent changer selon l'affectation, mais **les positions des pads ne bougent pas**.
+- **Critère d'acceptation UX à appliquer aux futures décisions** : « Après apprentissage, peut-on effectuer le geste sans regarder, ou avec un minimum de recherche visuelle ? » Évaluer toute nouvelle commande selon ce critère et signaler les collisions/contextes ambigus.
+- **Statut** : principe directeur confirmé en conception, non implémenté/testé en tant que tel.
