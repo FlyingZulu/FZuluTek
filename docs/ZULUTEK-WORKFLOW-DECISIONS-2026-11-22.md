@@ -989,3 +989,11 @@
 - Dans l'éditeur de pas : **voix sélectionnée = sa couleur individuelle, fixe** ; **SHIFT maintenu = bloc de 16 pas actuellement affiché, signal clignotant et couleur de repérage distincte** de la palette des voix. Relâcher SHIFT rétablit la couleur fixe de la voix sélectionnée. Les pads continuent à sélectionner les voix et ne naviguent pas entre les blocs.
 - **FM-1** : conserver la distinction fixe (voix) / clignotant (bloc), sans exiger huit couleurs matérielles.
 - La palette concrète (par exemple cyan, bleu, violet, rose, corail, ambre, vert) est **proposée, non encore validée** ; vérifier contraste, lisibilité et accessibilité. **Statut** : décision UX, aucun code ni test.
+
+## CORRECTION APK — couleur liée au TYPE d'instrument, pas au pad (23 novembre 2026)
+
+- **Correction explicite utilisateur, prioritaire sur l'entrée précédente** : les couleurs des voix DRUMS sur l'APK sont **déterminées par le type de son/instrument affecté** à la voix, **pas** par son emplacement OP1..OP6/PIT/GLO. Exemples confirmés : **KICK = orange**, **SNARE = rose**, **HAT = jaune**.
+- Si OP3 héberge un KICK, OP3 s'affiche en orange ; réaffecter OP3 à SNARE le rend rose. Deux voix affectées à KICK peuvent être toutes deux orange : la couleur décrit le **type**, pas l'identité unique de la piste. Cela respecte l'affectation libre des types et les doublons.
+- Autres types prévus (CLAP, TOM, COWBELL, FM, ELIXIR) : couleurs exactes **proposées, non encore validées**. Éviter de figer une couleur par pad. Conserver une palette cohérente, accessible et contrastée.
+- **Éditeur de pas** : voix sélectionnée = LED/indicateur **fixe** de la couleur du type ; **SHIFT maintenu** = indicateur **clignotant** du bloc 16 pas affiché, avec **couleur distincte dédiée à la position** sur APK. Sur FM-1, distinction par fixe/clignotant, sans présumer de LED RGB.
+- **Statut** : correction de conception, aucun code modifié/testé.
