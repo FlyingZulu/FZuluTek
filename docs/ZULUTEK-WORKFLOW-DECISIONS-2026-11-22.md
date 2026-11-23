@@ -291,3 +291,10 @@
 - **Appui/pression** : appliquer une contribution de modulation momentanée à la valeur courante du paramètre, sans modifier sa valeur de base ni le KIT/SNAP. **Relâchement** : retirer entièrement cette contribution et retrouver la valeur normalement produite **à cet instant** par les réglages, morphing SNAP, automation et autres modulations, pas une valeur de départ figée.
 - **Règle de moteur** : distinguer valeur persistante de paramètre, modulations de fond, et modulation MONKEY éphémère ; ne pas écrire de CC MONKEY comme réglage permanent. Gérer le retour à zéro sur déconnexion/perte de signal, ainsi que l'arbitrage/clamp lorsque plusieurs modulations s'additionnent. Vérifier la courbe de pression et la signalisation du relâchement du MONKEY réel.
 - Cette décision **remplace l'alternative « maintien de la dernière valeur »** précédemment envisagée : comportement momentané obligatoire pour le pad MONKEY.
+
+## MONKEY PAD — réaffectation contextuelle via ASSIGN (23 novembre 2026)
+
+- **Décision utilisateur** : conserver les **affectations par défaut** de la surface de modulation du MONKEY (BASSE/LEAD → cutoff, DRUMS → drive ; autres pages à préciser), tout en permettant à l'utilisateur de **réassigner librement le paramètre ciblé sur chaque page** via le mode **ASSIGN** déjà conçu.
+- **Principe d'interface proposé** : sélectionner la source **MONKEY PAD** dans ASSIGN, naviguer jusqu'à la page concernée et désigner le paramètre cible avec le geste habituel de sélection/confirmation d'ASSIGN ; conserver une affectation par contexte musical. Ne pas créer un éditeur de routage séparé uniquement pour MONKEY.
+- **Invariance impérative** : quelle que soit sa destination ASSIGN, la surface MONKEY reste une **modulation momentanée non destructive** : appui = perturbation temporaire ; relâchement/déconnexion = retrait de la contribution ; aucune écriture du réglage permanent, du SNAP ou du KIT.
+- **À préciser** : destinations par défaut des autres pages, portée des mappings (GLOBAL versus KIT), interaction avec la destination MIDI active du MONKEY et la navigation distincte FM-1/APK en FUSION.
