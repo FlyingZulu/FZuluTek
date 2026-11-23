@@ -284,3 +284,10 @@
 - **Point d'architecture** : le mapping doit suivre **la destination musicale effective du MONKEY** (notamment son canal MIDI et le routage GLOBAL), pas aveuglément la page affichée ; en FUSION APK et FM-1 peuvent afficher deux pages différentes. Prévoir un réglage GLOBAL de destination/modulation par contexte et d'éventuelles substitutions.
 - **Documentation officielle** : https://wavyindustries.com/monkey/manual/ — la surface blanche ronde transmet une modulation MIDI selon la pression exercée (CC modulation, usuellement CC1) ; **ce n'est pas un pad XY**. Le comportement au relâchement (retour au paramètre de base versus maintien de la dernière valeur) et l'interprétation du CC1 doivent être spécifiés et testés.
 - **Statut** : brainstorming sur les destinations, pas d'implémentation confirmée.
+
+## MONKEY — modulation STRICTEMENT momentanée, sans écriture de paramètre (23 novembre 2026)
+
+- **Décision explicite utilisateur** : la surface tactile de modulation du Wavy MONKEY sert uniquement à **tweaker/perturber temporairement** un paramètre musical (p. ex. cutoff BASSE/LEAD ou drive DRUMS), car le pad n'est pas assez précis pour régler une valeur durablement.
+- **Appui/pression** : appliquer une contribution de modulation momentanée à la valeur courante du paramètre, sans modifier sa valeur de base ni le KIT/SNAP. **Relâchement** : retirer entièrement cette contribution et retrouver la valeur normalement produite **à cet instant** par les réglages, morphing SNAP, automation et autres modulations, pas une valeur de départ figée.
+- **Règle de moteur** : distinguer valeur persistante de paramètre, modulations de fond, et modulation MONKEY éphémère ; ne pas écrire de CC MONKEY comme réglage permanent. Gérer le retour à zéro sur déconnexion/perte de signal, ainsi que l'arbitrage/clamp lorsque plusieurs modulations s'additionnent. Vérifier la courbe de pression et la signalisation du relâchement du MONKEY réel.
+- Cette décision **remplace l'alternative « maintien de la dernière valeur »** précédemment envisagée : comportement momentané obligatoire pour le pad MONKEY.
