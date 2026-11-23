@@ -1062,3 +1062,11 @@
 - **Illustration provisoire uniquement** : banque 1 FILTER, RESONANCE, DECAY, quatrième paramètre indéterminé ; banque 2 K1 TUNE, autres indéterminés. **Ne pas figer l'ordre ni les affectations non confirmées**.
 - **Raison ergonomique** : TUNE reste rapidement accessible par navigation de banque, et son emplacement K1 de la banque 2 constitue un repère spatial stable pour la mémoire musculaire.
 - **Statut** : proposition en discussion, non validée définitivement, non implémentée/testée.
+
+## BASSE / LEAD — première banque FILTER / RESO / DECAY / DRIVE MIX (23 novembre 2026)
+
+- **Précision utilisateur** : le quatrième contrôle de la première banque synthé doit être le **DRIVE**, plus précisément **le MIX / dosage du drive**, pas le choix du type de distorsion.
+- **Mapping de travail exprimé** pour BASSE/LEAD, **page 1** : **K1 FILTER (cutoff), K2 RESONANCE, K3 DECAY, K4 DRIVE MIX**. Cette première page rassemble les paramètres les plus immédiatement musicaux en jeu direct.
+- **Page 2 / réglages complémentaires** : **TUNE sur K1** (hypothèse de l'échange précédent) ; **TYPE DE DRIVE** accessible sur cette deuxième page. L'emplacement exact du type de drive (p. ex. K2) **n'a pas été explicitement arrêté** ; autres paramètres à définir.
+- **Différence fonctionnelle** : DRIVE MIX est une commande continue de quantité/mélange en performance ; DRIVE TYPE choisit le caractère/l'algorithme et peut rester sur une banque secondaire.
+- **Statut** : proposition de mapping UX précisée en discussion, pas encore éprouvée en jeu ni implémentée/testée.
