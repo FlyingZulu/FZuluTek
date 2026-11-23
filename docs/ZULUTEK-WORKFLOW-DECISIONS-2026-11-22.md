@@ -327,3 +327,8 @@
 - **Description historique effectivement retrouvée** : un **swipe vers le haut sur FX** bascule de XY vers un panneau MACROS, avec **six faders verticaux M1–M6**, **un grand fader horizontal MACRO** en bas et **quatre boutons latéraux** dont l'affectation était encore à venir. Mode XY/MACROS persistant au redémarrage. En v0.66, les boutons Ψ/Ξ restent fonctionnels pour les motion sequences en vue MACROS.
 - **Important** : cette documentation historique confirme la disposition **6 + 1**, mais **ne spécifie pas** dans cette section le comportement exact du MASTER, ni les zones/courbes/inversions par affectation. Ne pas rétroprojeter les nouvelles décisions ZuluTek comme déjà documentées ou implémentées dans FZuluFx.
 - **Adaptation ZuluTek actuelle** : quatre macros accessibles sur K1–K4 + cinquième commande maîtresse envisagée, chaque liaison paramètre dotée de zones, inversion, comportement ; positions de macro capturables par SNAP. Le nombre de faders historiques **ne remplace pas** le choix actuel de quatre commandes FM-1. L'accès physique à la commande maîtresse reste à préciser.
+
+## MACROS — contrainte des encodeurs physiques (23 novembre 2026)
+
+- **Correction utilisateur** : le bouton/encodeur **PRESET est déjà quasi constamment dédié à ZULU** ; il ne doit donc **pas** être retenu comme commande maîtresse des MACROS. La suggestion antérieure PRESET=MASTER est écartée.
+- **Piste ergonomique non validée** : quatre commandes K1–K4 = quatre macros individuelles ; **ALGORITHM** pourrait piloter le MASTER des quatre macros ; **SELECT** pourrait servir à naviguer dans les destinations/règles en édition. À confirmer après vérification des autres fonctions de la page et de la grammaire matérielle.
