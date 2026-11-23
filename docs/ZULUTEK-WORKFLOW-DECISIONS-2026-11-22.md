@@ -547,3 +547,10 @@
 - **Décision utilisateur** : retirer **CONGA** des types de percussion proposés dans le futur catalogue DRUMS. Préférer l'usage de plusieurs instances de **KICK** sur des pads indépendants plutôt que de réserver une place à CONGA.
 - Les huit pads/pistes demeurent disponibles ; supprimer un type sonore **ne supprime pas un pad**. Un même type (KICK, SNARE, HAT...) peut être affecté à plusieurs pistes avec paramètres et patterns distincts.
 - **Statut** : décision de catalogue enregistrée ; le code APK contient encore `DR_CONGA` et n'a pas été modifié dans cette étape. Ne pas supprimer immédiatement l'enum sans traiter les données/presets et la nouvelle table d'affectation libre.
+
+## DRUMS — catalogue commun FM-1 / APK, ELIXIR sur les deux (23 novembre 2026)
+
+- **Décision utilisateur** : les deux plateformes **FM-1 et APK ZuluTek doivent proposer exactement le même catalogue de types d'instruments DRUMS**, avec **ELIXIR sur les deux**. Supprimer la divergence historique entre les listes.
+- **CONGA est exclue** conformément à la décision précédente. **Proposition de liste à valider pendant le tri** : KICK, SNARE, HAT fermé, HAT ouvert, CLAP, TOM, COWBELL, FM, ELIXIR (9 types proposés pour 8 pads assignables, ce qui est permis). La distinction HAT fermé/ouvert et la conservation de chaque type non encore examinée restent à confirmer.
+- Les **types disponibles** ne sont pas les **instances simultanées** : huit pads peuvent sélectionner librement et répéter ces types. Budgets de polyphonie distincts conservés : FM-1 4 normal/3 ECO ; APK 6 normal/5 ECO.
+- **Statut** : conception enregistrée ; **aucun portage DSP ou synchronisation de code FM-1/APK réalisé** dans cette étape. Audit des moteurs et de la mémoire nécessaire avant implémentation.
