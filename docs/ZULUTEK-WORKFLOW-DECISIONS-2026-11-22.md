@@ -635,3 +635,8 @@
 - **Recherche** : recherches GitHub `R Window`, `R-WINDOW`, `R_WINDOW`, `RWindow` sans résultat indexé ; **identité, code, licence, compatibilité et coût DSP de R Window non vérifiés**. Ne pas prétendre que ses composants sont déjà intégrés ou portables sur FM-1.
 - Priorité : inventaire du code et des effets existants, coût DSP/RAM, licence et dépendances, puis profils légers adaptés au FM-1 et profils correspondants dans l'APK ; même catalogue/paramètres, implémentation éventuellement optimisée par plateforme.
 - **Statut** : orientation de conception consignée ; pas d'implémentation.
+
+## Correction de nom — Airwindows (23 novembre 2026)
+
+- L'utilisateur corrige « R Window » : il s'agit de **Airwindows**, la suite d'effets audio de Chris Johnson. Toute mention précédente de « R Window » désigne **Airwindows** ; utiliser désormais ce nom exact.
+- Explorer les modules Airwindows pertinents pour les recettes LO-FI de ZuluTek, en vérifiant les licences, le portage DSP FM-1 et le coût CPU/RAM avant d'en annoncer l'intégration. **Aucun module Airwindows n'est déclaré intégré ou testé à ce stade.**
