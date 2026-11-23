@@ -788,3 +788,9 @@
 - Prévoir **indication LED/UI du mode actif** et priorité de détection des combos pour que le double-tap SHIFT n'entraîne ni chargement de pattern, ni changement de banque, ni autre action SHIFT. Examiner la coexistence avec SHIFT+slot (chargement pattern), SHIFT+POLY (sauvegarde, en conflit avec banque suivante) et les affectations GLO comme pad vs GLOBAL/overlay de performance.
 - **À confirmer en implémentation** : état initial au démarrage, fenêtre de double-tap, priorité des événements et comportement lors du changement de page/kit ; ne pas inventer ces règles.
 - **Statut** : décision de conception, aucun code modifié/compilé/testé sur FM-1/APK.
+
+## DRUMS — témoin SHIFT du mode FINGER DRUMMING (23 novembre 2026)
+
+- **Décision explicite utilisateur** : sur **FM-1** et sur **APK ZuluTek**, le **bouton SHIFT clignote tant que FINGER DRUMMING est actif**. En **VOICE SELECT**, SHIFT **ne clignote pas**. Double-tap SHIFT bascule le mode et actualise immédiatement le témoin.
+- Le **clignotement est le signal retenu sur les deux plateformes**, sans nécessité de code couleur particulier. L'état exact de la LED hors clignotement (éteinte ou fixe), la fréquence et les priorités si SHIFT a d'autres indications restent à définir/tester selon le matériel.
+- **Statut** : décision de conception uniquement ; aucun code LED FM-1/APK modifié ni testé.
