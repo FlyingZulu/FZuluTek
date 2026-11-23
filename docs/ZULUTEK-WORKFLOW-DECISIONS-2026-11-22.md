@@ -648,3 +648,11 @@
 - **MASTER en toute fin de chaîne audio** : prévoir une tranche/étage de finition avec **loudness facultatif**, traitement du **clipping/crêtes** et protection de la sortie. Objectif : densité et tenue du signal, sans destruction systématique de la dynamique.
 - **Proposition technique à valider** : gestion de gain sur les bus, éventuelle compression douce, soft clipping/limitation de crête au MASTER, sécurité de sortie en dernier. Attention à la latence, aux overshoots, à la distorsion et au budget CPU/RAM du FM-1 ; distinguer coloration volontaire et sécurité contre la saturation.
 - **Statut** : orientation de conception documentée, **ni inventaire exhaustif des effets existants ni code/mastering ajouté ou testé** dans cette étape.
+
+## MASTER — trois modes de finition réglables (23 novembre 2026)
+
+- **Décision utilisateur** : le MASTER de sortie propose **trois modes** : **STUDIO** (plutôt transparent), **PUNCH** (nom de travail pour un mode un peu plus compressé, plus dense), **DIRTY** (nom de travail pour compression très forte, saturation et clipping volontaire extrême).
+- **Chaque mode doit rester ajustable**, du traitement subtil au traitement très marqué : l'utilisateur doit pouvoir doser son caractère et ne pas subir un preset figé. Proposition d'interface simple : **MODE + AMOUNT 0..100**, éventuellement réglage séparé du niveau de sortie pour comparaisons à volume comparable. Les noms PUNCH et DIRTY et les détails précis des contrôles restent à confirmer.
+- **STUDIO** vise fidélité et contrôle des crêtes ; **mode intermédiaire** vise densité/compression musicale sans détruire les attaques ; **mode extrême** autorise délibérément forte réduction de dynamique et écrêtage sonore.
+- **Garde-fou technique** : distinguer clipping artistique interne du traitement de sécurité de sortie ; pas de débordement DSP ni de plantage. Mesurer aliasing, gain, latence, CPU et qualité audio sur FM-1/APK.
+- **Statut** : décision d'architecture/UX consignée ; **aucun DSP compilé, mesuré ou testé** à cette étape.
