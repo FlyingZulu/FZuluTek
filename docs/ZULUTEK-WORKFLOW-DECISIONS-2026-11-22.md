@@ -1021,3 +1021,10 @@
 - **Différenciation maîtrisée** : les pages BASSE, LEAD, DRUMS, LOOPER MIDI, etc. conservent leurs identités et fonctions spécifiques ; la grammaire d'interaction reste commune. Les couleurs liées aux types d'instruments DRUMS peuvent changer selon l'affectation, mais **les positions des pads ne bougent pas**.
 - **Critère d'acceptation UX à appliquer aux futures décisions** : « Après apprentissage, peut-on effectuer le geste sans regarder, ou avec un minimum de recherche visuelle ? » Évaluer toute nouvelle commande selon ce critère et signaler les collisions/contextes ambigus.
 - **Statut** : principe directeur confirmé en conception, non implémenté/testé en tant que tel.
+
+## Principe live — jouer avec les autres, sans garder les yeux sur l'écran (23 novembre 2026)
+
+- **Précision explicite utilisateur** : ZuluTek est destiné notamment au **jeu musical collectif avec d'autres instrumentistes**. Le musicien doit pouvoir regarder ses partenaires et écouter/interagir, **sans devoir fixer le minuscule écran du FM-1 ni l'écran tactile d'un téléphone** pour les manipulations courantes. L'attention doit rester disponible pour la musique.
+- **Principe UX dérivé** : « **L'écran confirme ce que font les mains, il ne dicte pas les gestes** ». Les commandes de jeu fréquentes doivent être apprenables par mémoire musculaire, accessibles sans menu ni lecture prolongée, et fournir des retours brefs et non bloquants (ex. popup de sélection de voix 300 ms, code couleur par type sur APK, LED fixe vs clignotante sur FM-1).
+- **Priorité de conception** : conserver positions et gestes stables entre pages/FM-1/APK ; préserver le flux de jeu en live, éviter les dialogues de confirmation inutiles et les déplacements de commandes. Distinguer **performance live** (gestes immédiats, attention minimale) et **édition approfondie** (informations plus détaillées acceptables) sans imposer deux interfaces incohérentes.
+- **Statut** : objectif et critère ergonomique confirmés, pas de modification de code ni de test.
