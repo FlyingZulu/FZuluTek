@@ -600,3 +600,9 @@
 - **Proposition ergonomique, à valider** : mode par défaut au niveau de la piste, avec override par pas (hériter / ONE SHOT / GATE), afin de ne pas éditer tous les pas un à un.
 - Prévoir la définition précise de la **durée de gate par pas**, et son interaction avec les retriggers, CHOKE GROUPS et la limite de voix actives (FM-1 4/3, APK 6/5).
 - **Statut** : décision de conception enregistrée ; code non modifié, non compilé et non testé pour cette fonctionnalité.
+
+## Correction utilisateur — GATE DRUMS strictement identique au GATE LOOPER (23 novembre 2026)
+
+- **Décision explicite** : pour **chaque pas DRUMS**, le mode est indépendamment **ONE SHOT / GATE**. Lorsque le pas est en GATE, son réglage est **exactement le même que dans le séquenceur LOOPER**, sur une **échelle incrémentée de 0 à 100**.
+- **Annule la proposition précédente** de valeurs discrètes 25 %, 50 %, 75 %, 100 % ou de durées en nombre de pas. **Ne pas inventer une autre unité, granularité, courbe ou sémantique** : reprendre fidèlement la définition et le comportement du GATE LOOPER existant après inspection du code/spécification.
+- **Statut** : décision de conception consignée, pas d'implémentation ni de test dans cette étape.
