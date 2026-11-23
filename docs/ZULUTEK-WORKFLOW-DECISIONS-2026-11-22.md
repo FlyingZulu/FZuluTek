@@ -768,3 +768,8 @@
 
 - L'utilisateur hésite entre suffixes courts **B1** et **PB1** pour identifier les quatre pedalboards, et souhaite éviter d'écrire le mot entier BOARD. **Proposition assistant privilégiée : `PB1` à `PB4`** (PB = PEDALBOARD, moins ambigu avec BASSE). Exemples : `ALBERT 3 PB1-1`, `ALBERT 3 PB1-2`, `ALBERT 3 PB2-1`.
 - Le tiret avant le numéro d'itération est maintenu. Cette proposition de libellé **PB** attend confirmation explicite si nécessaire ; elle remplace l'ancienne recommandation de nommage `B1` à titre de préférence, pas encore de modification du code.
+
+## PEDALBOARD — libellé PB définitivement confirmé (23 novembre 2026)
+
+- **Confirmation explicite utilisateur : `PB`**. Le format de nommage est **`<nom du KIT> PB<1..4>-<numéro d'itération>`**, par exemple `ALBERT 3 PB2-4`. Les quatre boards s'identifient par PB1, PB2, PB3, PB4 ; ne plus utiliser B seul ni BOARD en entier dans le nom automatique.
+- Le numéro après le tiret compte les sauvegardes du board correspondant. Décision de conception confirmée ; pas de code implémenté/testé.
