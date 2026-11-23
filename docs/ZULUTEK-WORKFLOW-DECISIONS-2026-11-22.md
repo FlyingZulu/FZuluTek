@@ -438,3 +438,9 @@
 - **Rectification importante après relecture du début du présent journal** : décisions précédentes en lignes initiales : `REC + SEQ` = **LOOP** et `REC + EDIT` = **MACROS (page complète)**. Les réponses récentes de l'assistant affirmant `REC + SEQ` = MACROS étaient donc erronées.
 - **Conflit documentaire/firmware historique** : `docs/ZULUTEK.md` et `docs/ZULUTEK-SEQ-PLUS.md` mentionnent encore `REC + SEQ` = MACRO dans des implémentations/versions antérieures ; certains documents ont aussi `REC + EDIT` = LOOP ou FINE. **Ne pas présenter le mapping de conception comme déjà implémenté** ; auditer et migrer les dispatchs FM-1 et APK.
 - **Mapping de conception actuel** : `REC + EDIT` = page MACROS complète ; `REC + SHIFT` = widget MACROS ; `REC + SEQ` = LOOP. Vérifier existence et comportement réel de SHIFT sur le matériel FM-1 et la priorité de REC (fenêtre 20 ms).
+
+## Décision — navigation clavier dans la page MACROS complète (23 novembre 2026)
+
+- **Confirmation utilisateur** : `REC + EDIT` ouvre la **page MACROS complète**, donnant accès au système de navigation et à une partie des réglages internes. Dans cette page, **les touches du clavier physique peuvent être réaffectées comme raccourcis** (navigation, banques, chargement de profils, éditeur du Dictateur, etc.) plutôt que servir uniquement à jouer des notes.
+- **Distinction maintenue** : `REC + SHIFT` ouvre le **widget MACROS** transportable sur les autres pages ; ne pas y détourner les touches du clavier pour la navigation, afin de préserver le jeu musical.
+- **Proposition d'organisation, non encore validée** : raccourcis clavier vers BANKS (banques/profils), ROUTES (destinations M1–M4), DICTATOR (éditeur quatre pistes), SOURCES (ARP et courbes). Autres touches pour slots de banques, COPY/PASTE/CLEAR/SAVE à déterminer après inventaire du nombre de touches et des conflits. Ne pas figer le plan de clavier ni prétendre à une implémentation.
