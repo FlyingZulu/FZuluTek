@@ -505,3 +505,11 @@
 - L'ordre de présentation historique KICK en premier, puis SNARE/HAT/etc. est **arbitraire**, **pas un câblage fixe**. L'utilisateur doit pouvoir **placer librement chaque voix sur le pad physique qu'il préfère** (ex. kick au milieu, charley à l'extrême gauche), pour sa technique personnelle de finger drumming.
 - **Exigence d'intégration** : séparer les identifiants stables des voix de la table de mapping physique `pad -> voix` ; faire passer le jeu direct et la sélection/édition par ce mapping ; préserver l'identité de la voix dans les événements du séquenceur, les patterns et le routage audio quand on change le mapping. Les modalités exactes de réaffectation et de sauvegarde du mapping restent à définir avec l'utilisateur ; ne pas inventer un raccourci.
 - **À vérifier dans le code** : l'APK et le firmware FM-1 peuvent actuellement employer des nombres de pads et des listes de voix différents ; cette demande décrit les huit touches physiques et ne prouve pas à elle seule que huit moteurs simultanés existent sur le FM-1.
+
+## DRUMS — correction fondamentale : les patterns appartiennent aux PADS (23 novembre 2026)
+
+- **Clarification explicite de l'utilisateur, qui prime sur l'interprétation précédente** : la séquence appartient à la **piste/pad physique** (OP1, OP2, OP3, OP4, OP5, OP6, PIT, GLO), **pas à l'identité de la voix de percussion**.
+- Exemple : si OP1 contient un pattern aux pas 1/5/9/13, affecter KICK à OP1 fait jouer ce pattern par le kick ; remplacer KICK par HAT fait jouer **le même pattern OP1** par le charley. **Ne pas déplacer le pattern avec l'instrument** lors d'une réaffectation.
+- **Architecture à retenir** : `pad/piste -> pattern stable` et `pad/piste -> instrument assigné` sont deux couches indépendantes. Le déclenchement du séquenceur résout l'instrument actuellement affecté à la piste au moment du hit ; le jeu manuel suit la même affectation.
+- Cela **corrige** la formulation précédente disant de « préserver l'identité de la voix dans les événements du séquenceur » : il faut au contraire préserver **l'identité de la piste/pad** et résoudre l'instrument assigné au déclenchement.
+- **Non décidé** : autoriser un même type de voix sur plusieurs pads, comportement d'une réaffectation pendant une note tenue, méthode d'assignation et sauvegarde ; ne pas inventer ces choix.
