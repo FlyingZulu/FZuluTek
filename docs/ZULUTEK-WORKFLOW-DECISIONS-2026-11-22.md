@@ -720,3 +720,11 @@
 - **Renommage manuel ultérieur** des patterns depuis **GLOBAL** ; fenêtre et parcours exacts à concevoir. Le générateur de noms existant côté presets/KITS est une piste de réemploi, pas une intégration vérifiée pour les patterns DRUMS.
 - **À définir** : politique de sauvegarde en slot vide vs slot déjà occupé, persistance FM-1/APK, copie des paramètres/locks, interaction avec chargement de pattern, comportement quantifié ou immédiat, et priorité des commandes SHIFT dans les contextes de séquenceur.
 - **Statut** : spécification de conception et conflits identifiés ; aucune implémentation ni validation matérielle affirmée.
+
+## DRUMS — lancement immédiat des patterns et réglage GLOBAL commun (23 novembre 2026)
+
+- **Décision utilisateur** : dès l'appui sur le slot d'un pattern enregistré, **chargement/changement immédiat**, sans attendre la fin de la mesure. **IMMEDIATE est le comportement par défaut**.
+- Le comportement de lancement doit être **configurable dans GLOBAL**, selon le **même processus/réglage que les autres changements de patterns** de ZuluTek, afin d'uniformiser les gestes et habitudes de jeu. Un lancement quantifié est une alternative de réglage à préciser en cohérence avec l'existant ; ne pas imposer une quantification par défaut.
+- Cette décision **remplace la suggestion antérieure de chargement à la prochaine mesure**. La sélection d'une banque seule ne charge toujours pas de pattern.
+- **Conflit encore ouvert** : SHIFT+POLY avait été proposé pour banque suivante puis pour sauvegarder ; retenir la nouvelle affectation sauvegarde et définir un autre geste pour défiler les 4 banques.
+- **Statut** : décision de conception documentée, non implémentée ni testée sur FM-1/APK.
