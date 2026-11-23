@@ -576,3 +576,11 @@
 - Modèle envisagé : **P-LOCK par pas** ; un pas sans valeur spécifique reprend le réglage de la tranche. Préciser la durée de maintien et le retour au réglage de base, notamment entre les pas et sur des queues audio.
 - **Ambiguïté non résolue** : « RATE/compression » peut viser la **réduction de fréquence d'échantillonnage/bitcrushing** ou la **vitesse de lecture** ; ne pas coder de multiplicateurs de vitesse de sample ni présumer de l'effet exact sans clarification de l'utilisateur et examen des anciennes spécifications des modes.
 - **Statut** : demande de conception consignée, **aucune implémentation effectuée**.
+
+## LO-FI — blocs de saveur pilotables par pas et par partie (23 novembre 2026)
+
+- **Clarification explicite utilisateur** : il s'agit du **bloc d'outils de coloration LO-FI déjà évoqué dans les archives** (inspirations Akai SP-404, E-mu SP-1200, etc.), et **non** du RATE de vitesse de lecture des samples. Le traitement inclut notamment **réduction de résolution en bits** (exemples 8 bits, 12 bits, normal) et possiblement fréquence d'échantillonnage / modes de coloration selon spécification historique à retrouver.
+- **Exigence** : rendre les **modes/presets LO-FI et leur intensité/résolution sélectionnables pas par pas** dans le séquenceur, particulièrement pour les samples du LOOPER, et également pour DRUMS si le traitement y est applicable. Autoriser aussi une **valeur de base par partie/tranche/piste** (le terme « partie » et sa portée exacte restent à préciser) ; un P-LOCK de pas prend priorité temporairement sur cette valeur.
+- Les pas peuvent alterner **normal / très dégradé / 8 bits / 12 bits / autres saveurs**. Ne pas confondre profondeur en bits et taux d'échantillonnage, ni présumer d'une émulation fidèle des machines historiques à partir d'une seule valeur de bits.
+- **Recherche effectuée** : recherches textuelles GitHub « SP1200 », « lofi », « bitcrush », « rate compression », « sample rate », « P-LOCK » sans résultats concluants ; **source exacte des modes historiques non encore localisée**, donc ne pas inventer la liste des modes.
+- **Statut** : exigence fonctionnelle enregistrée, pas de code ni de tests. Préciser portée de l'effet (par voix, piste ou bus), maintien/retour à la valeur de base, coût DSP FM-1 et mode d'édition.
