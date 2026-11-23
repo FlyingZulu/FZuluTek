@@ -489,3 +489,11 @@
 - **Correction utilisateur explicite** : le comportement décrit jusqu'ici comme « one shot » pour le jeu au clavier dans les parties LOOPER / séquenceur est en réalité **GATE / GATED** : appui = gate ouvert et lecture/son actif ; relâchement = gate fermé, arrêt de l'activation commandée par cette touche. La durée dépend du maintien de la touche.
 - **ONE SHOT** désigne au contraire un déclenchement par appui qui poursuit sa lecture indépendamment du relâchement, jusqu'à sa fin ou à une autre condition d'arrêt. Garder les deux notions distinctes, notamment pour la prochaine inspection DRUMS.
 - **Portée** : décision de vocabulaire et de comportement attendu, **pas preuve d'implémentation**. Ne pas remplacer automatiquement tous les noms `one_shot` du dépôt : certains peuvent correspondre à de vrais lecteurs autonomes. Auditer la sémantique Note On/Note Off, les enveloppes de relâchement et les cas de séquenceur avant de modifier le code. Ne pas assimiler le GATE à une coupure audio sans release si l'enveloppe du moteur en possède une.
+
+## Décision finale — modes du LOOPER et des DRUMS (23 novembre 2026)
+
+- **Nom du module** : **LOOPER**, qu'il lise/enregistre du **MIDI** ou de l'**audio**, et même s'il offre d'autres fonctions que la répétition.
+- **LOOPER : exactement deux modes de comportement définis ici : `LOOP` et `GATE`**. `LOOP` = lecture en boucle ; `GATE` = lecture/activation tenue tant que la touche est maintenue, fermeture du gate au relâchement. L'ancien libellé « ONE SHOT » pour ce deuxième comportement du looper est **incorrect et remplacé par GATE**.
+- **DRUMS : deux modes distincts : `ONE SHOT` et `GATE`**. `ONE SHOT` = un appui déclenche la lecture indépendamment du relâchement, jusqu'à sa fin ou un arrêt prévu ; `GATE` = activation dépendante du maintien, gate fermé au relâchement.
+- **Ne pas mélanger les deux modules** : le LOOPER n'a pas le couple ONE SHOT/GATE ; les DRUMS n'ont pas le couple LOOP/GATE selon cette décision. Les détails de retrigger, enveloppes/release, fin de sample, transport et éventuelles autres fonctions restent à inspecter, sans modifier cette nomenclature.
+- **Statut** : décision utilisateur confirmée. Adapter labels, documentation et comportements de code après inspection des implémentations existantes, sans renommage aveugle des véritables lecteurs one-shot ailleurs.
