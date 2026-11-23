@@ -527,3 +527,10 @@
 - Les **CHOKE GROUPS** ne sont **pas spécifiques à DRUMS** : ils existent également dans l'autre séquenceur / LOOPER, selon la conception utilisateur. Ne pas traiter le choke uniquement comme une optimisation de polyphonie des percussions.
 - Conserver les contrats de modes distincts : **DRUMS = ONE SHOT / GATE**, **LOOPER = LOOP / GATE** ; ne pas confondre les modes malgré l'architecture commune.
 - **Statut** : décision de conception confirmée. **Parité d'implémentation non vérifiée** : auditer les moteurs réels avant d'affirmer que les mêmes structures et six groupes existent déjà dans les deux codes ; ne pas imposer un refactoring sans examen.
+
+## DRUMS — plafonds de polyphonie par plateforme (23 novembre 2026)
+
+- **Décision utilisateur retenue comme cible de conception** : **FM-1 = 4 voix DRUMS simultanées maximum** ; **ZuluTek APK = 6 voix DRUMS simultanées maximum**, pour huit pads/pistes logiques dans les deux cas.
+- Le plafond concerne les **voix sonores actives**, **pas** le nombre de pistes, les types d'instruments disponibles ou le nombre d'instances d'un même type (ex. plusieurs KICK/SNARE/HAT).
+- Les CHOKE GROUPS doivent être appliqués avant d'évaluer la nécessité de voler une voix ; en cas de dépassement, il faut définir une politique de voice stealing musicalement discrète (règle exacte à confirmer).
+- **Statut** : choix de conception, **non implémenté ni benchmarké sur FM-1**. Le code APK consulté comporte actuellement un mode normal 8 voix et ECO 5 voix, donc le plafond 6 nécessite un changement réel. Vérifier également la configuration historique FM-1 à six pads, qui ne doit pas être confondue avec les huit touches physiques.
