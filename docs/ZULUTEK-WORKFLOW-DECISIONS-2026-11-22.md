@@ -189,3 +189,10 @@
 - **Règle générale de navigation** : **les pages/menus ne se superposent pas** ; une seule page principale à la fois. **Seule exception : la banque de performance réaffectable (ex-widget SIRÈNE)**, qui est un **overlay persistant** au-dessus des pages et ne se ferme que par **double-tap GLO**.
 - **Gestes GLO consolidés** : maintien ~1 s = ouvrir GLOBAL ; tap simple si GLOBAL affiché = fermer GLOBAL ; double-tap = basculer overlay de performance ; maintien ~5 s = PANIC ; tap simple hors GLOBAL = fonction contextuelle (p. ex. banque KIT/SNAP 8 si retenue).
 - **À résoudre côté gestion des gestes** : reconnaître le double-tap depuis GLOBAL sans provoquer la fermeture intermédiaire de GLOBAL sur le premier tap, et éviter les doubles actions. Respecter la priorité des combinaisons de touches existantes.
+
+## Distinction fondamentale : vue affichée ≠ activation du module (23 novembre 2026)
+
+- **Correction explicite de l'utilisateur** : la règle « une seule page à la fois » ne concerne **que l'affichage/la navigation visuelle**. **Quitter ou remplacer une page ne désactive jamais automatiquement le module ou la fonction qu'elle représente** : séquenceur, looper, effets, synthés, paramètres, etc. continuent selon leur état propre.
+- Séparer dans l'architecture et le vocabulaire **(1) vue/page courante, (2) état actif/inactif des moteurs et fonctions, (3) overlay persistant de commandes de performance**. Les actions de contrôle peuvent changer les états, mais la navigation visuelle seule ne doit pas les changer.
+- **Fermer l'overlay** retire sa couche d'accès/sa priorité sur les touches ; cela ne réinitialise pas les paramètres modifiés ni ne coupe automatiquement les modules. Les déclenchements de type *momentary/held* (p. ex. PoW!) doivent toutefois avoir une gestion explicite de relâchement de touche pour éviter de rester coincés si on ferme l'overlay en cours de maintien — comportement exact à spécifier.
+- **Supersession/clarification** de la section précédente : « fermer GLOBAL en ouvrant une autre page » signifie **masquer/remplacer sa vue**, non désactiver les fonctions globales.
