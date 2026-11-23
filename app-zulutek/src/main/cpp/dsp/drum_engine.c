@@ -106,16 +106,6 @@ int  drum_get_eco(const drum_t *d)   { return d->eco; }
 void drum_hit(drum_t *d, int pad)
 {
     if (pad < 0 || pad >= DR_NPADS) return;
-    if (d->eco) {   /* MODE ECO : polyphonie 8 -> 5, la voix la plus vieille est coupée */
-        int act = 0, oldest = -1;
-        float ot = -1.0f;
-        for (int p = 0; p < DR_NPADS; p++)
-            if (d->v[p].t >= 0.0f) {
-                act++;
-                if (d->v[p].t > ot) { ot = d->v[p].t; oldest = p; }
-            }
-        if (act >= 5 && oldest >= 0 && oldest != pad) d->v[oldest].t = -1.0f;
-    }
     {
         int g = d->choke[pad];
         if (g > 0) {
@@ -125,6 +115,24 @@ void drum_hit(drum_t *d, int pad)
                     if (p != pad && d->choke[p] == (uint8_t)g)
                         d->v[p].t = -1.0f;      /* tue la voix */
         }
+    }
+    /* Choke first: freed voices must not count against the polyphony budget.
+     * Retriggering an already active pad reuses its voice slot. */
+    if (d->v[pad].t < 0.0f) {
+        const int limit = d->eco ? 5 : 6;  /* APK: normal 6, ECO 5 */
+        int active = 0, victim = -1;
+        float oldest_age = -1.0f;
+        for (int p = 0; p < DR_NPADS; ++p) {
+            if (d->v[p].t >= 0.0f) {
+                ++active;
+                if (d->v[p].t > oldest_age) {
+                    oldest_age = d->v[p].t;
+                    victim = p;
+                }
+            }
+        }
+        if (active >= limit && victim >= 0)
+            d->v[victim].t = -1.0f;
     }
     dr_voice_t *v = &d->v[pad];
     v->t = 0.0f;
