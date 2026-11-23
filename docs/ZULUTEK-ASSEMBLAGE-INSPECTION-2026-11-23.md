@@ -60,3 +60,15 @@
 **Effectué** : consolidation des décisions, relecture ciblée de `bass_engines.c`, `ztek_engine.cpp`, `docs/ZULUTEK-LOOP.md`, `docs/ZULUTEK-DRUMS.md`, `docs/ZULUTEK-MIX-SIREN.md` et du journal ; inventaire des conflits et plan d'intégration.
 
 **Non effectué** : compilation, exécution des tests, audit exhaustif des handlers, modification de firmware/APK ou validation sur FM-1. Ce document est une **base d'assemblage**, pas un certificat de correction. La partie DRUMS sera inspectée avec le capitaine lors de la prochaine visite ; sa spécification historique ne vaut pas approbation de son ergonomie finale.
+
+## 7. Première intervention réelle dans le moteur APK (23 novembre 2026)
+
+**Commit code** : `f8492f708b4d4b5ec6de45608aaf7f404e64a84e` — `app-zulutek/src/main/cpp/ztek_engine.cpp`.
+
+- `ztek_acid_play(z, 0)` libère désormais explicitement la note `seq_note` du séquenceur acid au lieu de simplement mettre `acid_on=0`. Cela traite un risque concret de note tenue lors de l'arrêt d'ATEK303.
+- Dans `ztek_acid_step`, les fins de notes générées par le séquenceur vont directement au moteur de voix courant (`at_gate` / `bass_gate`) plutôt que dans `ztek_note_off`, qui est réservé aux notes de jeu et touche aussi l'enregistrement MIDI LOOP et l'ARP. La génération des Note On acid avait déjà `record=0` ; cette correction aligne les Note Off sur cette séparation.
+- **Portée** : modification ciblée du moteur **APK**, **pas** du firmware FM-1 ; aucun changement de raccourci, de format KIT ou d'architecture MIX.
+- **Validation restante impérative** : compiler l'APK avec le toolchain Android/Oboe, exécuter des tests audio : ATEK303 note tenue→STOP, transitions de pitch, REST/tie, ARP activé pendant acid, MIDI LOOP en REC, engine BASSE actif, relance après STOP, bascule de moteur. **Ni compilation ni écoute audio exécutées dans cette session.**
+- **Risque à revoir** : un séquenceur acid et une note de clavier/ARP partageant une voix mono peuvent encore s'interrompre mutuellement ; la séparation complète des propriétaires de note et le routage BASSE/LEAD seront traités dans la suite.
+
+**Bilan d'avancement** : on est passé de l'inventaire à une **première correction de code**, sans prétendre que toute la chaîne audio est désormais validée.
