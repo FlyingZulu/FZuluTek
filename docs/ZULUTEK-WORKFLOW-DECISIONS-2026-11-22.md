@@ -871,3 +871,11 @@
 - Le **LOOPER MIDI est explicitement une page globale** même s'il contient des pistes/contrôles locaux ; ne pas confondre les opérations sur pistes LOOPER avec le transport PLAY/STOP de façade.
 - HOME+PLAY/STOP n'a **pas de rôle distinct nécessaire** sur les pages globales ; ne pas lui attribuer une autre fonction sans décision. Maintenir les règles de priorité des combos sur les trois pages instrumentales.
 - **Statut** : conception validée ; aucun câblage ni test FM-1/APK effectué dans cette mise à jour.
+
+## LOOPER MIDI — SOLO/MUTE sur les pistes du séquenceur (23 novembre 2026)
+
+- **Rappel et confirmation utilisateur** : prévoir et implémenter le même système **SOLO/MUTE multi-pistes** que pour DRUMS, sur les pistes du séquenceur **LOOPER MIDI**.
+- Gestes retenus par analogie DRUMS : **MONO + touche de piste** ajoute/retire la piste de la sélection SOLO ; **POLY + touche de piste** active/désactive son MUTE ; **MONO seul** bypass/réactive le masque SOLO mémorisé ; **POLY seul** bypass/réactive le masque MUTE mémorisé. Réaction immédiate pour les coupures live, sans double-tap.
+- **Indépendance transport** : LOOPER MIDI est une **page globale** ; PLAY/STOP seul commande toujours le **transport général**, pas un transport LOOPER local. SOLO/MUTE ne change pas les états PLAY/STOP des autres parties.
+- **À résoudre avant codage** : touches de sélection des pistes LOOPER, arbitrage des combos MONO/POLY contre gestes CHOKE GROUPS déjà documentés, persistance des masques et politique des pistes simultanément SOLO/MUTE. Vérifier l'absence de note-on coincé lors d'un MUTE/SOLO MIDI (note-off/flush).
+- **Statut** : exigence fonctionnelle confirmée, non implémentée/compilée/testée ici.
