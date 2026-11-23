@@ -606,3 +606,10 @@
 - **Décision explicite** : pour **chaque pas DRUMS**, le mode est indépendamment **ONE SHOT / GATE**. Lorsque le pas est en GATE, son réglage est **exactement le même que dans le séquenceur LOOPER**, sur une **échelle incrémentée de 0 à 100**.
 - **Annule la proposition précédente** de valeurs discrètes 25 %, 50 %, 75 %, 100 % ou de durées en nombre de pas. **Ne pas inventer une autre unité, granularité, courbe ou sémantique** : reprendre fidèlement la définition et le comportement du GATE LOOPER existant après inspection du code/spécification.
 - **Statut** : décision de conception consignée, pas d'implémentation ni de test dans cette étape.
+
+## DRUMS — paramètre de voix nommé LO-FI (23 novembre 2026)
+
+- **Décision explicite utilisateur** : chaque voix/tranche/pad DRUMS possède un réglage de coloration sonore nommé simplement **LO-FI**.
+- Chaque pad a son **LO-FI de base indépendant**, y compris lorsque plusieurs pads utilisent le même type d'instrument (par ex. deux KICK).
+- Le séquenceur peut **verrouiller un réglage LO-FI différent par pas (P-LOCK)**, puis retrouver la valeur de base de la voix ; cohérence des noms et des saveurs LO-FI avec le LOOPER.
+- Les modes exacts du bloc LO-FI historique restent à retrouver et confirmer ; ne pas inventer la liste des émulations. **Statut : conception documentée, pas de code modifié ni testé.**
