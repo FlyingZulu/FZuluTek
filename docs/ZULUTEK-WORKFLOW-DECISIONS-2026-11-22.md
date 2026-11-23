@@ -569,3 +569,10 @@
 - **Liberté absolue d'affectation** : l'utilisateur peut délibérément assigner plusieurs moteurs gourmands, même au risque de craquements, dégradation audio ou surcharge. **Aucun blocage ni limitation du nombre d'instances en fonction de la catégorie DSP**. Les limites de polyphonie active FM-1 4/3 et APK 6/5 restent des règles distinctes.
 - Principe de robustesse : ne pas chercher volontairement à provoquer un crash logiciel ; privilégier un comportement sûr en cas de dépassement du budget DSP, sans restreindre le choix musical.
 - Les étiquettes de coût sont à établir par mesures, pas par supposition. **Statut : décision UX, non implémentée ni testée.**
+
+## Séquenceurs DRUMS/LOOPER — variation par pas de RATE/compression (23 novembre 2026)
+
+- **Nouvelle demande utilisateur** : permettre de choisir **pour chaque pas du séquenceur** le taux de « compression » / **RATE**, avec les **modes de traitement déjà évoqués**, particulièrement utile sur DRUMS et les samples du LOOPER. Conserver la conception commune des séquenceurs, avec des paramètres pilotés propres à chaque moteur.
+- Modèle envisagé : **P-LOCK par pas** ; un pas sans valeur spécifique reprend le réglage de la tranche. Préciser la durée de maintien et le retour au réglage de base, notamment entre les pas et sur des queues audio.
+- **Ambiguïté non résolue** : « RATE/compression » peut viser la **réduction de fréquence d'échantillonnage/bitcrushing** ou la **vitesse de lecture** ; ne pas coder de multiplicateurs de vitesse de sample ni présumer de l'effet exact sans clarification de l'utilisateur et examen des anciennes spécifications des modes.
+- **Statut** : demande de conception consignée, **aucune implémentation effectuée**.
