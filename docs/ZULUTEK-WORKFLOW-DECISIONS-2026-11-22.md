@@ -743,3 +743,10 @@
 - Pour chaque catégorie (patterns DRUMS et KITS), à chaque démarrage/session d'allumage, générer une nouvelle racine aléatoire ; nommer les sauvegardes successives **NOM 1** à **NOM 8** ; à la neuvième sauvegarde, générer une **nouvelle racine** et recommencer à 1, et ainsi de suite. Compteurs de patterns et KITS indépendants, même mécanique. Préserver les noms enregistrés après extinction, éviter les collisions, renommage manuel futur dans GLOBAL.
 - Capacités inchangées : patterns DRUMS **4×16=64**, KITS **8×16=128**. Distinguer création/nouvelle sauvegarde et écrasement de slot existant (règle de renommage sur écrasement encore à définir).
 - **Statut** : décision documentaire, aucune implémentation/compilation/test FM-1 ou APK.
+
+## Presets BASSE et LEAD — nom aléatoire unique à chaque sauvegarde (23 novembre 2026)
+
+- **Décision utilisateur** : à chaque sauvegarde d'un nouveau preset de **BASSE** ou de **LEAD/synthé**, attribuer **un nouveau nom aléatoire différent**. Contrairement aux KITS et patterns DRUMS, **pas de racine commune pour huit sauvegardes**, pas de série de suffixes 1–8, et pas de dépendance au redémarrage.
+- **Uniformisation de la source** : même famille/générateur de noms aléatoires réutilisable, mais deux politiques distinctes : (1) KITS et patterns DRUMS = racine renouvelée toutes les 8 nouvelles sauvegardes, compteurs indépendants et reset de série au redémarrage ; (2) presets BASSE et LEAD = nom nouvellement généré à chaque nouvelle sauvegarde.
+- Prévoir vérification des collisions avec les noms déjà attribués, persistance et renommage manuel ultérieur. Le comportement sur **écrasement** d'un preset existant (conserver son nom ou en générer un autre) reste à décider ; ne pas présumer.
+- **Statut** : décision de conception uniquement ; aucun code modifié, compilé ou testé.
