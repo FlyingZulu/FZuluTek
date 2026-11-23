@@ -728,3 +728,11 @@
 - Cette décision **remplace la suggestion antérieure de chargement à la prochaine mesure**. La sélection d'une banque seule ne charge toujours pas de pattern.
 - **Conflit encore ouvert** : SHIFT+POLY avait été proposé pour banque suivante puis pour sauvegarder ; retenir la nouvelle affectation sauvegarde et définir un autre geste pour défiler les 4 banques.
 - **Statut** : décision de conception documentée, non implémentée ni testée sur FM-1/APK.
+
+## KITS — noms automatiques par groupes de huit et par session (23 novembre 2026)
+
+- **Décision utilisateur** : chaque nouveau KIT sauvegardé reçoit un nom automatique, sur le principe des noms de session des patterns DRUMS, **mais la racine change après chaque groupe de 8 KITS sauvegardés**. Exemple : ALBERT 1 à ALBERT 8, puis TARTE AU CITRON 1 à TARTE AU CITRON 8, puis nouvelle racine, etc. **Huit, et non quatre**, confirmé par l'utilisateur.
+- À **chaque nouvel allumage/session FM-1 ou APK**, générer une nouvelle racine aléatoire et redémarrer le compteur à 1 ; pendant la même session, générer une nouvelle racine après le huitième KIT de chaque groupe. Noms et compteurs des KITS déjà enregistrés persistent après extinction ; pas de dates nécessaires.
+- **Portée** : règle de nommage indépendante de l'emplacement/bank de stockage ; la capacité KIT reste **8 banques × 16 = 128 slots**. Ne pas confondre avec les patterns DRUMS : leur règle précédente était une racine par session avec suffixes incrémentaux, sans limite de huit décidée.
+- Prévoir possibilité de **renommage manuel** ultérieur dans GLOBAL, selon le workflow à concevoir ; éviter collisions de noms entre groupes/sessions. Pour un écrasement de KIT existant, le maintien ou renouvellement du nom reste à spécifier, ne pas le présumer.
+- **Statut** : décision de conception, aucun code modifié/compilé/testé.
