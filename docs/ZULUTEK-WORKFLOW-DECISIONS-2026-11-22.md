@@ -627,3 +627,11 @@
 - **Confirmation utilisateur** : l'application de référence recherchée est **Lo-Fly Dirt de MSXII Sound Design** (même développeur que Fly Tape 2), et non Fly Tape 2 elle-même.
 - La référence porte sur **l'ergonomie et le principe** : plusieurs saveurs LO-FI / profils de coloration de samplers anciens et un réglage de dosage pour chacun. **Ne pas supposer que la liste proposée précédemment est automatiquement le catalogue final ZuluTek**.
 - Contrôle cible : LO-FI par voix/pad DRUMS, profil et intensité ; valeurs de base et P-LOCK indépendants par pas, également pour LOOPER. DSP et interface à concevoir et tester, sans copier les algorithmes propriétaires de l'application de référence.
+
+## LO-FI — composer les profils avec les outils DSP existants, dont R Window (23 novembre 2026)
+
+- **Orientation utilisateur** : pour construire les profils LO-FI inspirés de Lo-Fly Dirt, **piocher dans les outils/effets déjà disponibles dans l'écosystème ZuluTek**, notamment la **suite « R Window »** citée comme particulièrement intéressante, et d'autres modules pertinents.
+- **Proposition architecturale** : chaque profil LO-FI est une recette de modules DSP (par exemple réduction de bits, réduction de fréquence d'échantillonnage, filtrage/EQ, saturation, compression/transitoires, composants R Window si compatibles) pilotée par une commande de dosage **AMOUNT 0..100**. Ces modules sont des candidats, **pas une liste de fonctionnalités déjà vérifiées**.
+- **Recherche** : recherches GitHub `R Window`, `R-WINDOW`, `R_WINDOW`, `RWindow` sans résultat indexé ; **identité, code, licence, compatibilité et coût DSP de R Window non vérifiés**. Ne pas prétendre que ses composants sont déjà intégrés ou portables sur FM-1.
+- Priorité : inventaire du code et des effets existants, coût DSP/RAM, licence et dépendances, puis profils légers adaptés au FM-1 et profils correspondants dans l'APK ; même catalogue/paramètres, implémentation éventuellement optimisée par plateforme.
+- **Statut** : orientation de conception consignée ; pas d'implémentation.
