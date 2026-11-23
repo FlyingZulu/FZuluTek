@@ -656,3 +656,10 @@
 - **STUDIO** vise fidélité et contrôle des crêtes ; **mode intermédiaire** vise densité/compression musicale sans détruire les attaques ; **mode extrême** autorise délibérément forte réduction de dynamique et écrêtage sonore.
 - **Garde-fou technique** : distinguer clipping artistique interne du traitement de sécurité de sortie ; pas de débordement DSP ni de plantage. Mesurer aliasing, gain, latence, CPU et qualité audio sur FM-1/APK.
 - **Statut** : décision d'architecture/UX consignée ; **aucun DSP compilé, mesuré ou testé** à cette étape.
+
+## MASTER — évolution continue par un seul potentiomètre (23 novembre 2026)
+
+- **Nouvelle orientation utilisateur, remplaçant la sélection discrète de trois modes** : piloter le caractère du MASTER avec **un seul potentiomètre sur toute sa course**. Début = **STUDIO** très flat/transparent/clean ; milieu = compression/densité progressive ; fin = **DIRTY** très exagéré, compression et clipping artistique poussés.
+- Les appellations STUDIO / PUNCH / DIRTY deviennent des **repères de zones sur une courbe continue**, **pas trois presets à sélectionner**. Le contrôle pourrait être nommé MASTER CHARACTER, course conceptuelle 0..100 ; valeur et courbes exactes à valider.
+- **Objectif UX et audio** : transitions progressives sans saut audible aux frontières, dosages internes évoluant de façon coordonnée, maintien d'une sortie maîtrisée et compensation éventuelle du gain pour ne pas confondre caractère et volume. Les frontières de zones affichées dans les maquettes sont purement illustratives.
+- **Statut** : décision de conception mise à jour ; aucun DSP modifié, compilé ou testé.
