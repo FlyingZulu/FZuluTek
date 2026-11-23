@@ -640,3 +640,11 @@
 
 - L'utilisateur corrige « R Window » : il s'agit de **Airwindows**, la suite d'effets audio de Chris Johnson. Toute mention précédente de « R Window » désigne **Airwindows** ; utiliser désormais ce nom exact.
 - Explorer les modules Airwindows pertinents pour les recettes LO-FI de ZuluTek, en vérifiant les licences, le portage DSP FM-1 et le coût CPU/RAM avant d'en annoncer l'intégration. **Aucun module Airwindows n'est déclaré intégré ou testé à ce stade.**
+
+## DSP — sélection minimale Airwindows et traitements distribués + MASTER final (23 novembre 2026)
+
+- **Orientation utilisateur** : **ne pas importer toute la collection Airwindows** : trop de doublons, de complexité et de coût potentiel. Sélectionner un petit nombre d'algorithmes réellement utiles et efficaces, puis les réutiliser où nécessaire.
+- **Traitements locaux** : DRUMS et LOOPER doivent bénéficier de quelques outils d'optimisation/coloração sonore adaptés (notamment LO-FI, contrôle de niveau, transitoires, saturation/clipping selon le besoin), plutôt que tout laisser au bus global. Le LOOPER a besoin d'une forme légère de « mastering »/gestion de sommation ; les DRUMS possèdent aussi leurs traitements adaptés.
+- **MASTER en toute fin de chaîne audio** : prévoir une tranche/étage de finition avec **loudness facultatif**, traitement du **clipping/crêtes** et protection de la sortie. Objectif : densité et tenue du signal, sans destruction systématique de la dynamique.
+- **Proposition technique à valider** : gestion de gain sur les bus, éventuelle compression douce, soft clipping/limitation de crête au MASTER, sécurité de sortie en dernier. Attention à la latence, aux overshoots, à la distorsion et au budget CPU/RAM du FM-1 ; distinguer coloration volontaire et sécurité contre la saturation.
+- **Statut** : orientation de conception documentée, **ni inventaire exhaustif des effets existants ni code/mastering ajouté ou testé** dans cette étape.
