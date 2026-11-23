@@ -686,3 +686,12 @@
 - **Proposition de symétrie, pas encore confirmée** : double-clic MONO pourrait également suspendre/rétablir un `solo_mask` sans l'effacer ; la demande explicite de ce tour concerne POLY/MUTE, et remplace la formulation précédente « double-clic MONO efface les solos » uniquement si l'utilisateur confirme la symétrie.
 - **Conflit restant** : MONO/POLY servent au CHOKE dans `docs/ZULUTEK-LOOP.md`. Réserver les fonctions CHOKE à un contexte explicite est une piste, non encore validée.
 - **Statut** : comportement MUTE à mémoire confirmé en conception ; aucune modification DSP/UI ni test.
+
+## DRUMS + LOOPER — SOLO/MUTE immédiats sans double-tap (23 novembre 2026)
+
+- **Nouvelle décision utilisateur** : **supprimer les doubles clics MONO/POLY** ; ils sont trop lents pour les cuts de performance. Privilégier des **appuis simples** pour basculer instantanément l'état global des groupes SOLO/MUTE mémorisés, sans perdre les sélections.
+- **Proposition gestuelle cohérente** : **MONO seul** = toggle global du masque SOLO mémorisé ; **POLY seul** = toggle global du masque MUTE mémorisé ; **MONO + pad(s)** = modifier les membres SOLO ; **POLY + pad(s)** = modifier les membres MUTE. Plusieurs pistes SOLO simultanément. Identique pour DRUMS et LOOPER.
+- **Fenêtre de combo très courte**, en cohérence avec le principe déjà documenté de ~20 ms pour les combos REC : éviter les activations parasites quand un pad suit immédiatement MONO/POLY. Ne pas introduire de latence musicale notable ; **temporisation exacte, traitement des key-down/key-up et éventuels effets d'un tap enchaîné restent à valider/tester**.
+- **Priorité UX** : performance live / cuts instantanés ; appui seul ne doit pas effacer les masques, et combinaison ne doit pas déclencher le toggle global accidentellement.
+- **Conflit non résolu** : `docs/ZULUTEK-LOOP.md` affecte déjà MONO/POLY aux groupes CHOKE. Conserver les fonctions CHOKE via contexte/gestuelle distincts à définir avant implémentation.
+- **Statut** : décision de conception, aucun code modifié ou testé.
