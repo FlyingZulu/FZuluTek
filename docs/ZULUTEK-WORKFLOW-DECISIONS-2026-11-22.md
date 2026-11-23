@@ -520,3 +520,10 @@
 - **Chaque pad est une instance autonome** : son pattern est attaché à la piste, son type d'instrument est réassignable, et **ses réglages sonores sont propres à cette instance**. Deux pads KICK peuvent avoir des pitches, decays, timbres et séquences différents ; réaffecter un type ne déplace pas le pattern de la piste.
 - **Conséquence d'implémentation** : distinguer `pad_id`, `instrument_type`, `pad_params`, `pad_pattern` et l'état de voix associé ; ne pas indexer les séquences ou paramètres uniquement par type d'instrument, ne pas limiter à une instance de chaque type.
 - **Statut** : contrat de conception confirmé ; aucun code DRUMS modifié dans cette mise à jour. À auditer sur APK et FM-1, notamment les contraintes éventuelles de polyphonie et la divergence historique 8/6 voix.
+
+## Séquenceurs DRUMS et LOOPER — architecture commune (23 novembre 2026)
+
+- **Clarification utilisateur** : les séquenceurs DRUMS et LOOPER sont conçus sur **la même architecture**, à quelques détails propres à chaque module près ; ils ne pilotent pas les mêmes paramètres mais reprennent la même logique de séquençage.
+- Les **CHOKE GROUPS** ne sont **pas spécifiques à DRUMS** : ils existent également dans l'autre séquenceur / LOOPER, selon la conception utilisateur. Ne pas traiter le choke uniquement comme une optimisation de polyphonie des percussions.
+- Conserver les contrats de modes distincts : **DRUMS = ONE SHOT / GATE**, **LOOPER = LOOP / GATE** ; ne pas confondre les modes malgré l'architecture commune.
+- **Statut** : décision de conception confirmée. **Parité d'implémentation non vérifiée** : auditer les moteurs réels avant d'affirmer que les mêmes structures et six groupes existent déjà dans les deux codes ; ne pas imposer un refactoring sans examen.
