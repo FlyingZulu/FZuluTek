@@ -982,3 +982,10 @@
 - **SHIFT + avant-dernière blanche (15)** reste la réduction de 16 pas ; **SHIFT + rotation SELECT** reste le réglage fin de longueur. Longueur max cible 128 pas. Ne pas confondre COPY/FREE avec sauvegarde de pattern.
 - **Encore à définir** : commande précise pour choisir COPY ou FREE, emplacement et persistance du réglage (global, par voix ou par piste), comportement lorsque LENGTH n'est pas un multiple de 16, et conservation des données des pas masqués lors d'une réduction. Ne pas inventer ces modalités.
 - **Statut** : choix COPY/FREE et défaut COPY confirmés en conception, pas d'implémentation ni de test.
+
+## APK — nuance de couleur distincte par voix DRUMS (23 novembre 2026)
+
+- **Nouvelle décision utilisateur** : sur ZuluTek **APK**, chacune des huit voix/pads **OP1–OP6, PIT, GLO** possède sa **propre couleur**, avec des **variations légères de teinte** pour identifier facilement la voix sélectionnée tout en gardant une palette cohérente.
+- Dans l'éditeur de pas : **voix sélectionnée = sa couleur individuelle, fixe** ; **SHIFT maintenu = bloc de 16 pas actuellement affiché, signal clignotant et couleur de repérage distincte** de la palette des voix. Relâcher SHIFT rétablit la couleur fixe de la voix sélectionnée. Les pads continuent à sélectionner les voix et ne naviguent pas entre les blocs.
+- **FM-1** : conserver la distinction fixe (voix) / clignotant (bloc), sans exiger huit couleurs matérielles.
+- La palette concrète (par exemple cyan, bleu, violet, rose, corail, ambre, vert) est **proposée, non encore validée** ; vérifier contraste, lisibilité et accessibilité. **Statut** : décision UX, aucun code ni test.
