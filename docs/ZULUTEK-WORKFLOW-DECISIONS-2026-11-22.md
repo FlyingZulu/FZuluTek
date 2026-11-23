@@ -554,3 +554,11 @@
 - **CONGA est exclue** conformément à la décision précédente. **Proposition de liste à valider pendant le tri** : KICK, SNARE, HAT fermé, HAT ouvert, CLAP, TOM, COWBELL, FM, ELIXIR (9 types proposés pour 8 pads assignables, ce qui est permis). La distinction HAT fermé/ouvert et la conservation de chaque type non encore examinée restent à confirmer.
 - Les **types disponibles** ne sont pas les **instances simultanées** : huit pads peuvent sélectionner librement et répéter ces types. Budgets de polyphonie distincts conservés : FM-1 4 normal/3 ECO ; APK 6 normal/5 ECO.
 - **Statut** : conception enregistrée ; **aucun portage DSP ou synchronisation de code FM-1/APK réalisé** dans cette étape. Audit des moteurs et de la mémoire nécessaire avant implémentation.
+
+## DRUMS — avertissement pour les moteurs DSP gourmands (23 novembre 2026)
+
+- **Demande utilisateur** : dans le sélecteur commun des types DRUMS, signaler clairement les moteurs **les plus gourmands en DSP**, pour éviter de les multiplier par inadvertance sur les huit pads. Pour ces moteurs, **une seule instance est la recommandation pratique**, en particulier sur FM-1.
+- Proposition d'interface : pictogramme d'avertissement près du type concerné, et message discret lorsqu'on assigne plusieurs instances coûteuses. **Avertir sans interdire** par défaut ; comportement précis à valider.
+- Ne pas étiqueter arbitrairement FM ou ELIXIR comme coûteux : **classification fondée sur mesures/profiling** des implémentations FM-1 et APK, éventuellement selon la variante et les paramètres.
+- Distinguer **instances assignées** et **voix effectivement simultanées** : la polyphonie FM-1 reste 4 normal/3 ECO et APK 6 normal/5 ECO, mais un plafond en nombre de voix n'assure pas à lui seul le respect du budget DSP si les moteurs ont des coûts différents.
+- **Statut** : exigence d'interface/conception consignée, **pas de code UI ni de mesures DSP réalisés** dans cette étape.
