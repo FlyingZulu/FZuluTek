@@ -1098,3 +1098,10 @@
 - **Correction explicite utilisateur de l'entrée précédente** : **BASSE strictement monophonique (1 voix)** ; **LEAD idéalement polyphonique jusqu'à 4 voix simultanées**, notamment pour plaquer des accords de quatre notes. Ne plus traiter LEAD comme obligatoirement mono.
 - **Objectif simultané maximal de synthèse** : **1 voix BASSE + 4 voix LEAD = 5 voix audio de synthèse**, indépendantes des voix DRUMS et autres traitements. Les quatre voix LEAD ne sont pas utilisées en permanence ; la charge maximale doit néanmoins être dimensionnée/testée pour les accords soutenus.
 - **Statut** : souhait de conception, **pas faisabilité prouvée sur FM-1**. Prioriser mesure CPU/RAM et rendu audio avec BASSE+LEAD poly4+DRUMS+LOOPER+FX. Explorer polyphonie LEAD configurable ou limitation ECO seulement si les mesures l'exigent, sans présumer que 4 voix sont garanties.
+
+## Polyphonie BASSE / LEAD selon NORMAL et ECO (23 novembre 2026)
+
+- **Décision utilisateur** : **BASSE reste monophonique (1 voix) dans les deux modes**. **LEAD en mode NORMAL = 4 voix polyphoniques** ; **LEAD en mode ECO = 1 voix monophonique**. ECO est le compromis explicitement souhaité si la charge FM-1 l'exige.
+- Conserver les mêmes pages, engines, paramètres et gestes : le mode de performance modifie **le budget de voix**, pas l'identité ergonomique du LEAD.
+- Prévoir une transition NORMAL → ECO pendant un accord en cours (choix de la note conservée, extinction douce des autres voix, sans clic), ainsi que ECO → NORMAL ; politique exacte à définir et tester.
+- **Statut** : règle de conception validée ; faisabilité de NORMAL 4 voix sur FM-1, interaction avec DRUMS/LOOPER/FX, et code non vérifiés. Ne pas présenter la polyphonie comme implémentée.
