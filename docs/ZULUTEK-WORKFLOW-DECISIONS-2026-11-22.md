@@ -276,3 +276,11 @@
 - **Ne plus écrire « SNAP capture le son »** : cette formulation est conceptuellement fausse. Parler de **capture de valeurs de paramètres**, et non de capture audio. Le son peut évoluer en conséquence, mais n'est pas le contenu enregistré.
 - **Restrictions de capturabilité confirmées** : OCT−/OCT+ (contrôle des pôles) et knob ZULU (contrôle du morphing) **jamais capturables** ; valeurs de paramètres FLY **exclues par défaut**, capturables seulement si l'option GLOBAL est activée. Interdiction des boucles SNAP → contrôle SNAP, indépendamment de cette option.
 - Cette rectification **prime sur toute formulation antérieure contradictoire** dans le journal et dans les échanges.
+
+## MONKEY — surface tactile de modulation contextuelle (23 novembre 2026)
+
+- **Intention utilisateur** : mapper directement la surface ronde de modulation du Wavy MONKEY à un paramètre musical dépendant du contexte. **BASSE/LEAD : cutoff du filtre** ; **DRUMS : drive global** envisagé par l'utilisateur, filtre également possible. Explorer les autres pages sans figer leurs affectations trop tôt.
+- **Propositions de travail, NON validées** : SIRÈNE → intensité ou hauteur ; LOOPER → cutoff si présent ; ATEK303/ARP → cutoff de l'instrument joué (pas un paramètre de transport) ; MIXER → filtre de la tranche sélectionnée ; PoW! → intensité de l'effet ; pages de configuration (KIT/SNAP/ASSIGN/GLOBAL) → aucune action automatique.
+- **Point d'architecture** : le mapping doit suivre **la destination musicale effective du MONKEY** (notamment son canal MIDI et le routage GLOBAL), pas aveuglément la page affichée ; en FUSION APK et FM-1 peuvent afficher deux pages différentes. Prévoir un réglage GLOBAL de destination/modulation par contexte et d'éventuelles substitutions.
+- **Documentation officielle** : https://wavyindustries.com/monkey/manual/ — la surface blanche ronde transmet une modulation MIDI selon la pression exercée (CC modulation, usuellement CC1) ; **ce n'est pas un pad XY**. Le comportement au relâchement (retour au paramètre de base versus maintien de la dernière valeur) et l'interprétation du CC1 doivent être spécifiés et testés.
+- **Statut** : brainstorming sur les destinations, pas d'implémentation confirmée.
