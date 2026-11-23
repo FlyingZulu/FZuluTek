@@ -256,3 +256,9 @@
 - **Précision utilisateur** : les pressions simples **OCT− et OCT+** sont dédiées respectivement aux pôles de morphing **ZU et LU** (activation/désactivation selon le contexte SNAP défini précédemment). Pour changer l'octave du clavier : **HOME + OCT− = −1 octave** et **HOME + OCT+ = +1 octave**. L'utilisateur dit « je crois que c'est ça » : convention très probable, à confirmer si nécessaire lors du test ergonomique.
 - **Priorité des combinaisons** : HOME + OCT doit intercepter l'événement avant toute action OCT seule afin d'éviter de basculer un pôle pendant la transposition. Définir la répétition sur maintien et les limites d'octave ultérieurement.
 - **Conflit à résoudre** : le geste historique **REC + OCT−** ouvre ASSIGN ; vérifier la priorité des combinaisons et l'accès à ASSIGN sans déclencher ZU.
+
+## Protection anti-feedback SNAP — ne jamais capturer le pilotage SNAP (23 novembre 2026)
+
+- **Décision explicite utilisateur** : **OCT− et OCT+**, dédiés à l'activation des pôles ZU/LU, **ne doivent jamais être enregistrés dans les SNAP**. Un SNAP ne doit pas prendre un snapshot de son propre état de contrôle ni créer de boucle de feedback SNAP → SNAP.
+- **Règle générale de conception proposée** : exclure des paramètres capturables toute commande qui contrôle le moteur SNAP lui-même (activation ZU/LU, sélection/déclenchement d'un SNAP, capture, etc.). Éviter également les déclenchements indirects de SNAP par les assignations ou macros activées par un SNAP. Les paramètres **musicaux** contrôlés par le morphing restent capturables normalement.
+- **Implémentation à définir** : distinguer les paramètres musicaux des commandes de pilotage SNAP dans le registre des paramètres ; filtrer à la capture **et** à l'application (y compris vieux KITS/assignations), détecter ou empêcher les cycles dans les routes de modulation/ASSIGN. **Pas implémenté à ce stade.**
