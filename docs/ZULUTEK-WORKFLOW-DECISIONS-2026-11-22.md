@@ -584,3 +584,11 @@
 - Les pas peuvent alterner **normal / très dégradé / 8 bits / 12 bits / autres saveurs**. Ne pas confondre profondeur en bits et taux d'échantillonnage, ni présumer d'une émulation fidèle des machines historiques à partir d'une seule valeur de bits.
 - **Recherche effectuée** : recherches textuelles GitHub « SP1200 », « lofi », « bitcrush », « rate compression », « sample rate », « P-LOCK » sans résultats concluants ; **source exacte des modes historiques non encore localisée**, donc ne pas inventer la liste des modes.
 - **Statut** : exigence fonctionnelle enregistrée, pas de code ni de tests. Préciser portée de l'effet (par voix, piste ou bus), maintien/retour à la valeur de base, coût DSP FM-1 et mode d'édition.
+
+## Confirmation — séquenceurs DRUMS / LOOPER, mêmes principes et modes distincts (23 novembre 2026)
+
+- **Confirmation explicite utilisateur** : les séquenceurs **DRUMS et LOOPER ont le même fonctionnement et la même conception** (séquences, paramètres par pas, CHOKE GROUPS, et ajout prévu des P-LOCK de coloration LO-FI). Les différences portent sur les cibles pilotées et les modes.
+- **DRUMS : ONE SHOT / GATE**. ONE SHOT déclenche la percussion qui poursuit son enveloppe sans dépendre du relâchement du pad ; GATE suit la durée de maintien avec release éventuel.
+- **LOOPER : LOOP / GATE**. LOOP répète la lecture ; GATE la conditionne au maintien de la commande, selon l'enveloppe/lecture propre au média.
+- **Ne pas confondre** ONE SHOT du comportement de déclenchement DRUMS et une ancienne option de transport de séquenceur « exécuter une fois le pattern ».
+- **Statut** : contrat de conception confirmé ; la parité du code des deux séquenceurs et les P-LOCK LO-FI ne sont **pas encore démontrés/implémentés** par cette décision.
