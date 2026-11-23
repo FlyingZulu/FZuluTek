@@ -250,3 +250,9 @@
 - **Nouvelle demande utilisateur** : pouvoir assigner **le même canal MIDI à plusieurs parties** (ex. BASSE et LEAD) et répartir les notes selon leur hauteur, avec un **point de split librement réglable** sur le clavier. Exemple : notes graves → BASSE ; notes aiguës → LEAD, tout en recevant sur le même canal MIDI.
 - **Proposition de conception** : compléter le routage GLOBAL par une **plage de notes MIDI min/max par partie** (ou un contrôle de split équivalent) ; les plages pourraient également se chevaucher pour créer des layers, **option proposée non encore confirmée par l'utilisateur**. Cette configuration s'applique aux claviers MIDI externes dont le Wavy MONKEY, sans dépendre du canal seul.
 - **À définir** : représentation du split sur le petit écran FM-1 et sur l'APK, capture du point de split par une note jouée, limites et transposition, gestion de Note Off si routage modifié pendant une note tenue, stockage GLOBAL versus KIT. **Pas implémenté ni validé matériellement.**
+
+## OCT− / OCT+ réaffectés aux pôles ZU/LU ; transposition via HOME (23 novembre 2026)
+
+- **Précision utilisateur** : les pressions simples **OCT− et OCT+** sont dédiées respectivement aux pôles de morphing **ZU et LU** (activation/désactivation selon le contexte SNAP défini précédemment). Pour changer l'octave du clavier : **HOME + OCT− = −1 octave** et **HOME + OCT+ = +1 octave**. L'utilisateur dit « je crois que c'est ça » : convention très probable, à confirmer si nécessaire lors du test ergonomique.
+- **Priorité des combinaisons** : HOME + OCT doit intercepter l'événement avant toute action OCT seule afin d'éviter de basculer un pôle pendant la transposition. Définir la répétition sur maintien et les limites d'octave ultérieurement.
+- **Conflit à résoudre** : le geste historique **REC + OCT−** ouvre ASSIGN ; vérifier la priorité des combinaisons et l'accès à ASSIGN sans déclencher ZU.
