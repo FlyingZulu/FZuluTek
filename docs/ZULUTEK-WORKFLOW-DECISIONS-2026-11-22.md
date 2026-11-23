@@ -1028,3 +1028,11 @@
 - **Principe UX dérivé** : « **L'écran confirme ce que font les mains, il ne dicte pas les gestes** ». Les commandes de jeu fréquentes doivent être apprenables par mémoire musculaire, accessibles sans menu ni lecture prolongée, et fournir des retours brefs et non bloquants (ex. popup de sélection de voix 300 ms, code couleur par type sur APK, LED fixe vs clignotante sur FM-1).
 - **Priorité de conception** : conserver positions et gestes stables entre pages/FM-1/APK ; préserver le flux de jeu en live, éviter les dialogues de confirmation inutiles et les déplacements de commandes. Distinguer **performance live** (gestes immédiats, attention minimale) et **édition approfondie** (informations plus détaillées acceptables) sans imposer deux interfaces incohérentes.
 - **Statut** : objectif et critère ergonomique confirmés, pas de modification de code ni de test.
+
+## Clarification des couches — poste de conduite et capot moteur (23 novembre 2026)
+
+- **Correction explicite utilisateur** : la séparation entre **jeu direct** et **édition approfondie** existait **déjà** dans la conception ZuluTek ; ce n'est **pas** une nouvelle proposition ni deux modes à inventer.
+- **Métaphore directrice** : le **jeu direct est le poste de conduite** ; l'**édition approfondie est le capot du moteur** qu'on ouvre volontairement pour intervenir, puis qu'on referme. « On ne roule pas avec le capot du moteur ouvert. »
+- **Conséquence UX** : les deux couches ne doivent pas être exposées côte à côte ni mélangées en permanence. La performance live doit garder ses commandes immédiates, stables et dégagées. L'édition avancée présente les paramètres détaillés uniquement lorsqu'elle est explicitement appelée ; la sortie rend immédiatement la disposition et les gestes de jeu habituels. Conserver une grammaire de gestes cohérente entre les couches, tout en évitant qu'une fonction d'édition profonde envahisse le jeu direct.
+- **Lecture technique** : séparation d'interface, **pas nécessairement arrêt du moteur audio** ; l'audio peut continuer pendant l'édition si le système le permet. Aucun nouveau geste d'ouverture/fermeture n'est défini ici ; respecter les gestes EDIT déjà confirmés.
+- **Statut** : clarification/confirmation de conception existante, pas de code ni tests.
