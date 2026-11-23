@@ -353,3 +353,9 @@
 - **Précision explicite utilisateur** : la combinaison est pensée et exécutée dans l'ordre **REC d'abord, puis OCT−/OCT+**. Dès que REC est engagé/maintenu, OCT doit adopter le comportement de la couche REC, et non déclencher son action simple sur ZU/LU. Le système doit consulter l'état REC **avant** de traiter l'événement OCT ; aucune activation/désactivation transitoire du pôle ne doit se produire.
 - Dans le mapping documentaire historique, REC→OCT− ouvre ASSIGN et REC→OCT+ ouvre PRESETS ; vérifier ces destinations dans la navigation définitive.
 - **Cas à tester, non encore décidés** : OCT pressé *avant* REC ; relâchement de REC alors que OCT reste enfoncé ; appuis simultanés proches ; HOME+OCT et REC+HOME+OCT. Ne pas déduire que l'ordre inverse a automatiquement le même sens.
+
+## Fenêtre de tolérance temporelle des combinaisons REC (23 novembre 2026)
+
+- **Intention utilisateur** : les notations `REC + bouton` signifient **priorité fonctionnelle de REC**, sans exiger un timing parfait des doigts. Prévoir une petite tolérance sur les boutons à double rôle pour éviter que leur action simple ne parte si REC arrive quasiment en même temps.
+- **Proposition technique, non validée par mesure** : fenêtre initiale de l'ordre de **20–30 ms**, à calibrer en test matériel/APK ; si REC est déjà tenu, traiter immédiatement `REC → bouton`. Si le bouton arrive un peu avant REC, différer uniquement **son action simple** pendant la fenêtre, puis déclencher soit le combo, soit le simple. Une fois combo reconnu, inhiber le simple aussi au relâchement. Pas de déclenchement spéculatif puis annulation.
+- **Portée** : généraliser l'arbitrage aux boutons qui ont une interaction REC, **pas** à toutes les touches ni aux gestes musicaux à latence critique. Examiner le debounce matériel, le scan des touches, la latence et les interactions avec HOME/long/double appui ; l'utilisateur doit connaître la tolérance choisie.
