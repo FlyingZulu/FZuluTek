@@ -513,3 +513,10 @@
 - **Architecture à retenir** : `pad/piste -> pattern stable` et `pad/piste -> instrument assigné` sont deux couches indépendantes. Le déclenchement du séquenceur résout l'instrument actuellement affecté à la piste au moment du hit ; le jeu manuel suit la même affectation.
 - Cela **corrige** la formulation précédente disant de « préserver l'identité de la voix dans les événements du séquenceur » : il faut au contraire préserver **l'identité de la piste/pad** et résoudre l'instrument assigné au déclenchement.
 - **Non décidé** : autoriser un même type de voix sur plusieurs pads, comportement d'une réaffectation pendant une note tenue, méthode d'assignation et sauvegarde ; ne pas inventer ces choix.
+
+## DRUMS — instances indépendantes et doublons de types autorisés (23 novembre 2026)
+
+- **Décision utilisateur confirmée** : chacun des huit pads/pistes OP1–OP6, PIT, GLO choisit librement un **type de percussion**, **sans contrainte d'unicité**. Ex. **2 KICK + 3 SNARE + 3 HAT** simultanément sur les huit pads.
+- **Chaque pad est une instance autonome** : son pattern est attaché à la piste, son type d'instrument est réassignable, et **ses réglages sonores sont propres à cette instance**. Deux pads KICK peuvent avoir des pitches, decays, timbres et séquences différents ; réaffecter un type ne déplace pas le pattern de la piste.
+- **Conséquence d'implémentation** : distinguer `pad_id`, `instrument_type`, `pad_params`, `pad_pattern` et l'état de voix associé ; ne pas indexer les séquences ou paramètres uniquement par type d'instrument, ne pas limiter à une instance de chaque type.
+- **Statut** : contrat de conception confirmé ; aucun code DRUMS modifié dans cette mise à jour. À auditer sur APK et FM-1, notamment les contraintes éventuelles de polyphonie et la divergence historique 8/6 voix.
