@@ -534,3 +534,10 @@
 - Le plafond concerne les **voix sonores actives**, **pas** le nombre de pistes, les types d'instruments disponibles ou le nombre d'instances d'un même type (ex. plusieurs KICK/SNARE/HAT).
 - Les CHOKE GROUPS doivent être appliqués avant d'évaluer la nécessité de voler une voix ; en cas de dépassement, il faut définir une politique de voice stealing musicalement discrète (règle exacte à confirmer).
 - **Statut** : choix de conception, **non implémenté ni benchmarké sur FM-1**. Le code APK consulté comporte actuellement un mode normal 8 voix et ECO 5 voix, donc le plafond 6 nécessite un changement réel. Vérifier également la configuration historique FM-1 à six pads, qui ne doit pas être confondue avec les huit touches physiques.
+
+## DRUMS — ECO retire une voix sur chaque plateforme (23 novembre 2026)
+
+- **Règle confirmée par l'utilisateur** : **FM-1 normal 4 / ECO 3 voix simultanées** ; **ZuluTek APK normal 6 / ECO 5 voix simultanées** ; toujours **8 pistes/pads logiques indépendants**.
+- Le mode ECO réduit uniquement le plafond des voix actives, pas les pistes, patterns, types de percussion ni les affectations multiples d'un même type.
+- **Code réellement modifié dans l'APK** : `app-zulutek/src/main/cpp/dsp/drum_engine.c`, commit `2a55530fd3e4bfc53f520d48d9b41ad05542d6c0` : plafond 6 normal / 5 ECO, CHOKE appliqué avant le comptage, redéclenchement d'un pad déjà actif sans consommer une nouvelle voix, vol de la voix la plus ancienne en dernier recours.
+- **FM-1 : cible 4/3 consignée mais code firmware non modifié dans ce commit** ; retrouver le code firmware correspondant et valider les limites sur la cible. **Aucun build ni test audio effectué** pour l'APK à ce stade.
