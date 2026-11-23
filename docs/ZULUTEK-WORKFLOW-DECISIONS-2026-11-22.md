@@ -9,9 +9,9 @@
 - **REC + SEQ** ouvre **LOOP**.
 - **REC + EDIT** ouvre **MACRO**.
 - **EDIT court** ouvre/ferme la page **XY**. Fermer la page ne désactive pas XY HOLD ni les effets.
-- **EDIT long (~0,8 s)** active/désactive l'édition des pas **uniquement si une page de séquenceur Zulu est déjà ouverte** (DRUMS ou LOOPER, ONE SHOT / LOOP). Hors d'une page de séquenceur, EDIT long ne déclenche pas l'édition et ne navigue pas. EDIT fixe en édition, clignotant sur page XY. Priorité LED en cas de chevauchement à préciser.
+- **EDIT long (~0,6 s)** active/désactive l'édition des pas **uniquement si une page de séquenceur Zulu est déjà ouverte** (DRUMS ou LOOPER, ONE SHOT / LOOP). Hors d'une page de séquenceur, EDIT long ne déclenche pas l'édition et ne navigue pas. EDIT fixe en édition, clignotant sur page XY. Priorité LED en cas de chevauchement à préciser.
 - En édition des pas : 16 pas sélectionnables ; K1–K4 éditent quatre paramètres ; SELECT change la page de quatre paramètres ; changer de pas conserve la page de paramètres ; EDIT court quitte l'édition.
-- **Nouvelle extension ARP/ATEK303** : lorsque la page de l'arpégiateur est déjà ouverte, **EDIT long (~0,8 s)** ouvre également une édition des pas sur le clavier (sans changer le moteur acid). Les 16 touches représentent/sélectionnent les 16 pas de la page ; **un appui sur OP1, OP2, OP3 ou OP4 choisit directement la page d'édition** : OP1 = pas 1–16, OP2 = 17–32, OP3 = 33–48, OP4 = 49–64. Pendant la lecture, leurs LEDs indiquent aussi la page actuellement jouée ; **le défilement de lecture ne change pas la page d'édition sélectionnée**. K1–K4 éditent les paramètres de la page courante ; SELECT parcourt les groupes de quatre paramètres ; EDIT court quitte. Distinguer visuellement la page sélectionnée pour l'édition de la page en cours de lecture, si elles divergent. **À vérifier** : mapping exact des paramètres acid, gestion des LEDs, conflits éventuels des OP1–OP4 avec d'autres usages et fonctionnement si pattern de moins de 64 pas.
+- **Nouvelle extension ARP/ATEK303** : lorsque la page de l'arpégiateur est déjà ouverte, **EDIT long (~0,6 s)** ouvre également une édition des pas sur le clavier (sans changer le moteur acid). Les 16 touches représentent/sélectionnent les 16 pas de la page ; **un appui sur OP1, OP2, OP3 ou OP4 choisit directement la page d'édition** : OP1 = pas 1–16, OP2 = 17–32, OP3 = 33–48, OP4 = 49–64. Pendant la lecture, leurs LEDs indiquent aussi la page actuellement jouée ; **le défilement de lecture ne change pas la page d'édition sélectionnée**. K1–K4 éditent les paramètres de la page courante ; SELECT parcourt les groupes de quatre paramètres ; EDIT court quitte. Distinguer visuellement la page sélectionnée pour l'édition de la page en cours de lecture, si elles divergent. **À vérifier** : mapping exact des paramètres acid, gestion des LEDs, conflits éventuels des OP1–OP4 avec d'autres usages et fonctionnement si pattern de moins de 64 pas.
 - **SEQ seul** conserve son rôle de demande/génération de nouveau pattern acid ATEK303, avec nouveau timing d'application défini plus bas.
 - **ARP seul** conserve sa fonction ATEK303.
 - **REC + ARP** ouvre l'éditeur avancé acid **SEQ+**, sans régénérer le pattern courant.
@@ -695,3 +695,9 @@
 - **Priorité UX** : performance live / cuts instantanés ; appui seul ne doit pas effacer les masques, et combinaison ne doit pas déclencher le toggle global accidentellement.
 - **Conflit non résolu** : `docs/ZULUTEK-LOOP.md` affecte déjà MONO/POLY aux groupes CHOKE. Conserver les fonctions CHOKE via contexte/gestuelle distincts à définir avant implémentation.
 - **Statut** : décision de conception, aucun code modifié ou testé.
+
+## EDIT long — seuil ramené à 600 ms (23 novembre 2026)
+
+- **Décision utilisateur** : raccourcir le maintien EDIT de **0,8 s à 0,6 s (600 ms)** pour accéder plus rapidement à l'édition des pas.
+- Concerne l'édition des pas DRUMS et LOOPER et le geste partagé sur la page ARP/ATEK303. EDIT court et la navigation K1–K4/SELECT ne changent pas.
+- **Statut** : seuil corrigé dans la documentation de conception ; handlers FM-1/APK non modifiés ni testés ici.
