@@ -444,3 +444,10 @@
 - **Confirmation utilisateur** : `REC + EDIT` ouvre la **page MACROS complète**, donnant accès au système de navigation et à une partie des réglages internes. Dans cette page, **les touches du clavier physique peuvent être réaffectées comme raccourcis** (navigation, banques, chargement de profils, éditeur du Dictateur, etc.) plutôt que servir uniquement à jouer des notes.
 - **Distinction maintenue** : `REC + SHIFT` ouvre le **widget MACROS** transportable sur les autres pages ; ne pas y détourner les touches du clavier pour la navigation, afin de préserver le jeu musical.
 - **Proposition d'organisation, non encore validée** : raccourcis clavier vers BANKS (banques/profils), ROUTES (destinations M1–M4), DICTATOR (éditeur quatre pistes), SOURCES (ARP et courbes). Autres touches pour slots de banques, COPY/PASTE/CLEAR/SAVE à déterminer après inventaire du nombre de touches et des conflits. Ne pas figer le plan de clavier ni prétendre à une implémentation.
+
+## Décision ferme — règle de persistance des widgets et toggle MACROS (23 novembre 2026)
+
+- **Règle générale de tous les widgets ZuluTek** : une fois ouvert, un widget reste **constamment superposé**, y compris pendant la navigation entre pages ; **aucun changement de page ne le ferme**. Il ne disparaît que sur commande de fermeture explicite.
+- **Raccourci MACROS validé** : `REC + SHIFT` est un **toggle** : premier accord **ouvre le widget MACROS**, accord suivant **ferme le widget MACROS**. Ne pas confondre avec `REC + EDIT`, qui ouvre la **page MACROS complète**.
+- **Portée de la page MACROS complète** : ses sous-pages et raccourcis clavier exposent les **réglages propres aux macros et aux potentiomètres**, pas l'ensemble du GLOBAL. Le menu GLOBAL reste distinct pour les réglages généraux et les sources communes.
+- **Widget ouvert** : K1–K4 = quatre macros, SELECT = Dictateur, ALGORITHM = dix slots de comportement ; PRESET reste ZULU. Règles de coexistence de plusieurs widgets et de priorité des contrôles encore à spécifier ; ne pas inventer d'auto-fermeture.
