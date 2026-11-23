@@ -182,3 +182,10 @@
 - **GLO maintenu ~5 secondes** déclenche un **mode PANIC** pour récupérer d'une machine qui s'emballe. Intention : arrêt d'urgence des sons/notes/événements qui restent bloqués, sans effacer KITS, SNAPs ou réglages ; **détail exact des sous-systèmes à couper, politique audio/looper/FX et comportement MIDI à spécifier**.
 - **Contrainte d'implémentation** : un maintien de 5 s franchit forcément le seuil de 1 s. Ne pas interrompre le décompte après l'ouverture de GLOBAL ; au seuil de 5 s, PANIC doit prendre priorité. Prévoir confirmation visuelle et éviter les déclenchements répétés lors du même maintien. Le changement de page GLOBAL ne doit pas fermer automatiquement la banque de performance, qui reste fermable uniquement par double-tap GLO.
 - **Supersession** : les mentions historiques « GLO court = GLOBAL » sont obsolètes au profit de **GLO 1 s = GLOBAL**. Délais exacts et conflits de gestes à valider sur matériel/code.
+
+## Navigation exclusive des pages, exception banque de performance (23 novembre 2026)
+
+- **Précision utilisateur** : **un tap simple sur GLO suffit à fermer le menu GLOBAL déjà ouvert** ; il n'est pas nécessaire de refaire un maintien de 1 s pour le quitter. **Ouvrir une autre page ferme GLOBAL automatiquement**.
+- **Règle générale de navigation** : **les pages/menus ne se superposent pas** ; une seule page principale à la fois. **Seule exception : la banque de performance réaffectable (ex-widget SIRÈNE)**, qui est un **overlay persistant** au-dessus des pages et ne se ferme que par **double-tap GLO**.
+- **Gestes GLO consolidés** : maintien ~1 s = ouvrir GLOBAL ; tap simple si GLOBAL affiché = fermer GLOBAL ; double-tap = basculer overlay de performance ; maintien ~5 s = PANIC ; tap simple hors GLOBAL = fonction contextuelle (p. ex. banque KIT/SNAP 8 si retenue).
+- **À résoudre côté gestion des gestes** : reconnaître le double-tap depuis GLOBAL sans provoquer la fermeture intermédiaire de GLOBAL sur le premier tap, et éviter les doubles actions. Respecter la priorité des combinaisons de touches existantes.
