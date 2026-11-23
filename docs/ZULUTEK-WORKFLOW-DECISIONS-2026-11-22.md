@@ -763,3 +763,8 @@
 - **Sémantique** : le chiffre immédiatement après B désigne **le board physique/logique parmi les quatre**, celui après le tiret désigne **l'itération de sauvegarde** de ce board. Compteur propre à chaque board (interprétation directe du format, à vérifier pour sa portée par KIT vs globale). Pas de nouvelle racine aléatoire pour une sauvegarde PEDALBOARD.
 - **Remplace** la convention illustrative précédente `ALBERT 3 · BOARD 1` etc. Les questions de propagation d'un renommage du KIT et de portée exacte des compteurs restent ouvertes.
 - **Statut** : spécification documentaire ; non implémenté/testé.
+
+## PEDALBOARD — préférence de libellé PB plutôt que B (23 novembre 2026)
+
+- L'utilisateur hésite entre suffixes courts **B1** et **PB1** pour identifier les quatre pedalboards, et souhaite éviter d'écrire le mot entier BOARD. **Proposition assistant privilégiée : `PB1` à `PB4`** (PB = PEDALBOARD, moins ambigu avec BASSE). Exemples : `ALBERT 3 PB1-1`, `ALBERT 3 PB1-2`, `ALBERT 3 PB2-1`.
+- Le tiret avant le numéro d'itération est maintenu. Cette proposition de libellé **PB** attend confirmation explicite si nécessaire ; elle remplace l'ancienne recommandation de nommage `B1` à titre de préférence, pas encore de modification du code.
