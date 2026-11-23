@@ -813,3 +813,23 @@
 - **VOICE SELECT** : aucune animation réactive aux frappes ; comportement normal de SHIFT. Le **double-tap SHIFT** reste le geste de bascule persistant entre modes.
 - **Technique privilégiée** : déclencher le feedback à partir des événements pads, sans analyse audio coûteuse. **Réserve matérielle** : vérifier si la LED SHIFT FM-1 supporte la variation d'intensité ; sinon prévoir une variante binaire clairement identifiable, et conserver l'animation douce sur l'APK. Les temps/intensités exacts restent à calibrer.
 - Cette décision **supplante** les propositions antérieures de clignotement continu/double flash. **Statut : conception validée, non implémentée/compilée/testée.**
+
+## Audit d'assemblage DRUMS — contrôle documentaire/code ciblé (23 novembre 2026)
+
+**Portée** : lecture du moteur APK `app-zulutek/src/main/cpp/dsp/drum_engine.{c,h}` et de `docs/ZULUTEK-DRUMS.md`, `docs/ZULUTEK-LOOP.md`, journal ; **pas de compilation, pas de test audio, pas de flash FM-1**. Le document `ZULUTEK-DRUMS.md` décrit aussi un moteur distinct `app-zulutek-drums` et des patches FM-1 ; ne pas attribuer leurs fonctionnalités au moteur APK principal sans vérification.
+
+**Pièces présentes dans le moteur APK principal** : 8 slots pads et matrice 8×16 ON/OFF, horloge BPM/swing, triggers manuels, choke 0..6 (6 groupes), mode leader/mutuel, transport run, polyphonie 6 normale/5 ECO avec choke avant vol de voix, génération de 8 timbres fixes (dont CONGA), niveau pad, rendu mono.
+
+**Écarts bloquants face à la conception la plus récente** :
+- `drum_hit` utilise `v->kind = pad` et `switch(pad)` : type sonore **figé au pad** ; impossible actuellement de réaffecter librement un type ou d'en dupliquer plusieurs. Catalogue CONGA obsolète ; FM/ELIXIR non intégrés dans ce moteur.
+- `pat[8][16]` est un booléen : pas de structure par pas pour **ONE SHOT/GATE 0..100, vélocité, P-LOCK LO-FI, paramètres de timbre/FX**, ni séquenceur DRUMS de 64 slots intégré dans ce fichier.
+- `oneshot` actuel = **arrêt global du séquenceur à la fin du pattern**, à ne pas confondre avec ONE SHOT/GATE **par pas**. Le nom doit être clarifié/migré.
+- Le `clock()` déclenche les pas **après** la première durée de 16e ; `drum_init` initialise `step=0` mais ne déclenche pas le pas 0 au démarrage. La spec du module DRUMS distinct dit explicitement « step 0 dès le départ ». **Divergence à corriger/tester** (attention au premier cycle et aux resets).
+- Le moteur APK principal `drum_render` est **mono**, sans bus delay/reverb/SMASH ni envois par piste dans ce fichier ; ces fonctions sont documentées pour le module DRUMS distinct. Vérifier l'intégration réelle des FX dans la chaîne principale avant de les déclarer disponibles.
+- Les comportements **double-tap SHIFT FINGER DRUMMING/VOICE SELECT, témoin SHIFT réactif aux frappes, SOLO/MUTE à mémoire**, édition longue EDIT, chargement/sauvegarde/copie patterns, noms et banques sont des **décisions d'UI/workflow** non prouvées par ce moteur DSP ; audit UI/firmware à mener.
+- `drum_engine.h` contient des commentaires périmés (« ECO 8 -> 5 » alors que le C applique 6 -> 5) ; risque de confusion documentaire.
+- `docs/ZULUTEK-DRUMS.md` section 5d évoque un FM-1 à **6 pads** et un ancien catalogue fixe ; décision récente prioritaire : **8 touches physiques OP1–OP6/PIT/GLO**, avec budget DSP **FM-1 4/3 voix simultanées**. Réconcilier clairement nombre de pads et polyphonie.
+
+**Conflits d'interaction encore ouverts** : SHIFT+POLY banque suivante vs SAVE (SAVE est choix le plus récent), MONO/POLY pour SOLO/MUTE vs CHOKE, SHIFT+touches de pas vs double-tap SHIFT, GLO pad vs GLOBAL, confirmation YES/NO, comportement slots vides/occupés, priorités des combinaisons, et timing de changement de pattern.
+
+**Ordre d'assemblage recommandé** : (1) figer matrice de contrôles/contextes et invariants voix/pad/pattern ; (2) unifier types de voix et modèle des steps/locks/64 slots ; (3) rendre transport, enregistrement et première note déterministes ; (4) intégrer FX/envois et budget CPU ; (5) tests host séquenceur/choke/polyphonie/mute/solo/save-load, puis APK et firmware FM-1. **Aucune de ces corrections n'est déclarée effectuée par cet audit.**
