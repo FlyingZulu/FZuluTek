@@ -794,3 +794,9 @@
 - **Décision explicite utilisateur** : sur **FM-1** et sur **APK ZuluTek**, le **bouton SHIFT clignote tant que FINGER DRUMMING est actif**. En **VOICE SELECT**, SHIFT **ne clignote pas**. Double-tap SHIFT bascule le mode et actualise immédiatement le témoin.
 - Le **clignotement est le signal retenu sur les deux plateformes**, sans nécessité de code couleur particulier. L'état exact de la LED hors clignotement (éteinte ou fixe), la fréquence et les priorités si SHIFT a d'autres indications restent à définir/tester selon le matériel.
 - **Statut** : décision de conception uniquement ; aucun code LED FM-1/APK modifié ni testé.
+
+## DRUMS — clignotement SHIFT dynamique en FINGER DRUMMING (23 novembre 2026)
+
+- **Précision utilisateur** : en mode FINGER DRUMMING, le clignotement du bouton SHIFT doit être **dynamique, vif, rythmé**, plutôt qu'un clignotement lent. Identique en intention sur FM-1 et APK ZuluTek ; en VOICE SELECT, aucun clignotement.
+- **Proposition assistant, non encore validée dans son détail** : motif de deux flashes rapides suivis d'une courte pause, répété en boucle. Durées exactes, éventuelle synchronisation au tempo, luminosité et limites matérielles restent à tester et décider. Ne pas figer ce motif comme décision utilisateur tant qu'il n'est pas confirmé.
+- **Statut** : intention visuelle documentée, non implémentée ni testée.
