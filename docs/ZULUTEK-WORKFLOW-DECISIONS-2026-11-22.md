@@ -1112,3 +1112,11 @@
 - **Règle de conception** : comme pour les DRUMS, la réduction de polyphonie en ECO doit être justifiée par des **mesures CPU/RAM/latence et des tests audio en charge réelle**. Tester LEAD 4 voix en ECO d'abord ; si la charge est acceptable, **garder 4 voix même en ECO**. Sinon évaluer 3 puis 2 voix et choisir selon l'impact mesuré. **Deux voix ECO sont un souhait minimum, non une garantie matérielle établie**.
 - **Référence DRUMS FM-1 en conception** : NORMAL 4 voix / ECO 3 voix, sans prétendre que c'est déjà implémenté. Les budgets de synthèse et de DRUMS doivent être testés ensemble avec LOOPER et FX.
 - **Statut** : correction de spécification, pas de code ni mesures effectués. Cette note remplace explicitement la règle antérieure LEAD ECO = 1 voix.
+
+## KIT — mémorisation et rappel du profil de performance ECO / NORMAL / LUXE (23 novembre 2026)
+
+- **Décision utilisateur** : le **KIT doit enregistrer le mode de performance dans lequel il a été conçu/sauvegardé** : **ECO, NORMAL ou LUXE** lorsqu'il est disponible. Au **chargement d'un KIT**, restaurer ce profil afin de retrouver les budgets de polyphonie et ressources attendus ; ne pas laisser le mode ECO du KIT précédent limiter silencieusement un KIT conçu en NORMAL avec LEAD poly4.
+- Le profil de performance est une **donnée persistée dans le KIT**, pas seulement un réglage global indépendant du contenu musical. Les profils doivent s'appliquer de manière cohérente à BASSE, LEAD, DRUMS et aux autres fonctions concernées. Les budgets précis restent soumis aux mesures de faisabilité, notamment LEAD ECO (2 à 4 voix souhaitées selon charge).
+- **Cas à spécifier avant implémentation** : priorité entre mode rappelé par KIT et éventuelle contrainte matérielle/système, repli explicite si LUXE indisponible (notamment FM-1), affichage bref du mode restauré, changements de KIT pendant lecture, et compatibilité/migration des anciens fichiers KIT sans champ de profil.
+- **Historique à vérifier** : `docs/ZULUTEK.md` présente ECO et LUXE comme options système, LUXE APK uniquement, et LUXE prioritaire sur ECO lorsqu'ils sont simultanément actifs. La nouvelle intention est **un profil de KIT explicite** ; ne pas supposer que sa persistance est déjà codée.
+- **Statut** : spécification validée en principe, aucune preuve d'implémentation ni de test.
