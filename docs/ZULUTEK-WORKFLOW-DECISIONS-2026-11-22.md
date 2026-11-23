@@ -750,3 +750,9 @@
 - **Uniformisation de la source** : même famille/générateur de noms aléatoires réutilisable, mais deux politiques distinctes : (1) KITS et patterns DRUMS = racine renouvelée toutes les 8 nouvelles sauvegardes, compteurs indépendants et reset de série au redémarrage ; (2) presets BASSE et LEAD = nom nouvellement généré à chaque nouvelle sauvegarde.
 - Prévoir vérification des collisions avec les noms déjà attribués, persistance et renommage manuel ultérieur. Le comportement sur **écrasement** d'un preset existant (conserver son nom ou en générer un autre) reste à décider ; ne pas présumer.
 - **Statut** : décision de conception uniquement ; aucun code modifié, compilé ou testé.
+
+## PEDALBOARD — nom dérivé du KIT associé (23 novembre 2026)
+
+- **Intention utilisateur** : lors de la sauvegarde d'un preset de la section PEDALBOARD, reprendre le **nom du KIT associé** avec une différenciation explicite de type `BOARD` pour ne pas confondre preset de pedalboard et KIT complet. Exemple de convention proposée : KIT `ALBERT 3` → `ALBERT 3 · BOARD` ; si quatre boards sont sauvegardés séparément, `ALBERT 3 · BOARD 1` à `ALBERT 3 · BOARD 4`.
+- Le PEDALBOARD **n'utilise pas de nouveau nom aléatoire** et ne fait pas avancer le compteur des noms KITS. Le suffixe exact, la granularité (un preset pour l'ensemble des quatre aux vs un par board), le comportement en cas de renommage ultérieur du KIT, et la gestion de presets PEDALBOARD indépendants réutilisables restent **à confirmer**.
+- **Statut** : principe de nommage en conception, aucune implémentation ni test.
