@@ -332,3 +332,10 @@
 
 - **Correction utilisateur** : le bouton/encodeur **PRESET est déjà quasi constamment dédié à ZULU** ; il ne doit donc **pas** être retenu comme commande maîtresse des MACROS. La suggestion antérieure PRESET=MASTER est écartée.
 - **Piste ergonomique non validée** : quatre commandes K1–K4 = quatre macros individuelles ; **ALGORITHM** pourrait piloter le MASTER des quatre macros ; **SELECT** pourrait servir à naviguer dans les destinations/règles en édition. À confirmer après vérification des autres fonctions de la page et de la grammaire matérielle.
+
+## Commande ZULU permanente — arbitrage matériel confirmé (23 novembre 2026)
+
+- **Décision utilisateur confirmée** : dans la plupart des modes/pages, l'encodeur physique historiquement nommé **PRESET** est **volontairement réaffecté à ZULU**. C'est le contrôle central permanent du morphing entre pôles ZU/LU, utilisable sans interruption lorsqu'on change de page ; les moteurs continuent à jouer et le morph reste actif.
+- Les **deux petites commandes OCT− et OCT+** sous ZULU complètent cet ensemble : accès direct aux pôles ZU/LU selon la grammaire déjà convenue (avec combinaisons prioritaires pour la transposition d'octave).
+- **Conséquence** : ne pas utiliser PRESET comme MASTER des quatre macros ; le MASTER MACROS doit être porté par une autre commande ou interaction. La piste ALGORITHM reste à vérifier, non décidée.
+- **Intention de design** : préserver cette triade physique ZULU + OCT−/OCT+ comme pièce maîtresse de la performance, indépendamment des pages et des moteurs.
