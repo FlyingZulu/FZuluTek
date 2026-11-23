@@ -678,3 +678,11 @@
 - **Conflit documentaire à résoudre avant implémentation** : `docs/ZULUTEK-LOOP.md`, section « Choke des séquenceurs (DRUMS + LOOP) », affecte déjà **MONO** à la fenêtre de groupes CHOKE et **POLY + pad** à la désignation de leader. Définir des contextes/combinaisons distincts pour conserver les fonctions CHOKE sans collision avec SOLO/MUTE.
 - **Proposition à confirmer** : états SOLO et MUTE indépendants ; l'effacement des solos ne doit pas effacer les mutes. Préciser gestuelle exacte (maintien, clic, fenêtre de sélection, temporisation du double-clic), priorité SOLO/MUTE et indication LED/UI.
 - **Statut** : décision de commandes de performance consignée ; conflits d'ergonomie non résolus, aucun code modifié, compilé ou testé.
+
+## DRUMS + LOOPER — double-clic MUTE à mémoire (23 novembre 2026)
+
+- **Clarification explicite utilisateur** : MUTE est un **toggle global à mémoire**, et non « clear all ». Exemple : POLY + OP2/OP3/OP5 pour sélectionner les trois mutes ; **double-clic POLY** suspend le mute de ces pistes (elles redeviennent audibles) **sans effacer leur sélection** ; double-clic POLY suivant réactive **exactement OP2/OP3/OP5**. Répétable pour la performance.
+- **Modèle d'état** : `mute_mask` persistant + `mute_enabled` global ; le double-clic inverse `mute_enabled`, jamais le masque. Sélection individuelle via POLY + partie bascule son appartenance au masque. À appliquer identiquement aux pistes DRUMS et LOOPER.
+- **Proposition de symétrie, pas encore confirmée** : double-clic MONO pourrait également suspendre/rétablir un `solo_mask` sans l'effacer ; la demande explicite de ce tour concerne POLY/MUTE, et remplace la formulation précédente « double-clic MONO efface les solos » uniquement si l'utilisateur confirme la symétrie.
+- **Conflit restant** : MONO/POLY servent au CHOKE dans `docs/ZULUTEK-LOOP.md`. Réserver les fonctions CHOKE à un contexte explicite est une piste, non encore validée.
+- **Statut** : comportement MUTE à mémoire confirmé en conception ; aucune modification DSP/UI ni test.
