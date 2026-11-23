@@ -497,3 +497,11 @@
 - **DRUMS : deux modes distincts : `ONE SHOT` et `GATE`**. `ONE SHOT` = un appui déclenche la lecture indépendamment du relâchement, jusqu'à sa fin ou un arrêt prévu ; `GATE` = activation dépendante du maintien, gate fermé au relâchement.
 - **Ne pas mélanger les deux modules** : le LOOPER n'a pas le couple ONE SHOT/GATE ; les DRUMS n'ont pas le couple LOOP/GATE selon cette décision. Les détails de retrigger, enveloppes/release, fin de sample, transport et éventuelles autres fonctions restent à inspecter, sans modifier cette nomenclature.
 - **Statut** : décision utilisateur confirmée. Adapter labels, documentation et comportements de code après inspection des implémentations existantes, sans renommage aveugle des véritables lecteurs one-shot ailleurs.
+
+## DRUMS — huit pads physiques et affectation libre (23 novembre 2026)
+
+- Les **huit pads physiques de finger drumming** sont **OP1, OP2, OP3, OP4, OP5, OP6, PIT et GLO** (correction de transcription orale « EHPAD » = « les pads »).
+- Ces touches servent **à jouer les voix** et, selon le contexte DRUMS, **à entrer dans les paramètres de la voix choisie**, selon la logique de sélection/édition des autres modules.
+- L'ordre de présentation historique KICK en premier, puis SNARE/HAT/etc. est **arbitraire**, **pas un câblage fixe**. L'utilisateur doit pouvoir **placer librement chaque voix sur le pad physique qu'il préfère** (ex. kick au milieu, charley à l'extrême gauche), pour sa technique personnelle de finger drumming.
+- **Exigence d'intégration** : séparer les identifiants stables des voix de la table de mapping physique `pad -> voix` ; faire passer le jeu direct et la sélection/édition par ce mapping ; préserver l'identité de la voix dans les événements du séquenceur, les patterns et le routage audio quand on change le mapping. Les modalités exactes de réaffectation et de sauvegarde du mapping restent à définir avec l'utilisateur ; ne pas inventer un raccourci.
+- **À vérifier dans le code** : l'APK et le firmware FM-1 peuvent actuellement employer des nombres de pads et des listes de voix différents ; cette demande décrit les huit touches physiques et ne prouve pas à elle seule que huit moteurs simultanés existent sur le FM-1.
