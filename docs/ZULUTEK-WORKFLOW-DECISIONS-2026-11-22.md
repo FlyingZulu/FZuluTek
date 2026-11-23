@@ -592,3 +592,11 @@
 - **LOOPER : LOOP / GATE**. LOOP répète la lecture ; GATE la conditionne au maintien de la commande, selon l'enveloppe/lecture propre au média.
 - **Ne pas confondre** ONE SHOT du comportement de déclenchement DRUMS et une ancienne option de transport de séquenceur « exécuter une fois le pattern ».
 - **Statut** : contrat de conception confirmé ; la parité du code des deux séquenceurs et les P-LOCK LO-FI ne sont **pas encore démontrés/implémentés** par cette décision.
+
+## DRUMS — mode ONE SHOT / GATE configurable indépendamment pour chaque pas (23 novembre 2026)
+
+- **Décision explicite utilisateur** : dans le séquenceur DRUMS, **chaque pas** doit pouvoir choisir **ONE SHOT ou GATE**, indépendamment des autres pas de la même piste/pad. Ce n'est **pas seulement un mode global de la piste**.
+- **ONE SHOT** : déclenche la percussion et laisse son enveloppe se dérouler, indépendamment de la fin du pas. **GATE** : maintient la voix pendant la durée de gate définie pour le pas, puis lance son relâchement éventuel.
+- **Proposition ergonomique, à valider** : mode par défaut au niveau de la piste, avec override par pas (hériter / ONE SHOT / GATE), afin de ne pas éditer tous les pas un à un.
+- Prévoir la définition précise de la **durée de gate par pas**, et son interaction avec les retriggers, CHOKE GROUPS et la limite de voix actives (FM-1 4/3, APK 6/5).
+- **Statut** : décision de conception enregistrée ; code non modifié, non compilé et non testé pour cette fonctionnalité.
