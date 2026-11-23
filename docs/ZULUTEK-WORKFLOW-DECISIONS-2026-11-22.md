@@ -997,3 +997,11 @@
 - Autres types prévus (CLAP, TOM, COWBELL, FM, ELIXIR) : couleurs exactes **proposées, non encore validées**. Éviter de figer une couleur par pad. Conserver une palette cohérente, accessible et contrastée.
 - **Éditeur de pas** : voix sélectionnée = LED/indicateur **fixe** de la couleur du type ; **SHIFT maintenu** = indicateur **clignotant** du bloc 16 pas affiché, avec **couleur distincte dédiée à la position** sur APK. Sur FM-1, distinction par fixe/clignotant, sans présumer de LED RGB.
 - **Statut** : correction de conception, aucun code modifié/testé.
+
+## Confirmation de sélection de voix — témoin couleur et popup 300 ms (23 novembre 2026)
+
+- **Décision explicite utilisateur** : sur le FM-1, les touches/pads physiques ne pouvant pas porter le code couleur des instruments, afficher **un petit témoin coloré à l'écran** correspondant au type d'instrument affecté à la voix sélectionnée (KICK orange, SNARE rose, HAT jaune ; autres types à préciser). Ce témoin sert de rappel visuel du type de voix courant. Ne pas présumer de LED RGB sur les touches physiques.
+- **À chaque sélection d'une voix** par OP1..OP6/PIT/GLO (notamment en éditeur de pas), afficher brièvement et **en grand** le **nom du type d'instrument** sélectionné, par ex. appui OP4 assigné TOM => popup « TOM ». **Durée demandée : 0,3 seconde (300 ms)**, puis disparition automatique et retour à l'écran normal. Pas de message persistant, pas de confirmation nécessaire.
+- **APK** : même feedback de sélection bref souhaitable, en complément des pads déjà colorés selon le type d'instrument ; préserver la règle couleur liée au type, pas au pad.
+- **Coexistence avec l'indication de bloc** : dans l'éditeur de pas, la sélection de voix conserve son témoin fixe, SHIFT maintenu affiche le bloc actif via pad clignotant ; la popup 300 ms ne doit pas perturber l'édition ni masquer durablement les pas. Prévoir rafraîchissement si nouvelle sélection avant expiration.
+- **Statut** : conception UX confirmée, non implémentée ni testée sur FM-1/APK. Vérifier les possibilités de couleur de l'écran FM-1 ; prévoir alternative lisible si écran monochrome.
