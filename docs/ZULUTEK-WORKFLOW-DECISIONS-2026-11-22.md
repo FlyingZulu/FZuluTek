@@ -244,3 +244,9 @@
 - **Emplacement de réglage** : **GLOBAL → MIDI ROUTING** (nom proposé) car ce sont des réglages de configuration relativement stables, **pas des commandes de performance à modifier pendant le jeu**. Ils s'appliquent à **tous les contrôleurs MIDI**, dont le Wavy MONKEY, et pas uniquement au MONKEY.
 - Le **canal contextuel/FOLLOW** évoqué pour MONKEY peut être configurable lui aussi ; en FUSION, préciser s'il suit la partie active sur APK ou FM-1. **À trancher** : valeurs par défaut exactes, possibilité de canal OFF/OMNI, routage multicanal, canaux partagés entre destinations (layer), conflit éventuel avec le canal 10 utilisé par l'effet DRM du MONKEY, persistance globale versus capture dans KIT.
 - **Supersession** : CH1→BASSE, CH2→LEAD, CH3→DRUMS, CH4→SIRÈNE sont des **exemples de mapping initial**, pas des affectations définitives.
+
+## GLOBAL → MIDI ROUTING — split clavier et plages de notes (23 novembre 2026)
+
+- **Nouvelle demande utilisateur** : pouvoir assigner **le même canal MIDI à plusieurs parties** (ex. BASSE et LEAD) et répartir les notes selon leur hauteur, avec un **point de split librement réglable** sur le clavier. Exemple : notes graves → BASSE ; notes aiguës → LEAD, tout en recevant sur le même canal MIDI.
+- **Proposition de conception** : compléter le routage GLOBAL par une **plage de notes MIDI min/max par partie** (ou un contrôle de split équivalent) ; les plages pourraient également se chevaucher pour créer des layers, **option proposée non encore confirmée par l'utilisateur**. Cette configuration s'applique aux claviers MIDI externes dont le Wavy MONKEY, sans dépendre du canal seul.
+- **À définir** : représentation du split sur le petit écran FM-1 et sur l'APK, capture du point de split par une note jouée, limites et transposition, gestion de Note Off si routage modifié pendant une note tenue, stockage GLOBAL versus KIT. **Pas implémenté ni validé matériellement.**
