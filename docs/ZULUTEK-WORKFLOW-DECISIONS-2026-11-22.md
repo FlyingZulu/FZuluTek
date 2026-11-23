@@ -856,3 +856,10 @@
 - **Transport global prioritaire** : STOP général suspend toutes les parties ; PLAY général permet à chaque partie de reprendre **seulement si son état PLAY local est actif**. Chaque partie conserve son état PLAY/STOP local indépendamment des autres ; condition effective par partie `global_play && local_play[part]`.
 - **Tempo global partagé**, mais lancement manuel de chaque séquenceur à l'instant choisi, y compris en contretemps ; pas de réalignement automatique obligatoire à la grille globale. Clarifier dans l'implémentation le comportement exact des phases lors des STOP/reprises et le geste d'accès au transport général depuis une page de partie.
 - **Statut** : conception validée, non implémentée/testée ici. Auditer également les transports existants BASSE/LEAD pour éviter le bug d'arrêt déjà signalé pour DRUMS.
+
+## BASSE / LEAD / DRUMS — HOME + PLAY/STOP = transport général (23 novembre 2026)
+
+- **Nouvelle proposition explicite utilisateur, acceptée comme geste cible** : sur les pages **BASSE, LEAD et DRUMS**, **PLAY/STOP seul** commande exclusivement le transport local du séquenceur de la partie affichée ; **HOME maintenu + PLAY/STOP** commande le **PLAY/STOP général** (toggle). L'utilisateur veut pouvoir arrêter ou relancer tout le monde sans quitter sa page de jeu.
+- **Priorité des combos** : HOME+PLAY/STOP ne doit ni changer la page via HOME ni actionner par erreur le transport local. Détection du maintien HOME avant l'action PLAY/STOP et consommation de l'événement HOME associé.
+- **Règle persistante** : `effective_play[part] = global_play && local_play[part]`. STOP général suspend tous les séquenceurs ; retour PLAY général relance seulement ceux dont le transport local est en PLAY. BPM commun, lancement local libre en contretemps.
+- **À auditer avant codage** : collisions éventuelles HOME+PLAY/STOP dans les mappings FM-1/APK, sémantique des phases à la reprise, accès global depuis d'autres pages, et comportement des queues sonores. **Statut : conception retenue, non implémentée/compilée/testée.**
