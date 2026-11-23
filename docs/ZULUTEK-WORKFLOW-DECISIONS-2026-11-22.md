@@ -431,3 +431,10 @@
 - **Rappel du raccourci documenté précédemment** : `REC + SEQ` ouvre MACROS (fonction de fermeture et bascule à vérifier dans code). `REC + OCT−` ouvre ASSIGN.
 - **Proposition non validée** : `REC + SEQ` pour ouvrir/fermer la page MACROS ; `SEQ + EDIT` pour passer de la page complète au widget et inversement, en gardant K1–K4=macros, SELECT=Dictateur, ALGORITHM=10 slots, PRESET=ZULU permanent.
 - **Avant validation** : vérifier la **proximité physique** réelle de SEQ et EDIT sur FM-1, les fonctions existantes de SEQ/EDIT et leurs combinaisons, la priorité des accords REC (fenêtre 20 ms), et définir l'état de fermeture du widget versus activité persistante du moteur. Ne pas annoncer le geste `SEQ + EDIT` comme décidé ou implémenté.
+
+## Décision et rectification — raccourcis MACROS / LOOP (23 novembre 2026)
+
+- **Décision utilisateur explicite** : `REC + SHIFT` **appelle le WIDGET MACROS**, et non la page MACROS complète. Fermeture par le même geste proposée, à confirmer.
+- **Rectification importante après relecture du début du présent journal** : décisions précédentes en lignes initiales : `REC + SEQ` = **LOOP** et `REC + EDIT` = **MACROS (page complète)**. Les réponses récentes de l'assistant affirmant `REC + SEQ` = MACROS étaient donc erronées.
+- **Conflit documentaire/firmware historique** : `docs/ZULUTEK.md` et `docs/ZULUTEK-SEQ-PLUS.md` mentionnent encore `REC + SEQ` = MACRO dans des implémentations/versions antérieures ; certains documents ont aussi `REC + EDIT` = LOOP ou FINE. **Ne pas présenter le mapping de conception comme déjà implémenté** ; auditer et migrer les dispatchs FM-1 et APK.
+- **Mapping de conception actuel** : `REC + EDIT` = page MACROS complète ; `REC + SHIFT` = widget MACROS ; `REC + SEQ` = LOOP. Vérifier existence et comportement réel de SHIFT sur le matériel FM-1 et la priorité de REC (fenêtre 20 ms).
