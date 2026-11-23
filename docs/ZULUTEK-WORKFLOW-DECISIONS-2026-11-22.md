@@ -424,3 +424,10 @@
 - **Proposition à valider** : flux principal `REC + OCT−` (ASSIGN) → sélectionner/toucher la **destination** → choisir une **source de modulation** (ARP STEP/PITCH/VELOCITY, BASSE ou LEAD) et éventuellement une **courbe de réponse** → régler plage, intensité, inversion, lissage. Flux inverse sur APK : `GLOBAL > CURVE LIBRARY` → choisir courbe → `Assigner` → toucher destination ; les deux ouvrent une fiche ASSIGN commune.
 - **Clarification conceptuelle** : une courbe de réponse seule ne génère pas nécessairement un mouvement autonome ; elle façonne une commande ou une source animée. Pour mouvement temporel autonome, prévoir source (LFO, ARP, séquenceur). Éviter un second moteur d'assignation.
 - **À vérifier** : capacité réelle de détection de dernière destination touchée sur FM-1 et dans l'APK, conflits avec boutons REC et widget MACROS, accès aux paramètres non associés à un potentiomètre physique, retour visuel, sauvegarde par KIT ou GLOBAL. Aucune implémentation confirmée.
+
+## Proposition — page MACROS complète et widget transportable (23 novembre 2026)
+
+- L'utilisateur souhaite que les sources assignables (ARP STEP/PITCH/VELOCITY, courbes) soient réunies sous **GLOBAL > SOURCES** et que **MACROS dispose d'une page d'édition complète** pouvant se transformer en **widget superposé transportable** sur les autres pages, avec des boutons physiquement proches.
+- **Rappel du raccourci documenté précédemment** : `REC + SEQ` ouvre MACROS (fonction de fermeture et bascule à vérifier dans code). `REC + OCT−` ouvre ASSIGN.
+- **Proposition non validée** : `REC + SEQ` pour ouvrir/fermer la page MACROS ; `SEQ + EDIT` pour passer de la page complète au widget et inversement, en gardant K1–K4=macros, SELECT=Dictateur, ALGORITHM=10 slots, PRESET=ZULU permanent.
+- **Avant validation** : vérifier la **proximité physique** réelle de SEQ et EDIT sur FM-1, les fonctions existantes de SEQ/EDIT et leurs combinaisons, la priorité des accords REC (fenêtre 20 ms), et définir l'état de fermeture du widget versus activité persistante du moteur. Ne pas annoncer le geste `SEQ + EDIT` comme décidé ou implémenté.
