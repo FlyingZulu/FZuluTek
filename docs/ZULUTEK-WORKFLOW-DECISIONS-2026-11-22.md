@@ -359,3 +359,9 @@
 - **Intention utilisateur** : les notations `REC + bouton` signifient **priorité fonctionnelle de REC**, sans exiger un timing parfait des doigts. Prévoir une petite tolérance sur les boutons à double rôle pour éviter que leur action simple ne parte si REC arrive quasiment en même temps.
 - **Proposition technique, non validée par mesure** : fenêtre initiale de l'ordre de **20–30 ms**, à calibrer en test matériel/APK ; si REC est déjà tenu, traiter immédiatement `REC → bouton`. Si le bouton arrive un peu avant REC, différer uniquement **son action simple** pendant la fenêtre, puis déclencher soit le combo, soit le simple. Une fois combo reconnu, inhiber le simple aussi au relâchement. Pas de déclenchement spéculatif puis annulation.
 - **Portée** : généraliser l'arbitrage aux boutons qui ont une interaction REC, **pas** à toutes les touches ni aux gestes musicaux à latence critique. Examiner le debounce matériel, le scan des touches, la latence et les interactions avec HOME/long/double appui ; l'utilisateur doit connaître la tolérance choisie.
+
+## Arbitrage utilisateur — tolérance REC fixée à 20 ms (23 novembre 2026)
+
+- **Décision** : fenêtre de reconnaissance des appuis quasi simultanés **20 ms maximum**, et non 20–30 ms. Le musicien privilégie la réactivité ; ne pas augmenter sans observation concrète lors des essais.
+- Si REC est déjà enfoncé : déclenchement immédiat de la combinaison, sans délai ajouté. Sinon, seuls les boutons à action simple et combinaison REC peuvent différer leur action simple de **20 ms au plus** pour détecter REC. Jamais de double déclenchement simple+combo, y compris au relâchement.
+- Valeur de design actée ; implémentation et validation sur matériel/APK restent à faire.
