@@ -562,3 +562,10 @@
 - Ne pas étiqueter arbitrairement FM ou ELIXIR comme coûteux : **classification fondée sur mesures/profiling** des implémentations FM-1 et APK, éventuellement selon la variante et les paramètres.
 - Distinguer **instances assignées** et **voix effectivement simultanées** : la polyphonie FM-1 reste 4 normal/3 ECO et APK 6 normal/5 ECO, mais un plafond en nombre de voix n'assure pas à lui seul le respect du budget DSP si les moteurs ont des coûts différents.
 - **Statut** : exigence d'interface/conception consignée, **pas de code UI ni de mesures DSP réalisés** dans cette étape.
+
+## DRUMS — avertissement DSP fugitif et non bloquant (23 novembre 2026)
+
+- **Confirmation utilisateur** : lorsqu'un instrument DRUMS classé gourmand est sélectionné ou multiplié, l'avertissement doit **apparaître brièvement puis disparaître automatiquement**. Aucune boîte de dialogue persistante, aucune confirmation ni interaction obligatoire.
+- **Liberté absolue d'affectation** : l'utilisateur peut délibérément assigner plusieurs moteurs gourmands, même au risque de craquements, dégradation audio ou surcharge. **Aucun blocage ni limitation du nombre d'instances en fonction de la catégorie DSP**. Les limites de polyphonie active FM-1 4/3 et APK 6/5 restent des règles distinctes.
+- Principe de robustesse : ne pas chercher volontairement à provoquer un crash logiciel ; privilégier un comportement sûr en cas de dépassement du budget DSP, sans restreindre le choix musical.
+- Les étiquettes de coût sont à établir par mesures, pas par supposition. **Statut : décision UX, non implémentée ni testée.**
