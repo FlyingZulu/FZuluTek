@@ -833,3 +833,10 @@
 **Conflits d'interaction encore ouverts** : SHIFT+POLY banque suivante vs SAVE (SAVE est choix le plus récent), MONO/POLY pour SOLO/MUTE vs CHOKE, SHIFT+touches de pas vs double-tap SHIFT, GLO pad vs GLOBAL, confirmation YES/NO, comportement slots vides/occupés, priorités des combinaisons, et timing de changement de pattern.
 
 **Ordre d'assemblage recommandé** : (1) figer matrice de contrôles/contextes et invariants voix/pad/pattern ; (2) unifier types de voix et modèle des steps/locks/64 slots ; (3) rendre transport, enregistrement et première note déterministes ; (4) intégrer FX/envois et budget CPU ; (5) tests host séquenceur/choke/polyphonie/mute/solo/save-load, puis APK et firmware FM-1. **Aucune de ces corrections n'est déclarée effectuée par cet audit.**
+
+## DRUMS — mode de déclenchement propre à chaque pad FINGER DRUMMING (23 novembre 2026)
+
+- **Nouvelle exigence utilisateur** : indépendamment du ONE SHOT/GATE **par pas du séquenceur** (GATE 0–100), chaque pad physique en **FINGER DRUMMING** doit avoir son **propre mode ONE SHOT ou GATE**. ONE SHOT : la frappe lance le son jusqu'à la fin de son enveloppe ; GATE : le son suit le maintien et le relâchement du pad (comportement d'enveloppe à préciser).
+- **Geste proposé par l'utilisateur, techniquement plausible, à confirmer** : maintenir le pad OP1–OP6/PIT/GLO et tourner l'encodeur **SELECT** à gauche/droite pour changer ONE SHOT ↔ GATE ; afficher le mode du pad à l'écran. L'encodeur PRESET reste réservé au morph ZULU.
+- **Points d'intégration** : en FINGER DRUMMING, l'appui initial peut déclencher un son avant le réglage ; éviter retrigger accidentel et distinguer rotation SELECT+pad des commandes SOLO/MUTE, de la sélection de voix et du mode VOICE SELECT. Prévoir gestion réelle des événements pad-down/pad-up et enveloppe de release pour GATE ; le moteur APK principal actuel ne gère que `drum_hit` (pas de `pad_up`/gate release).
+- **Statut** : intention de conception + geste proposé, non implémentés/testés ; ne pas confondre avec le `oneshot` actuel du moteur qui arrête globalement la lecture après un cycle.
