@@ -663,3 +663,9 @@
 - Les appellations STUDIO / PUNCH / DIRTY deviennent des **repères de zones sur une courbe continue**, **pas trois presets à sélectionner**. Le contrôle pourrait être nommé MASTER CHARACTER, course conceptuelle 0..100 ; valeur et courbes exactes à valider.
 - **Objectif UX et audio** : transitions progressives sans saut audible aux frontières, dosages internes évoluant de façon coordonnée, maintien d'une sortie maîtrisée et compensation éventuelle du gain pour ne pas confondre caractère et volume. Les frontières de zones affichées dans les maquettes sont purement illustratives.
 - **Statut** : décision de conception mise à jour ; aucun DSP modifié, compilé ou testé.
+
+## Principe de compromis DSP — priorité musicale (23 novembre 2026)
+
+- **Principe utilisateur** : lorsque des compromis sont nécessaires, choisir les **plus heureux musicalement** : qualité et caractère sonore, plaisir de jeu, fluidité des contrôles, tout en préservant la stabilité matérielle et logicielle.
+- Pour le MASTER continu : privilégier une courbe de contrôle **perceptuellement agréable** plutôt qu'une interpolation mathématique arbitraire ; minimiser les algorithmes redondants, les discontinuités audibles et le coût DSP, particulièrement sur FM-1.
+- Ne pas confondre cette préférence avec une validation technique : les compromis concrets devront être tranchés à l'écoute et par mesures CPU/latence/crêtes sur chaque plateforme.
