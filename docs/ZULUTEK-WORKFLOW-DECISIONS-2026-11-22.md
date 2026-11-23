@@ -541,3 +541,9 @@
 - Le mode ECO réduit uniquement le plafond des voix actives, pas les pistes, patterns, types de percussion ni les affectations multiples d'un même type.
 - **Code réellement modifié dans l'APK** : `app-zulutek/src/main/cpp/dsp/drum_engine.c`, commit `2a55530fd3e4bfc53f520d48d9b41ad05542d6c0` : plafond 6 normal / 5 ECO, CHOKE appliqué avant le comptage, redéclenchement d'un pad déjà actif sans consommer une nouvelle voix, vol de la voix la plus ancienne en dernier recours.
 - **FM-1 : cible 4/3 consignée mais code firmware non modifié dans ce commit** ; retrouver le code firmware correspondant et valider les limites sur la cible. **Aucun build ni test audio effectué** pour l'APK à ce stade.
+
+## DRUMS — retrait de CONGA du catalogue cible (23 novembre 2026)
+
+- **Décision utilisateur** : retirer **CONGA** des types de percussion proposés dans le futur catalogue DRUMS. Préférer l'usage de plusieurs instances de **KICK** sur des pads indépendants plutôt que de réserver une place à CONGA.
+- Les huit pads/pistes demeurent disponibles ; supprimer un type sonore **ne supprime pas un pad**. Un même type (KICK, SNARE, HAT...) peut être affecté à plusieurs pistes avec paramètres et patterns distincts.
+- **Statut** : décision de catalogue enregistrée ; le code APK contient encore `DR_CONGA` et n'a pas été modifié dans cette étape. Ne pas supprimer immédiatement l'enum sans traiter les données/presets et la nouvelle table d'affectation libre.
