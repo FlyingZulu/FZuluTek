@@ -710,3 +710,13 @@
 - **Suggestion assistant à confirmer** : chargement quantifié à la prochaine frontière de mesure pour éviter les coupures ; utilisateur n'a pas encore validé le timing de changement. Reste à préciser geste d'enregistrement/écrasement, contenu exact d'un pattern, persistance et comportement si slot vide.
 - **Conflits à vérifier** : SHIFT+POLY et SHIFT+touches avec autres fonctions contextuelles et SOLO/MUTE MONO/POLY ; priorité de SHIFT dans DRUMS.
 - **Statut** : conception proposée, aucun chargement de patterns implémenté/testé par ce changement documentaire. Ne pas dire que toute la boîte à rythme est fonctionnelle sur FM-1/APK.
+
+## DRUMS — sauvegarde, duplication et noms de session (23 novembre 2026)
+
+- **Nouvelle demande utilisateur** : 4 banques × 16 slots de patterns DRUMS. Sélectionner un slot vide, composer/éditer le pattern, puis sauvegarder via **SHIFT+POLY** avec confirmation à l'écran. **ATTENTION CONFLIT** : SHIFT+POLY était affecté à la banque suivante dans la décision précédente ; ne pas prétendre que les deux sont possibles. Le geste de navigation des banques doit être réattribué/confirmé.
+- **SHIFT+MONO** prépare la duplication du pattern en cours ; l'utilisateur peut choisir un slot de destination. Sans destination choisie, confirmation propose le slot libre suivant, en privilégiant celui juste à côté. Si destination occupée, demander une confirmation explicite avant écrasement (proposition de sécurité à valider).
+- **Dialogue YES/NO** de confirmation pour sauvegarde/copie. Tourner SELECT permet de sélectionner NO pour annuler ; **geste exact de validation non arrêté**. Ne pas enregistrer en cas de refus.
+- **Nom automatique par session d'allumage** : chaque démarrage FM-1 ou APK ouvre une nouvelle session avec un nom aléatoire unique ou suffisamment distinct. Les patterns enregistrés durant cette session reçoivent le même nom-racine et un suffixe incrémental (ex. ZEPHYR, ZEPHYR-02, ZEPHYR-03) ; après extinction/redémarrage, nouvelle racine et compteur. Les noms des patterns précédents persistent, sans date affichée. Éviter les collisions de noms entre sessions.
+- **Renommage manuel ultérieur** des patterns depuis **GLOBAL** ; fenêtre et parcours exacts à concevoir. Le générateur de noms existant côté presets/KITS est une piste de réemploi, pas une intégration vérifiée pour les patterns DRUMS.
+- **À définir** : politique de sauvegarde en slot vide vs slot déjà occupé, persistance FM-1/APK, copie des paramètres/locks, interaction avec chargement de pattern, comportement quantifié ou immédiat, et priorité des commandes SHIFT dans les contextes de séquenceur.
+- **Statut** : spécification de conception et conflits identifiés ; aucune implémentation ni validation matérielle affirmée.
