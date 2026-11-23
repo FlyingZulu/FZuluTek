@@ -1054,3 +1054,11 @@
 - **Souhait fort** : **réutiliser/généraliser la navigation conjointe SELECT + ALGORITHM**, jugée rapide, élégante et agréable, dans les pages synthés et effets pour parcourir les banques de quatre paramètres. Idée d'une navigation **à deux dimensions (horizontale et verticale)**, l'une parcourant les banques, l'autre les familles/sections, en reprenant le principe précédemment discuté ; **affectation exacte des axes et du geste encore à vérifier**, ne pas inventer de mapping définitif.
 - **Contrainte ergonomique** : les mêmes repères K1–K4 et gestes de navigation doivent se retrouver sur les pages où c'est pertinent ; les quatre paramètres de premier accès sont des **commandes de proximité/live**, pas un menu d'édition approfondie. Préserver les attributions existantes de SELECT, ALGORITHM et SHIFT selon le contexte et résoudre les collisions avant de coder.
 - **Statut** : orientation UX et proposition de paramètres enregistrées ; ni mapping final validé, ni implémentation/test.
+
+## Ajustement proposé : TUNE sur K1 de la deuxième banque synthé (23 novembre 2026)
+
+- **Correction utilisateur** : la première liste FILTER / RESONANCE / TUNE / DECAY sur K1–K4 était **un exemple de réflexion**, **pas un mapping arrêté**. Ne pas la traiter comme validée.
+- **Nouvelle hypothèse** : déplacer **TUNE sur K1 de la deuxième page/banque de réglages** BASSE/LEAD, afin de réserver la première banque aux quatre contrôles les plus utiles en jeu direct. Le choix exact reste à éprouver musicalement ; l'utilisateur explore encore les placements.
+- **Illustration provisoire uniquement** : banque 1 FILTER, RESONANCE, DECAY, quatrième paramètre indéterminé ; banque 2 K1 TUNE, autres indéterminés. **Ne pas figer l'ordre ni les affectations non confirmées**.
+- **Raison ergonomique** : TUNE reste rapidement accessible par navigation de banque, et son emplacement K1 de la banque 2 constitue un repère spatial stable pour la mémoire musculaire.
+- **Statut** : proposition en discussion, non validée définitivement, non implémentée/testée.
