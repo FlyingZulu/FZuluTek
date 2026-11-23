@@ -919,3 +919,10 @@
 - **Geste retenu en conception** : en **mode sélection de voix / édition du séquenceur**, sélectionner la voix OP1..OP6/PIT/GLO, accéder au paramètre **LENGTH**, puis tourner l'encodeur **SELECT** pour régler sa longueur de 1 à 64 pas. Le chemin précis d'accès au paramètre LENGTH (page K1–K4, écran ou raccourci) reste à fixer pour éviter toute collision avec SELECT qui change de page de paramètres en édition de pas. Ne pas attribuer LENGTH à PRESET : PRESET reste le morph ZULU.
 - **Différencier** LENGTH (nombre de pas de la boucle propre à la voix), GATE 0–100 (durée d'une note/pas) et TM LEN du séquenceur avancé (fenêtre de transformation). Chaque voix conserve sa propre phase/longueur selon les règles de synchronisation à tester.
 - **Statut** : principe et molette SELECT validés en conception ; aucun code modifié/compilé/testé.
+
+## DRUMS — raccourci direct LENGTH par SHIFT + rotation SELECT (23 novembre 2026)
+
+- **Décision utilisateur confirmée** : en mode **VOICE SELECT**, sélectionner une voix DRUMS (OP1..OP6, PIT, GLO), puis **maintenir SHIFT et tourner l'encodeur SELECT** pour régler **directement la longueur de séquence de cette voix**, de **1 à 64 pas**. Pas de sous-menu LENGTH nécessaire ; afficher immédiatement la voix et sa longueur à l'écran (ex. `KICK — LENGTH 12/64`).
+- Chaque voix conserve sa longueur indépendante ; les autres voix ne sont pas modifiées. **PRESET reste dédié au morph ZULU**. Ce raccourci précise et remplace la proposition précédente d'ouvrir d'abord un paramètre LENGTH.
+- **Priorités d'événements à tester** : `SHIFT + rotation SELECT` règle LENGTH uniquement dans le contexte normal VOICE SELECT, mais **pas pendant l'éditeur CHOKE**, où SELECT doit choisir OFF/groupe 1..6 puis OUI/NON. Le maintien SHIFT seul continue d'afficher les slots de patterns sur les touches blanches ; le double-tap SHIFT ne doit pas être déclenché par le raccourci. En édition de pas, SELECT conserve sa navigation de pages sauf règle ultérieure.
+- **Statut** : geste ergonomique validé ; pas encore implémenté ni testé sur FM-1/APK.
