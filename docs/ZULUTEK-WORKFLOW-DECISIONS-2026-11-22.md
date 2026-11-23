@@ -736,3 +736,10 @@
 - **Portée** : règle de nommage indépendante de l'emplacement/bank de stockage ; la capacité KIT reste **8 banques × 16 = 128 slots**. Ne pas confondre avec les patterns DRUMS : leur règle précédente était une racine par session avec suffixes incrémentaux, sans limite de huit décidée.
 - Prévoir possibilité de **renommage manuel** ultérieur dans GLOBAL, selon le workflow à concevoir ; éviter collisions de noms entre groupes/sessions. Pour un écrasement de KIT existant, le maintien ou renouvellement du nom reste à spécifier, ne pas le présumer.
 - **Statut** : décision de conception, aucun code modifié/compilé/testé.
+
+## Uniformisation noms automatiques — patterns DRUMS comme KITS (23 novembre 2026)
+
+- **Décision explicite utilisateur** : appliquer **exactement la même règle de nommage automatique aux patterns DRUMS et aux KITS**. Cette décision **remplace** la règle précédente « une seule racine de nom pour tous les patterns de la session ».
+- Pour chaque catégorie (patterns DRUMS et KITS), à chaque démarrage/session d'allumage, générer une nouvelle racine aléatoire ; nommer les sauvegardes successives **NOM 1** à **NOM 8** ; à la neuvième sauvegarde, générer une **nouvelle racine** et recommencer à 1, et ainsi de suite. Compteurs de patterns et KITS indépendants, même mécanique. Préserver les noms enregistrés après extinction, éviter les collisions, renommage manuel futur dans GLOBAL.
+- Capacités inchangées : patterns DRUMS **4×16=64**, KITS **8×16=128**. Distinguer création/nouvelle sauvegarde et écrasement de slot existant (règle de renommage sur écrasement encore à définir).
+- **Statut** : décision documentaire, aucune implémentation/compilation/test FM-1 ou APK.
