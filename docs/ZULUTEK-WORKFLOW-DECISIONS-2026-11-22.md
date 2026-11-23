@@ -701,3 +701,12 @@
 - **Décision utilisateur** : raccourcir le maintien EDIT de **0,8 s à 0,6 s (600 ms)** pour accéder plus rapidement à l'édition des pas.
 - Concerne l'édition des pas DRUMS et LOOPER et le geste partagé sur la page ARP/ATEK303. EDIT court et la navigation K1–K4/SELECT ne changent pas.
 - **Statut** : seuil corrigé dans la documentation de conception ; handlers FM-1/APK non modifiés ni testés ici.
+
+## DRUMS — chargement direct des patterns par SHIFT (23 novembre 2026)
+
+- **Proposition utilisateur retenue comme cible de conception** : depuis DRUMS, **SHIFT maintenu + une des 16 touches de pas** = choisir/charger directement le pattern enregistré dans le slot correspondant de la banque affichée. **SHIFT + POLY** = banque suivante ; répéter pour défiler et boucler entre **4 banques × 16 slots = 64 patterns DRUMS**.
+- Le changement de banque ne doit pas, à lui seul, charger de pattern. Prévoir un repère clair de banque affichée, slot actif, slot vide/occupé.
+- **Bien distinguer** ces 64 emplacements de **patterns DRUMS** des **128 KITS (8×16)** déjà décidés. Le LOOPER est capturé dans les KITS selon la décision antérieure ; ne pas lui attribuer ces 64 patterns sans décision supplémentaire.
+- **Suggestion assistant à confirmer** : chargement quantifié à la prochaine frontière de mesure pour éviter les coupures ; utilisateur n'a pas encore validé le timing de changement. Reste à préciser geste d'enregistrement/écrasement, contenu exact d'un pattern, persistance et comportement si slot vide.
+- **Conflits à vérifier** : SHIFT+POLY et SHIFT+touches avec autres fonctions contextuelles et SOLO/MUTE MONO/POLY ; priorité de SHIFT dans DRUMS.
+- **Statut** : conception proposée, aucun chargement de patterns implémenté/testé par ce changement documentaire. Ne pas dire que toute la boîte à rythme est fonctionnelle sur FM-1/APK.
