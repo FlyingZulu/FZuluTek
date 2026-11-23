@@ -912,3 +912,10 @@
 - **Points de risque d'intégration prioritaires** : gestion d'événements SHIFT (maintien aperçu, SHIFT+pad CHOKE, SHIFT+touche blanche pattern, double-tap SHIFT FINGER/VOICE, validation SHIFT) ; distinction pad de voix/touche blanche ; cohérence phase de transport local et STOP global ; sécurité NOTE OFF du LOOPER ; clignotement et disponibilité des LED individuelles FM-1 ; sémantique LEADER par groupe, état sélectionné vs réellement joué, conflits de nomenclature `oneshot`.
 - **Ordre conseillé à la reprise** : (1) unifier matrice des gestes/états et nettoyer les documents historiques, (2) implémenter/tester transports et pas ONE SHOT/GATE, (3) raccorder patterns/LED/SOLO-MUTE/CHOKE et sauvegardes, (4) tests hôtes + APK + FM-1. Ensuite deuxième synthé par réutilisation, PEDALBOARD, TOOLS et LFO ; ne pas présumer de leur simplicité technique sans inspection.
 - **Statut** : audit ciblé et note de reprise, **aucune modification du DSP ni validation fonctionnelle**.
+
+## DRUMS — longueur indépendante de séquence par voix via SELECT (23 novembre 2026)
+
+- **Validation utilisateur** : chaque voix/pad DRUMS possède une **longueur de séquence indépendante de 1 à 64 pas**, permettant des polyrythmies. Cette intention figure déjà dans `docs/ZULUTEK-DRUMS.md` (fin de fichier), sans procédure de façade détaillée.
+- **Geste retenu en conception** : en **mode sélection de voix / édition du séquenceur**, sélectionner la voix OP1..OP6/PIT/GLO, accéder au paramètre **LENGTH**, puis tourner l'encodeur **SELECT** pour régler sa longueur de 1 à 64 pas. Le chemin précis d'accès au paramètre LENGTH (page K1–K4, écran ou raccourci) reste à fixer pour éviter toute collision avec SELECT qui change de page de paramètres en édition de pas. Ne pas attribuer LENGTH à PRESET : PRESET reste le morph ZULU.
+- **Différencier** LENGTH (nombre de pas de la boucle propre à la voix), GATE 0–100 (durée d'une note/pas) et TM LEN du séquenceur avancé (fenêtre de transformation). Chaque voix conserve sa propre phase/longueur selon les règles de synchronisation à tester.
+- **Statut** : principe et molette SELECT validés en conception ; aucun code modifié/compilé/testé.
