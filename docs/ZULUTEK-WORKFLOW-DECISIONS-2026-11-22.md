@@ -966,3 +966,12 @@
 - **SHIFT + blanche 15** conserve l'intention de réduction de longueur −16 ; **SHIFT + rotation SELECT** ajuste LENGTH précisément. Le sort des données hors longueur après réduction et le comportement des blocs partiels restent à définir. Plafond visé : 128 pas.
 - **Conflit existant toujours ouvert** : SHIFT+blanches 15/16 sont aussi des raccourcis de chargement des slots de patterns 15/16. Définir les contextes de priorité sans rendre ces slots inaccessibles. Le geste réel de navigation entre blocs de 16 pas n'est pas encore confirmé.
 - **Statut** : sélection de voix et intention de duplication confirmées, modalité COPIER/VIDE en cours de discussion ; pas de code ni de test.
+
+## Témoin distinct VOIX vs BLOC dans l'éditeur de pas — FM-1 et APK (23 novembre 2026)
+
+- **Décision explicite utilisateur** : les huit pads OP1..OP6/PIT/GLO portent deux indications différentes selon SHIFT, **sans changer la sélection de voix**. En **édition des pas, SHIFT relâché**, la **voix/piste sélectionnée** est signalée par une **LED allumée fixe** sur son pad (ex. OP3 fixe = édition voix 3). L'appui sur un autre pad sélectionne effectivement une autre voix à éditer.
+- En **édition des pas, SHIFT maintenu**, on affiche **temporairement la position du bloc de 16 pas actuellement visible** : le pad correspondant **clignote** (OP1 = pas 1–16, OP2 = 17–32, OP3 = 33–48, OP4 = 49–64, OP5 = 65–80, OP6 = 81–96, PIT = 97–112, GLO = 113–128). Relâcher SHIFT restaure le témoin **fixe** de la voix choisie. SHIFT ne change pas de voix et les pads ne naviguent pas entre les blocs.
+- **FM-1** : distinction impérative **fixe (voix)** / **clignotant (bloc)**, sur les LED physiques ; vérifier cadence et faisabilité matérielle.
+- **ZuluTek APK** : garder le **même comportement fixe/clignotant** pour parité FM-1, et ajouter **deux couleurs distinctes** pour voix et bloc. Cyan fixe vs orange clignotant est une **suggestion d'interface non encore figée**, pas une exigence utilisateur sur les teintes exactes.
+- Les raccourcis **SHIFT + blanche 15 = −16 pas**, **SHIFT + blanche 16 = +16 pas (avec duplication du bloc précédent ou bloc vide à préciser)**, **SHIFT + rotation SELECT = longueur fine** restent distincts de ces indicateurs.
+- **Statut** : spécification UX confirmée, non implémentée, non testée FM-1/APK.
