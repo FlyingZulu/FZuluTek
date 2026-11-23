@@ -800,3 +800,9 @@
 - **Précision utilisateur** : en mode FINGER DRUMMING, le clignotement du bouton SHIFT doit être **dynamique, vif, rythmé**, plutôt qu'un clignotement lent. Identique en intention sur FM-1 et APK ZuluTek ; en VOICE SELECT, aucun clignotement.
 - **Proposition assistant, non encore validée dans son détail** : motif de deux flashes rapides suivis d'une courte pause, répété en boucle. Durées exactes, éventuelle synchronisation au tempo, luminosité et limites matérielles restent à tester et décider. Ne pas figer ce motif comme décision utilisateur tant qu'il n'est pas confirmé.
 - **Statut** : intention visuelle documentée, non implémentée ni testée.
+
+## DRUMS — nouvelle proposition de témoin SHIFT réactif aux pads (23 novembre 2026)
+
+- **Nouvelle idée utilisateur, à confirmer comme choix final** : remplacer le clignotement périodique de SHIFT en FINGER DRUMMING par un **témoin lumineux réactif au jeu** : luminosité faible au repos, éclat renforcé lors de chaque frappe sur un pad, puis retour rapide vers le niveau de repos. En VOICE SELECT, pas d'animation de finger drumming.
+- **Recommandation technique** : piloter le témoin par les **événements de déclenchement des pads**, plutôt que par une analyse du flux audio ; coût CPU minime et réactivité directe. Vérifier la capacité matérielle de variation de luminosité de la LED SHIFT du FM-1. Si LED binaire seulement, envisager un flash ON/OFF sur FM-1 et une décroissance douce sur APK.
+- Le motif de **double flash périodique** précédemment proposé n'est **pas validé** et pourrait être remplacé par ce comportement événementiel. Ne pas présenter cette idée comme codée/testée.
