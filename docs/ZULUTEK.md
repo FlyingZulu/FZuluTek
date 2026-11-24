@@ -318,3 +318,7 @@ préservées par snapshots/kits/undo. **Migration** : magic preset `ZTP1` → `Z
 `strip_par` au load/import (VOICE := ex-LEAD, DRUMS/LOOP décalés, SIREN neuf vol=`siren_lvl`) ;
 `ZTEK_NSTRIP` reste 4 donc la baie (52 ports) ne change pas. ZTF inchangé (aucun param
 renuméroté).
+
+## Recette de l’APK Android
+
+Voir la [session musicale complète](RECETTE-APK.md) pour l’installation, le jeu tactile, les transports, les enregistrements et les liaisons. Sur la page LOOP, **GLO maintenu + pad** démarre le resampling dans ce slot. **REC** ou un nouvel accord **GLO + pad** arrête la capture.

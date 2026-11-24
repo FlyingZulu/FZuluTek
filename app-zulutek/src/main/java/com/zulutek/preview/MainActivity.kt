@@ -326,7 +326,7 @@ class MainActivity : Activity(), SurfaceListener {
         super.onCreate(savedInstanceState)
         /* jeu tactile (Flying Zulu) : pas de vue verticale, on verrouille paysage, facade FM-1 */
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        ZtekAudio.start()
+        val audioStarted = ZtekAudio.start()
         ZtekAudio.initPrefs(this)
         // OPTIONS persistées (OBJ_OPTIONS côté FM-1) : ECO uniquement
         // (CHOKE LDR est supprimé d'OPTIONS : remplacé par le LDR par tranche, page MIX)
@@ -353,6 +353,7 @@ class MainActivity : Activity(), SurfaceListener {
         ZtekAudio.setParam(ZtekAudio.AT_DECAY, st.encVals[6])
 
         lcd = LcdView(this, st)
+        if (!audioStarted) android.widget.Toast.makeText(this, "Sortie audio indisponible", android.widget.Toast.LENGTH_LONG).show()
 
         // badge de build (anti-confusion d'artefacts) : SHA court du commit injecté par la CI via -PBUILD_SHA
         st.buildTag = try { getString(R.string.build_sha).take(8) } catch (e: Exception) { "" }
@@ -382,10 +383,16 @@ class MainActivity : Activity(), SurfaceListener {
          * tempo ; on reçoit ses CC (74..80 voix/moteur, 20..37 FX, 102..115 boutons). */
         ZuluLink.onMessage = { msg -> handler.post { onZuluMessage(msg) } }
         ZuluLink.onPeersChanged = { handler.post { lcd.invalidate() } }
-        ZuluLink.start("zulu-apk", ZuluLink.Role.CONSOLE)
+        try {
+            ZuluLink.start("zulu-apk", ZuluLink.Role.CONSOLE)
+        } catch (_: java.net.SocketException) {
+            android.widget.Toast.makeText(this, "ZuluLink indisponible", android.widget.Toast.LENGTH_LONG).show()
+        }
 
         /* liaison ZTF avec le FM-1 (page LINK 17) : callbacks worker -> UI via handler */
         Fm1Usb.init(this)
+        // Lancer les requêtes seulement après permission USB et claimInterface réussis.
+        Fm1Usb.onConnected = { Fm1Usb.ping(); Fm1Usb.refreshFiles() }
         Fm1Usb.onStatus = { s -> handler.post { st.linkStatus = s; lcd.invalidate() } }
         Fm1Usb.onProgress = { s -> handler.post { st.linkProg = s; lcd.invalidate() } }
         Fm1Usb.onFiles = { fs -> handler.post {
@@ -601,8 +608,6 @@ class MainActivity : Activity(), SurfaceListener {
     private fun linkScan() {
         st.linkStatus = "scan USB…"
         Fm1Usb.scan()
-        Fm1Usb.ping()
-        Fm1Usb.refreshFiles()
         linkWatchStart()
         linkRefreshLocal()
     }
@@ -750,8 +755,10 @@ class MainActivity : Activity(), SurfaceListener {
                             curEngine = (v * 4.999f).toInt().coerceIn(0, 4); ZtekAudio.setEngine(curEngine)
                             st.engine = (v * 4.999f).toInt().coerceIn(0, 4)
                         } else {
-                            ZtekAudio.setParam(msg.cc - 74, v)
-                            st.encVals[3 + (msg.cc - 74)] = v
+                            val param = msg.cc - 74
+                            ZtekAudio.setParam(param, v)
+                            if (st.page == 0 && param in ZtekAudio.AT_CUTOFF..ZtekAudio.AT_DECAY)
+                                st.encVals[2 + param] = v
                         }
                     }
                     msg.cc in 20..37 -> ZtekAudio.fxSet(msg.cc - 20, v)
@@ -779,7 +786,7 @@ class MainActivity : Activity(), SurfaceListener {
                 }
                 lcd.invalidate()
             }
-            "REC" -> when (st.page) { 1, in 6..18 -> { st.page = 0; lcd.invalidate() } else -> { /* long-REC ne fait plus redo : undo/redo = HOME+REC / HOME+GLO uniquement */ } }
+            "REC" -> when (st.page) { 1, in 6..18 -> { recCombo = true; st.page = 0; lcd.invalidate() } else -> { /* long-REC ne fait plus redo : undo/redo = HOME+REC / HOME+GLO uniquement */ } }
             "HOME" -> {   // long-HOME : page LINK (17) liaison ZTF avec le FM-1
                 st.page = if (st.page == 17) 0 else 17
                 if (st.page == 17) { setEncLabels(encLink); linkScan() }
@@ -831,9 +838,10 @@ class MainActivity : Activity(), SurfaceListener {
 
     // ---- encoders ----
     override fun onEncoderHold(i: Int) { if (i == 0) selHeld = true }
+    override fun onEncoderRelease(i: Int) { if (i == 0) selHeld = false }
     override fun onEncoderPress(i: Int) {
         if (i == 0) {   // appui SEL = page MIX (bible) ; REC+SEL = page SNAP (bible l.40) ; page PRESETS 10 : appui SEL = LOAD (confirme le choix)
-            if (recHeld) st.page = if (st.page == 2) 0 else 2
+            if (recHeld) { recCombo = true; st.page = if (st.page == 2) 0 else 2 }
             else if (st.page == 10 && (st.psSaveArm || st.psRename)) {   // mode save/renommage PRESETS : appui SEL = char suivante / valide le nom
                 selHeld = false
                 if (st.psNameEdit) {
@@ -1279,6 +1287,8 @@ class MainActivity : Activity(), SurfaceListener {
     private val KEY_SHIFT = SurfaceView.BLACK_NOTES[10]    // dernière noire = Shift
     // états de modifieurs pour la page MIX (11) et la sirène
     private var recHeld = false
+    private var recCombo = false
+    private var resampleHeld = false
     private var homeDownAt = 0L
     private var homeHeld = false
     private var homeCombo = false
@@ -1455,10 +1465,35 @@ class MainActivity : Activity(), SurfaceListener {
         st.chokeWin = false   // la manip est terminée
     }
 
+    override fun onButtonCancel(i: Int) {
+        when (SurfaceView.BTN_LABELS[i]) {
+            "REC" -> recCombo = true
+            "HOME" -> homeCombo = true
+        }
+        onButton(i, false)
+    }
+
     override fun onButton(i: Int, down: Boolean) {
         val label = SurfaceView.BTN_LABELS[i]
+        if (label == "GLO") resampleHeld = down && st.page == 1 && !recHeld
+        if (label == "REC") {
+            if (down) {
+                recHeld = true
+                recCombo = homeHeld
+                if (homeHeld) handleButton(i, true)
+            } else {
+                val tap = recHeld && !recCombo
+                recHeld = false
+                if (tap) handleButton(i, true)
+            }
+            return
+        }
+        handleButton(i, down)
+    }
+
+    private fun handleButton(i: Int, down: Boolean) {
+        val label = SurfaceView.BTN_LABELS[i]
         if (!down) {
-            if (label == "REC") recHeld = false
             if (label == "GLO") gloDown = false
             if (label == "HOME" && homeDownAt > 0) {
                 if (!homeCombo && System.currentTimeMillis() - homeDownAt < 600) cyclePart()
@@ -1467,7 +1502,6 @@ class MainActivity : Activity(), SurfaceListener {
             }
             return
         }
-        if (label == "REC") recHeld = true
         if (down && label == "HOME") {
             if (shiftHeld) { cycleWorkPage(); return }
             homeDownAt = System.currentTimeMillis()
@@ -1479,6 +1513,7 @@ class MainActivity : Activity(), SurfaceListener {
         }
         // REC+FX (ancien process PoW!, slot 5 récupéré) = page SIREN
         if (label == "FX" && recHeld) {
+            recCombo = true
             st.page = if (st.page == 5) 0 else 5
             if (st.page == 5) {
                 st.fxView = 0; st.fxSub = 0
@@ -1487,19 +1522,53 @@ class MainActivity : Activity(), SurfaceListener {
             }
             lcd.invalidate(); return
         }
-        if (down && recHeld) {   // entrées de pages (mode d'emploi) : REC+EDIT/SAVE/ARP/SEQ/LFO/ENV/OCT±, REC+PLAY = capture SNAP, REC+GLO = proc REC loop
+        if (recHeld) {   // entrées de pages (mode d'emploi) : REC+EDIT/SAVE/ARP/SEQ/LFO/ENV/OCT±, REC+PLAY = capture SNAP, REC+GLO = proc REC loop
             when (label) {
-                "EDIT" -> { st.page = if (st.page == 1) 0 else 1; lcd.invalidate(); return }     // page LOOP (bible REC+EDIT)
-                "SAVE" -> { st.page = if (st.page == 3) 0 else 3; lcd.invalidate(); return }     // page KIT (REC+SAVE)
-                "ARP" -> { st.page = if (st.page == 4) 0 else 4; lcd.invalidate(); return }      // page XY (REC+ARP)
-                "SEQ" -> { st.page = if (st.page == 14) 0 else 14; syncMacroSel(); lcd.invalidate(); return }  // page MACRO
-                "LFO" -> { st.page = if (st.page == 7) 0 else 7; setEncLabels(arrayOf("SUB", "SYN", "TRG", "K1", "K2", "K3", "K4")); lcd.invalidate(); return }
-                "ENV" -> { st.page = if (st.page == 8) 0 else 8; setEncLabels(arrayOf("SUB", "LOOP", "", "K1", "K2", "K3", "K4")); lcd.invalidate(); return }
-                "OCT-" -> { st.page = if (st.page == 9) 0 else 9; setEncLabels(arrayOf("DST", "SRC", "LUD", "DPT", "", "", "")); lcd.invalidate(); return }   // ASSIGN
-                "OCT+" -> { st.page = if (st.page == 10) 0 else 10; setEncLabels(arrayOf("SLT", "PRT", "", "", "SV", "CLR", "")); lcd.invalidate(); return } // PRESETS (LOAD = appui SEL, pas K1)
-                "PLAY" -> { snapCaptureArm(); return }                                         // capture SNAP (REC+PLAY)
-                "GLO" -> { loopRecProc(); return }                                              // procédure REC loop
+                "EDIT" -> { recCombo = true; st.page = if (st.page == 1) 0 else 1; lcd.invalidate(); return }     // page LOOP (bible REC+EDIT)
+                "SAVE" -> { recCombo = true; st.page = if (st.page == 3) 0 else 3; lcd.invalidate(); return }     // page KIT (REC+SAVE)
+                "ARP" -> { recCombo = true; st.page = if (st.page == 4) 0 else 4; lcd.invalidate(); return }      // page XY (REC+ARP)
+                "SEQ" -> { recCombo = true; st.page = if (st.page == 14) 0 else 14; syncMacroSel(); lcd.invalidate(); return }  // page MACRO
+                "LFO" -> { recCombo = true; st.page = if (st.page == 7) 0 else 7; setEncLabels(arrayOf("SUB", "SYN", "TRG", "K1", "K2", "K3", "K4")); lcd.invalidate(); return }
+                "ENV" -> { recCombo = true; st.page = if (st.page == 8) 0 else 8; setEncLabels(arrayOf("SUB", "LOOP", "", "K1", "K2", "K3", "K4")); lcd.invalidate(); return }
+                "OCT-" -> { recCombo = true; st.page = if (st.page == 9) 0 else 9; setEncLabels(arrayOf("DST", "SRC", "LUD", "DPT", "", "", "")); lcd.invalidate(); return }   // ASSIGN
+                "OCT+" -> { recCombo = true; st.page = if (st.page == 10) 0 else 10; setEncLabels(arrayOf("SLT", "PRT", "", "", "SV", "CLR", "")); lcd.invalidate(); return } // PRESETS (LOAD = appui SEL, pas K1)
+                "PLAY" -> { recCombo = true; snapCaptureArm(); return }                                         // capture SNAP (REC+PLAY)
+                "GLO" -> { recCombo = true; loopRecProc(); return }                                              // procédure REC loop
             }
+        }
+        if (down && label == "SEQ" && shiftHeld && !st.smpPage) {   // SHIFT+SEQ : one-shot (liaison APK/FM-1, patch 0023)
+            if (st.page == 15) {                                    // page DRUMS : le seq s'arrete au dernier step releve
+                val on = if (ZtekAudio.drumGetOneshot() != 0) 0 else 1
+                ZtekAudio.drumSetOneshot(on)
+                hint(if (on != 0) "DRUMS ONE-SHOT ON" else "DRUMS ONE-SHOT OFF")
+                lcd.invalidate(); return
+            }
+            if (st.page == 1) {                                     // page LOOP : les slots s'arretent au wrap
+                val on = if (ZtekAudio.loopGetOneshot() != 0) 0 else 1
+                ZtekAudio.loopSetOneshot(on)
+                hint(if (on != 0) "LOOP ONE-SHOT ON" else "LOOP ONE-SHOT OFF")
+                lcd.invalidate(); return
+            }
+        }
+        if (down && label == "PLAY" && shiftHeld && !st.smpPage &&
+            (st.page == 6 || st.page == 15 || st.page == 1)) {   // SHIFT+PLAY : play/stop du sequenceur, UNIQUEMENT sur sa page (patch APK 0023)
+            if (st.page == 15) {                                    // page DRUMS : transport de la boite a rythme
+                drumTrUi = !drumTrUi
+                ZtekAudio.drumTr(if (drumTrUi) 1 else 0)
+                hint(if (drumTrUi) "DRUMS SEQ ON" else "DRUMS SEQ OFF")
+                lcd.invalidate(); return
+            }
+            if (st.page == 1) {                                     // page LOOP : transport du looper
+                st.playing = !st.playing
+                ZtekAudio.loopPlay(if (st.playing) 1 else 0)
+                if (st.playing) ZuluLink.sendStart("TOUS") else ZuluLink.sendStop("TOUS")
+                hint(if (st.playing) "LOOP PLAY" else "LOOP STOP")
+                lcd.invalidate(); return
+            }
+            st.seqOn = !st.seqOn                                    // page SEQ synth (6) : idem bouton SEQ
+            ZtekAudio.acidPlay(if (st.seqOn) 1 else 0)
+            hint(if (st.seqOn) "SEQ SYNTH ON" else "SEQ SYNTH OFF")
+            lcd.invalidate(); return
         }
         // pages SNAP / KIT / LOOP / XY : les boutons gardent des rôles de page
         when (st.page) {
@@ -1679,40 +1748,6 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate()
             return
         }
-        if (down && label == "SEQ" && shiftHeld && !st.smpPage) {   // SHIFT+SEQ : one-shot (liaison APK/FM-1, patch 0023)
-            if (st.page == 15) {                                    // page DRUMS : le seq s'arrete au dernier step releve
-                val on = if (ZtekAudio.drumGetOneshot() != 0) 0 else 1
-                ZtekAudio.drumSetOneshot(on)
-                hint(if (on != 0) "DRUMS ONE-SHOT ON" else "DRUMS ONE-SHOT OFF")
-                lcd.invalidate(); return
-            }
-            if (st.page == 1) {                                     // page LOOP : les slots s'arretent au wrap
-                val on = if (ZtekAudio.loopGetOneshot() != 0) 0 else 1
-                ZtekAudio.loopSetOneshot(on)
-                hint(if (on != 0) "LOOP ONE-SHOT ON" else "LOOP ONE-SHOT OFF")
-                lcd.invalidate(); return
-            }
-        }
-        if (down && label == "PLAY" && shiftHeld && !st.smpPage &&
-            (st.page == 6 || st.page == 15 || st.page == 1)) {   // SHIFT+PLAY : play/stop du sequenceur, UNIQUEMENT sur sa page (patch APK 0023)
-            if (st.page == 15) {                                    // page DRUMS : transport de la boite a rythme
-                drumTrUi = !drumTrUi
-                ZtekAudio.drumTr(if (drumTrUi) 1 else 0)
-                hint(if (drumTrUi) "DRUMS SEQ ON" else "DRUMS SEQ OFF")
-                lcd.invalidate(); return
-            }
-            if (st.page == 1) {                                     // page LOOP : transport du looper
-                st.playing = !st.playing
-                ZtekAudio.loopPlay(if (st.playing) 1 else 0)
-                if (st.playing) ZuluLink.sendStart("TOUS") else ZuluLink.sendStop("TOUS")
-                hint(if (st.playing) "LOOP PLAY" else "LOOP STOP")
-                lcd.invalidate(); return
-            }
-            st.seqOn = !st.seqOn                                    // page SEQ synth (6) : idem bouton SEQ
-            ZtekAudio.acidPlay(if (st.seqOn) 1 else 0)
-            hint(if (st.seqOn) "SEQ SYNTH ON" else "SEQ SYNTH OFF")
-            lcd.invalidate(); return
-        }
         when (SurfaceView.BTN_LABELS[i]) {
             "PLAY" -> if (down) {
                 if (st.page == 15) {                        // page DRUMS : PLAY = marche/arret de la boite a rythme
@@ -1759,8 +1794,8 @@ class MainActivity : Activity(), SurfaceListener {
     override fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean) {
         if (st.page == 17) {   // page LINK : le clavier joue les notes SUR le FM-1 (ZTF TRIG/OFF)
             val n = 48 + slot
-            if (down) Fm1Usb.remote("TRIG") { ztfNoteOn(n, 100) }
-            else Fm1Usb.remote("OFF") { ztfNoteOff(n) }
+            if (!down) Fm1Usb.remote("OFF") { ztfNoteOff(n) }
+            else if (!longPress) Fm1Usb.remote("TRIG") { ztfNoteOn(n, 100) }
             return
         }
         if (st.smpPage && down && !longPress) { ZtekAudio.smpPlay(1); return }
@@ -1836,10 +1871,29 @@ class MainActivity : Activity(), SurfaceListener {
             lcd.invalidate(); surface.invalidate()
             return
         }
-        if ((st.page == 2 || st.page == 3) && recHeld && down && !longPress) {   // REC+touche = stocker (mode d'emploi)
+        if ((st.page == 2 || st.page == 3) && recHeld && down && !longPress) {
+            recCombo = true   // REC+touche = stocker (mode d'emploi)
             if (st.page == 2) { ZtekAudio.snapStore(slot); st.snapFilled[slot] = true; hint("SNAP ${slot + 1} sauvé") }
             else { ZtekAudio.kitStore(slot); st.kitFilled[slot] = true; hint("KIT ${slot + 1} sauvé") }
             lcd.invalidate(); return
+        }
+        if (st.page == 1 && resampleHeld && down && !longPress) {
+            if (ZtekAudio.loopRsRec()) {
+                ZtekAudio.loopRsStop()
+                st.recArmed = false
+                hint("RESAMPLE STOP")
+            } else {
+                if (!st.playing) {
+                    st.playing = true
+                    ZtekAudio.loopPlay(1)
+                }
+                ZtekAudio.loopRsStart(slot, 0xFFFF, 0, 32)
+                st.recArmed = ZtekAudio.loopRsRec()
+                hint("RESAMPLE PAD ${slot + 1}")
+            }
+            syncSlots()
+            lcd.invalidate()
+            return
         }
         if (st.loopRecArm == -2 && down && !longPress) {   // proc REC+GLO : tap blanche = slot destination, armé 1,2 s
             st.loopRecArm = slot

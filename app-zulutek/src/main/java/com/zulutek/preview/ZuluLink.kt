@@ -101,6 +101,7 @@ object ZuluLink {
 
     // ---- Cycle de vie -----------------------------------------------------
 
+    @Synchronized
     fun start(name: String, asRole: Role) {
         if (!running.compareAndSet(false, true)) return
         localName = name.take(NAME_MAX)
@@ -108,36 +109,60 @@ object ZuluLink {
         peers.clear()
 
         // Socket de découverte : écoute le broadcast, accepte d'émettre en broadcast
-        val ds = DatagramSocket(DISCOVERY_PORT)
-        ds.broadcast = true
-        discoverySocket = ds
+        var ds: DatagramSocket? = null
+        var dds: DatagramSocket? = null
+        try {
+            val discovery = DatagramSocket(DISCOVERY_PORT)
+            ds = discovery
+            discovery.broadcast = true
+            val direct = DatagramSocket(DIRECT_PORT)
+            dds = direct
+            discoverySocket = discovery
+            directSocket = direct
 
-        // Socket direct : les pairs nous envoient ici les CC/CLOCK/etc.
-        val dds = DatagramSocket(DIRECT_PORT)
-        directSocket = dds
-
-        listenThread = thread("zulu-link-listen") { listenLoop(ds) }
-        directListenThread = thread("zulu-link-direct") { directListenLoop(dds) }
-        announceThread = thread("zulu-link-hello") { announceLoop() }
+            listenThread = thread("zulu-link-listen") { listenLoop(discovery) }
+            directListenThread = thread("zulu-link-direct") { directListenLoop(direct) }
+            announceThread = thread("zulu-link-hello") { announceLoop(discovery) }
+        } catch (e: Exception) {
+            running.set(false)
+            ds?.close()
+            dds?.close()
+            discoverySocket = null
+            directSocket = null
+            throw e
+        }
     }
 
+    @Synchronized
     fun stop() {
         if (!running.compareAndSet(true, false)) return
         try { sendBye() } catch (_: Exception) {}
         discoverySocket?.close(); directSocket?.close()
         discoverySocket = null; directSocket = null
+        // Sur la JVM la fermeture du socket peut se terminer au retour de receive().
+        announceThread?.interrupt()
+        for (thread in listOfNotNull(listenThread, directListenThread, announceThread)) {
+            if (thread == Thread.currentThread()) continue
+            try {
+                thread.join(100)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+        }
+        listenThread = null; directListenThread = null; announceThread = null
         peers.clear()
         onPeersChanged?.invoke()
     }
 
     // ---- Boucles réseau ---------------------------------------------------
 
-    private fun announceLoop() {
+    private fun announceLoop(socket: DatagramSocket) {
         val hello = encodeHello()
-        while (running.get()) {
+        while (!socket.isClosed) {
             try {
                 val addr = InetAddress.getByName("255.255.255.255")
-                discoverySocket?.send(DatagramPacket(hello, hello.size, addr, DISCOVERY_PORT))
+                socket.send(DatagramPacket(hello, hello.size, addr, DISCOVERY_PORT))
                 prunePeers()
             } catch (e: Exception) {
                 // socket fermée ou réseau absent : on retentera au prochain tour
@@ -148,32 +173,33 @@ object ZuluLink {
 
     private fun listenLoop(socket: DatagramSocket) {
         val buf = ByteArray(256)
-        while (running.get()) {
+        while (!socket.isClosed) {
             val packet = DatagramPacket(buf, buf.size)
             try {
                 socket.receive(packet)
                 if (packet.length >= 6) handleIncoming(buf, packet.length, packet.address.hostAddress ?: continue)
             } catch (e: Exception) {
-                if (!running.get()) return
+                if (socket.isClosed) return
             }
         }
     }
 
     private fun directListenLoop(socket: DatagramSocket) {
         val buf = ByteArray(512)
-        while (running.get()) {
+        while (!socket.isClosed) {
             val packet = DatagramPacket(buf, buf.size)
             try {
                 socket.receive(packet)
                 if (packet.length >= 6) handleDirect(buf, packet.length, packet.address.hostAddress ?: continue)
             } catch (e: Exception) {
-                if (!running.get()) return
+                if (socket.isClosed) return
             }
         }
     }
 
     /** Traite un paquet de découverte (HELLO/BYE venant du port broadcast). */
     private fun handleIncoming(b: ByteArray, len: Int, fromAddr: String) {
+        if (!validHeader(b, len)) return
         when (b[4]) {
             T_HELLO -> {
                 val (name, role, tempo) = decodeHello(b, len) ?: return
@@ -197,11 +223,13 @@ object ZuluLink {
 
     /** Traite un message direct (CC, CLOCK, START/STOP, TAP, SNAP, PING/PONG, BYE). */
     private fun handleDirect(b: ByteArray, len: Int, fromAddr: String) {
-        val from = peers[fromAddr]?.name ?: "?"   // un inconnu peut nous parler ; on écoute quand même
+        if (!validHeader(b, len)) return
+        val peer = peers.values.firstOrNull { it.address == fromAddr }
+        val from = peer?.name ?: "?"   // un inconnu peut nous parler ; on écoute quand même
         when (b[4]) {
             T_CC -> {
                 val (target, cc, ch, v) = decodeCc(b, len) ?: return
-                if (target != localName) return     // pas pour nous : ignorer (le broadcast UDP direct ne rebondit pas, mais par prudence)
+                if (target != localName && !target.equals("TOUS", ignoreCase = true)) return
                 onMessage?.invoke(RxMessage(T_CC, from, fromAddr, cc = cc, ch = ch, value = v))
             }
             T_CLOCK -> {
@@ -213,7 +241,6 @@ object ZuluLink {
             T_PING -> { replyPong(fromAddr, b, len); onMessage?.invoke(RxMessage(T_PING, from, fromAddr)) }
             T_PONG -> {
                 val stamp = decodeStamp(b, len)
-                val peer = peers[fromAddr]
                 if (peer != null && stamp > 0L) {
                     peer.lastPingMs = System.currentTimeMillis() - stamp
                 }
@@ -292,6 +319,11 @@ object ZuluLink {
             directSocket?.send(DatagramPacket(pkt, pkt.size, addr, DIRECT_PORT))
         } catch (_: Exception) {}
     }
+
+    /** Rejette les datagrammes hors protocole avant toute action réseau ou transport. */
+    private fun validHeader(b: ByteArray, len: Int): Boolean =
+        len >= 6 && b[0] == MAGIC[0] && b[1] == MAGIC[1] &&
+            b[2] == MAGIC[2] && b[3] == MAGIC[3] && b[5] == VERSION
 
     // ---- Encodage binaire (petit, fixe, comme la spécification) -------------
 

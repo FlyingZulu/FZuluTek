@@ -4,7 +4,7 @@
  *
  * Le FM-1 énumère en USB-MIDI (interface classe 0x01, sous-classe 0x03 MIDISTREAMING,
  * endpoints bulk IN/OUT) — on filtre par classe, pas de VID/PID. Chaque paquet USB-MIDI
- * fait 4 octets d'en-tête (CIN<<4 | câble) + jusqu'à 3 octets de données ; un SysEx est
+ * fait 4 octets : 1 octet d'en-tête (câble<<4 | CIN) + 3 octets de données ; un SysEx est
  * découpé en blocs de 3 (CIN 0x4 continue, 0x5/0x6/0x7 fin à 1/2/3 octets) et réassemblé
  * à la réception. Au-dessus : ZtfTransport (companion 0x60/61/62 + commandes ZTF).
  *
@@ -36,7 +36,8 @@ import kotlin.concurrent.thread
 private class UsbMidiLink(
     private val conn: UsbDeviceConnection,
     private val epOut: UsbEndpoint,
-    private val epIn: UsbEndpoint
+    private val epIn: UsbEndpoint,
+    private val usbInterface: UsbInterface
 ) : ZtfLink {
 
     private val queue: BlockingQueue<ByteArray> = LinkedBlockingQueue()
@@ -53,11 +54,13 @@ private class UsbMidiLink(
             val take = minOf(3, rem)
             val last = off + take >= n
             val cin = if (!last) 0x4 else when (take) { 3 -> 0x7; 2 -> 0x6; else -> 0x5 }
-            val buf = ByteArray(4 + take)
-            buf[0] = ((cin shl 4) or 0).toByte()   // câble 0
-            System.arraycopy(pkt, off, buf, 4, take)
+            // Un événement USB-MIDI fait exactement 4 octets : header + 3 données.
+            // Les octets non utilisés du dernier événement restent à zéro.
+            val buf = ByteArray(4)
+            buf[0] = cin.toByte()   // câble 0 (nibble haut), CIN (nibble bas)
+            System.arraycopy(pkt, off, buf, 1, take)
             val r = conn.bulkTransfer(epOut, buf, buf.size, 250)
-            if (r < 0) return false
+            if (r != buf.size) return false
             off += take
         }
         return true
@@ -72,14 +75,14 @@ private class UsbMidiLink(
             if (r <= 0) continue
             var p = 0
             while (p + 4 <= r) {
-                val cin = (buf[p].toInt() ushr 4) and 0xF
-                val cable = buf[p].toInt() and 0xF
+                val cin = buf[p].toInt() and 0xF
+                val cable = (buf[p].toInt() ushr 4) and 0xF
                 if (cable != 0) { p += 4; continue }
                 when (cin) {
                     0x4, 0x5, 0x6, 0x7 -> {
                         val nb = when (cin) { 0x4, 0x7 -> 3; 0x6 -> 2; else -> 1 }
                         for (k in 0 until nb) {
-                            if (p + 4 + k < r && sxLen < sx.size) sx[sxLen++] = buf[p + 4 + k]
+                            if (p + 1 + k < r && sxLen < sx.size) sx[sxLen++] = buf[p + 1 + k]
                         }
                         if (cin != 0x4) {   // fin de SysEx -> trame complète
                             queue.offer(sx.copyOf(sxLen))
@@ -98,6 +101,8 @@ private class UsbMidiLink(
     override fun close() {
         running = false
         reader.interrupt()
+        try { conn.releaseInterface(usbInterface) } catch (_: Exception) {}
+        conn.close()
         queue.clear()
     }
 }
@@ -115,6 +120,8 @@ object Fm1Usb {
     /** callbacks appelés depuis le thread worker — poster sur le looper UI si besoin */
     var onStatus: (String) -> Unit = {}
     var onFiles: (List<Fm1File>) -> Unit = {}
+    /** Émis une fois que l'interface USB est effectivement ouverte (thread worker). */
+    var onConnected: () -> Unit = {}
     var onProgress: (String) -> Unit = {}
     /** notifications de params (0x62 CHANGED) reçues en live quand watch est actif — miroir mode A */
     var onParams: (List<Pair<Int, Int>>) -> Unit = {}
@@ -123,14 +130,21 @@ object Fm1Usb {
 
     /** boucle de réception des notifications de params (démarrée à la connexion) */
     private fun startWatch() {
+        watchThread?.interrupt()
         watchThread = thread(name = "fm1-params-rx", start = true) {
             while (connected) {
                 val t = transport
-                if (t == null) { Thread.sleep(300); continue }
+                if (t == null) {
+                    try { Thread.sleep(300) } catch (_: InterruptedException) { break }
+                    continue
+                }
                 try {
                     val ns = t.poll(300)
                     if (ns.isNotEmpty()) onParams(ns)
-                } catch (e: Exception) { Thread.sleep(500) }
+                } catch (_: InterruptedException) { break }
+                catch (e: Exception) {
+                    try { Thread.sleep(500) } catch (_: InterruptedException) { break }
+                }
             }
         }
     }
@@ -229,8 +243,10 @@ object Fm1Usb {
         val itf = midiIf ?: return
         val mgr = usbManager ?: return
         worker.execute {
+            var newConn: UsbDeviceConnection? = null
             try {
                 val conn = mgr.openDevice(dev) ?: throw ZtfException("openDevice a échoué")
+                newConn = conn
                 if (!conn.claimInterface(itf, true)) throw ZtfException("claimInterface a échoué")
                 var epIn: UsbEndpoint? = null
                 var epOut: UsbEndpoint? = null
@@ -242,13 +258,16 @@ object Fm1Usb {
                 }
                 if (epIn == null || epOut == null) throw ZtfException("endpoints bulk manquants")
                 link?.close()
-                val l = UsbMidiLink(conn, epOut, epIn)
+                val l = UsbMidiLink(conn, epOut, epIn, itf)
+                newConn = null // la liaison prend possession de la connexion
                 link = l
                 transport = ZtfTransport(l)
                 connected = true
                 startWatch()
                 onStatus("FM-1 connecté ($deviceName)")
+                onConnected()
             } catch (e: Exception) {
+                try { newConn?.close() } catch (_: Exception) {}
                 connected = false
                 onStatus("connexion: ${e.message}")
             }
@@ -274,16 +293,13 @@ object Fm1Usb {
         }
     }
 
-    fun ping(): Triple<String, Int, Long>? {
-        var out: Triple<String, Int, Long>? = null
+    fun ping() {
         run("ping") {
             val t = transport!!.ztfPing()
             if (t != null) {
-                out = t
                 onStatus("ZTF OK: ${t.first} v${t.second}, libre ${t.third / 1024} Ko")
             } else onStatus("pas de réponse ZTF (pas companion ?)")
         }
-        return out
     }
 
     fun refreshFiles() {
@@ -294,58 +310,47 @@ object Fm1Usb {
         }
     }
 
-    /** tire le fichier i du FM-1 vers un fichier local ; retourne la taille lue */
-    fun pull(i: Int, dest: File, label: String = "PULL"): Long {
-        var size = 0L
+    /** tire le fichier i du FM-1 vers un fichier local */
+    fun pull(i: Int, dest: File, label: String = "PULL") {
         run(label) {
             val data = transport!!.fileRead(i) { done, total ->
                 onProgress("$label $done/$total")
             }
             dest.parentFile?.mkdirs()
             dest.writeBytes(data)
-            size = data.size.toLong()
             onStatus("$label -> ${dest.name} (${data.size} o)")
         }
-        return size
     }
 
     /** pousse des octets vers le fichier i du FM-1 (begin/data/commit, CRC-32, reprise) */
-    fun push(i: Int, data: ByteArray, label: String = "PUSH"): Boolean {
-        var ok = false
+    fun push(i: Int, data: ByteArray, label: String = "PUSH") {
         run(label) {
             transport!!.fileWrite(i, data) { done, total ->
                 onProgress("$label ${(done * 100 / total.coerceAtLeast(1))}%")
             }
-            ok = true
             onStatus("$label OK (${data.size} o, CRC ok)")
         }
-        return ok
     }
 
     /** pousse vers un fichier nommé (ZSMP00..07 / ZLUP00..07 / ZMAC / ZPRE00..31 / ZKIT) */
-    fun pushNamed(name: String, data: ByteArray, label: String = "PUSH"): Boolean {
-        var ok = false
+    fun pushNamed(name: String, data: ByteArray, label: String = "PUSH") {
         run(label) {
             val f = transport!!.fileIndexOf(name)
             transport!!.fileWrite(f.index, data) { done, total ->
                 onProgress("$label ${(done * 100 / total.coerceAtLeast(1))}%")
             }
-            ok = true
             onStatus("$label $name OK (${data.size} o)")
         }
-        return ok
     }
 
-    fun pullNamed(name: String, dest: File, label: String = "PULL"): Long {
-        var size = 0L
+    fun pullNamed(name: String, dest: File, label: String = "PULL") {
         run(label) {
             val f = transport!!.fileIndexOf(name)
             val data = transport!!.fileRead(f.index) { done, total -> onProgress("$label $done/$total") }
             dest.parentFile?.mkdirs()
             dest.writeBytes(data)
-            size = data.size.toLong()
+            onStatus("$label -> ${dest.name} (${data.size} o)")
         }
-        return size
     }
 
     fun load(i: Int) {

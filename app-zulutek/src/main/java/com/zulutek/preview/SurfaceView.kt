@@ -33,8 +33,10 @@ import kotlin.math.sin
 interface SurfaceListener {
     fun onEncoder(i: Int, v: Float)
     fun onEncoderPress(i: Int) {}    // appui court sur un encodeur (SEL pushable du FM-1)
+    fun onEncoderRelease(i: Int) {}
     fun onEncoderHold(i: Int) {}     // maintien long sur un encodeur (SEL maintenu + touche = LOAD preset)
     fun onButton(i: Int, down: Boolean)
+    fun onButtonCancel(i: Int) { onButton(i, false) }
     fun onButtonLong(i: Int)
     fun onWhiteKey(slot: Int, down: Boolean, longPress: Boolean)
     fun onBlackKey(note: Int, down: Boolean)
@@ -246,23 +248,26 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
     private val rr = RectF()
     private val handler = Handler(Looper.getMainLooper())
 
-    // touch state
-    private var zone = 0            // 0 none, 1 encoder, 2 button, 3 white key, 4 black key
-    private var idx = -1
-    private var startY = 0f
-    private var startVal = 0f
-    private var longPosted = false
-    private var downTime = 0L
-    private var encMoved = false
-    private val encHoldRunnable = Runnable {
-        if (zone == 1 && idx >= 0 && !encMoved) listener.onEncoderHold(idx)
+    private class Touch(val zone: Int, var index: Int, val startY: Float, val startValue: Float) {
+        val startedAt = android.os.SystemClock.uptimeMillis()
+        var moved = false
+        var hold: Runnable? = null
     }
-    private val longRunnable = Runnable {
-        longPosted = false
-        when (zone) {
-            3 -> if (idx >= 0) listener.onWhiteKey(idx, true, true)
-            2 -> if (idx >= 0) listener.onButtonLong(idx)
-        }
+
+    private val touches = mutableMapOf<Int, Touch>()
+
+    private fun pressed(zone: Int, index: Int): Boolean =
+        touches.values.any { it.zone == zone && it.index == index }
+
+    private fun cancelHold(touch: Touch) {
+        touch.hold?.let(handler::removeCallbacks)
+        touch.hold = null
+    }
+
+    private fun scheduleHold(touch: Touch, delayMs: Long, action: () -> Unit) {
+        val hold = Runnable { touch.hold = null; action() }
+        touch.hold = hold
+        handler.postDelayed(hold, delayMs)
     }
 
     /* hit-test en pixels du device (la geometrie est deja adaptative) */
@@ -357,7 +362,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             val b = btn[id]
             val i = M2I[id]
             val led = ledFor(i)
-            val down = zone == 2 && idx == i
+            val down = pressed(2, i)
             rrect(c, b[0] + 1f * ts, b[1] + 3f * ts, b[2], b[3], 8f * ts, 0xFF1C1D20.toInt())  // shadow
             val tint = if (id == 12) GREEN_LED else AMBER_LED
             val top = if (led > 0f) mix(BTN_TOP, tint, 0.85f) else BTN_TOP
@@ -388,7 +393,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
             }
         }
         for (i in 0 until 16) {
-            val down = zone == 3 && idx == i
+            val down = pressed(3, i)
             val heat = maxOf(heatOf(i, st.slotOn[i], st.slotRec[i]), if (down) 0.75f else 0f).coerceAtMost(1f)
             val off = if (down) 3f * ts else 0f
             val x = whiteKeyX(i)
@@ -399,7 +404,7 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         }
         for (bi in BLACK_NOTES.indices) {
             val note = BLACK_NOTES[bi]
-            val down = zone == 4 && idx == bi
+            val down = pressed(4, bi)
             val heat = if (note == st.curNote) 0.75f else if (down) 0.75f else 0f
             val off = if (down) 3f * ts else 0f
             val x = blackKeyX(bi)
@@ -416,72 +421,78 @@ class SurfaceView(ctx: Context, val st: LcdState, val listener: SurfaceListener)
         (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t).toInt())
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
-        val px = ev.x
-        val py = ev.y
-        when (ev.action) {
-            MotionEvent.ACTION_DOWN -> {
-                val (z, i) = zoneAt(px, py)
-                zone = z; idx = i; startY = py; longPosted = false
-                when (z) {
-                    1 -> { startVal = st.encVals[i]; downTime = System.currentTimeMillis(); encMoved = false
-                           handler.postDelayed(encHoldRunnable, 600) }
+        val pointer = ev.actionIndex
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val (zone, index) = zoneAt(ev.getX(pointer), ev.getY(pointer))
+                if (zone == 0 || pressed(zone, index)) return touches.isNotEmpty()
+                val chord = touches.isNotEmpty()
+                touches.values.filter { it.zone == 2 || it.zone == 3 }.forEach(::cancelHold)
+                val value = if (zone == 1) st.encVals[index] else 0f
+                val touch = Touch(zone, index, ev.getY(pointer), value)
+                touches[ev.getPointerId(pointer)] = touch
+                when (zone) {
+                    1 -> scheduleHold(touch, 600) { listener.onEncoderHold(index) }
                     2 -> {
-                        listener.onButton(i, true)
-                        handler.postDelayed(longRunnable, 600)
-                        longPosted = true
+                        listener.onButton(index, true)
+                        if (!chord) scheduleHold(touch, 600) { listener.onButtonLong(index) }
                     }
                     3 -> {
-                        handler.postDelayed(longRunnable, 500)
-                        longPosted = true
-                        st.lastKeyUse = System.currentTimeMillis()   // rappel HOME 20 s (charte)
-                        listener.onWhiteKey(i, true, false)
+                        st.lastKeyUse = System.currentTimeMillis()
+                        listener.onWhiteKey(index, true, false)
+                        if (!chord) scheduleHold(touch, 500) { listener.onWhiteKey(touch.index, true, true) }
                     }
                     4 -> {
-                        val note = BLACK_NOTES[i]
-                        st.lastKeyUse = System.currentTimeMillis()   // rappel HOME 20 s (charte)
-                        listener.onBlackKey(note, true)
-                    }
-                    else -> { zone = 0; idx = -1 }
-                }
-                invalidate()
-                return zone != 0
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if (zone == 1) {
-                    encMoved = true
-                    handler.removeCallbacks(encHoldRunnable)
-                    val v = (startVal + (startY - py) / (160f * ts)).coerceIn(0f, 1f)
-                    st.encVals[idx] = v
-                    listener.onEncoder(idx, v)
-                    invalidate()
-                } else if (zone == 3) {
-                    // glissando over the white pills (panel.rs main.js)
-                    val (z, i) = zoneAt(px, py)
-                    if (z == 3 && i != idx) {
-                        if (idx >= 0) listener.onWhiteKey(idx, false, false)
-                        idx = i
                         st.lastKeyUse = System.currentTimeMillis()
-                        listener.onWhiteKey(i, true, false)
-                        invalidate()
+                        listener.onBlackKey(BLACK_NOTES[index], true)
                     }
                 }
-                return true
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                handler.removeCallbacks(longRunnable)
-                handler.removeCallbacks(encHoldRunnable)
-                when (zone) {
-                    1 -> if (!encMoved && System.currentTimeMillis() - downTime < 350)
-                             listener.onEncoderPress(idx)   // tap encodeur = appui SEL/... du FM-1
-                    2 -> listener.onButton(idx, false)
-                    3 -> if (longPosted) listener.onWhiteKey(idx, false, false)
-                    4 -> listener.onBlackKey(BLACK_NOTES[idx], false)
+            MotionEvent.ACTION_MOVE -> for (p in 0 until ev.pointerCount) {
+                val touch = touches[ev.getPointerId(p)] ?: continue
+                val y = ev.getY(p)
+                if (touch.zone == 1 && (touch.moved || kotlin.math.abs(y - touch.startY) > 2f * ts)) {
+                    touch.moved = true
+                    cancelHold(touch)
+                    val value = (touch.startValue + (touch.startY - y) / (160f * ts)).coerceIn(0f, 1f)
+                    st.encVals[touch.index] = value
+                    listener.onEncoder(touch.index, value)
+                } else if (touch.zone == 3) {
+                    val (zone, index) = zoneAt(ev.getX(p), y)
+                    if (zone == 3 && touch.index != index && !pressed(zone, index)) {
+                        cancelHold(touch)
+                        listener.onWhiteKey(touch.index, false, false)
+                        touch.index = index
+                        st.lastKeyUse = System.currentTimeMillis()
+                        listener.onWhiteKey(index, true, false)
+                    }
                 }
-                zone = 0; idx = -1; longPosted = false
-                invalidate()
-                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                touches.remove(ev.getPointerId(pointer))?.let { releaseTouch(it, cancelled = false) }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                val cancelled = touches.values.toList()
+                touches.clear()
+                cancelled.forEach { releaseTouch(it, cancelled = true) }
             }
         }
-        return false
+        invalidate()
+        return true
+    }
+
+    private fun releaseTouch(touch: Touch, cancelled: Boolean) {
+        cancelHold(touch)
+        val index = touch.index
+        when (touch.zone) {
+            1 -> {
+                if (!cancelled && !touch.moved && android.os.SystemClock.uptimeMillis() - touch.startedAt < 350)
+                    listener.onEncoderPress(index)
+                listener.onEncoderRelease(index)
+            }
+            2 -> if (cancelled) listener.onButtonCancel(index) else listener.onButton(index, false)
+            3 -> listener.onWhiteKey(index, false, false)
+            4 -> listener.onBlackKey(BLACK_NOTES[index], false)
+        }
     }
 }
