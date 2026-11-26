@@ -119,9 +119,18 @@ Pistes pour le régime (≥ 83 Ko, décision équipe A) : généraliser le mode 
 
 ## 8. Ordre recommandé avant le premier flash réel
 
-1. `git apply` 0001..0018 sur clone neuf de `8934f53` → build host OK → tests host sim
-   (7/9 scénarios OK ; `options`/`presets` = régressions connues, voir PR #33).
-2. Build firmware `.fwsc` (quand le fit SRAM sera réglé) → `fm1-emu` avec script de touches →
-   WAV non muet, pas de NaN.
+1. ✅ **Fait 2026-11-22 (audit, branche `vibe/fm1-audit-0026-c75184`)** : `git apply` 0001..0026
+   (+ `fm1-base/0011`, `fm1-base/0012`, `felucca-bsp/0011`) sur clones neufs épinglés
+   (`8934f53` / `565fafe` / `7b77bfb`) : **28/28 OK** → build host OK → **10/10 scénarios sim,
+   237 `ok`, 0 FAIL** → build host **ASan+UBSan : 10/10, 0 rapport sanitizer** (rapport :
+   `docs/FM1-AUDIT-2026-11-22.md`).
+2. ✅ **Fait 2026-11-22** : build firmware `.fwsc` avec la toolchain pinnée :
+   **rc=0, 0 warning**, `atek303.fwsc` **616 059 o**, identité `FM-1_33000`, image
+   **220 772 o**, SRAM **417 020/475 136 o (58 116 o libres)** → `fm1-emu` sur ce `.fwsc`
+   (scénarios boot / seq+MIDI / loop REC+PLAY / macro / fine / drums / mix) : tous rc=0,
+   WAV 44,1 kHz stéréo non muet (RMS 3 100..7 500, ~97 % non nul, 0..16 éch. clippés
+   transitoires), LCD 240×240 rendu (pages vérifiées en capture).
 3. Sur le FM-1 : `--info`, backup AT64 + dump flash complet, puis `fm1_install.py`,
    puis re-vérifier l'identité et rejouer les scénarios clés.
+   ⚠️ Le patch 0025 (flash-loop) n'est **pas encore câblé** dans `app.c` : ne pas
+   s'attendre au loop audio en flash sur cette image (voir `docs/FM1-AUDIT-2026-11-22.md`).

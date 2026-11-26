@@ -1,0 +1,41 @@
+diff --git a/chip/usb.c b/chip/usb.c
+index 19091a4..b69aa92 100644
+--- a/chip/usb.c
++++ b/chip/usb.c
+@@ -3539,6 +3539,36 @@ static void uac_play(int32_t *out, uint32_t n, uint32_t gain_q12) { (void)uac_pl
+  * computer's audio; 0 = none (not streaming, priming, ran dry): lr is silence */
+ static __attribute__((unused)) int uac_play_take(int32_t *lr, uint32_t n) { return uac_play_mix(lr, n, 4096u, 1); }
+ #endif
++
++/* patch zuluTek (FZuluTek patches/felucca-bsp/0010-uac-in-tap.patch, implemented at the JieLi build):
++ * non-destructive tap of the computer's audio (the UAC-out ring) for the APP_USB_IN hook
++ * (device/uac_mix.h -> app_usb_in): copies up to n stereo frames from the ring at uo_r WITHOUT advancing
++ * it (uac_play's read position is untouched), as 24-bit L/R packed in int32 (16-bit ring: sample << 8),
++ * the scale app_usb_in/zml_usb_feed takes. Returns the frames copied (0: not streaming, priming, dry).
++ * Audio ISR context, like uac_play. */
++uint32_t uac_in_peek(int32_t *dst, uint32_t n)
++{
++#if FELUCCA_UAC_OUT_24
++    (void)dst; (void)n;                 /* the FM-1's zuluTek build is 16-bit plain: no tap there */
++    return 0;
++#else
++    uint32_t r, fill, i, got;
++    if (!dst || !n || !uo.alt || !usb.config || !uo.go)
++        return 0;
++    r = uo_r;
++    fill = uo_w - r;
++    if (!fill)
++        return 0;
++    got = n < fill ? n : fill;
++    RING_PUBLISH();
++    for (i = 0; i < got; i++) {
++        uint32_t a = uo_ring[(r + i) & (UO_N - 1u)];    /* 16-bit L | R << 16, as uac_play reads it */
++        dst[2u * i] = (int32_t)(int16_t)a << 8;         /* 24-bit scale, what app_usb_in takes */
++        dst[2u * i + 1u] = (int32_t)(int16_t)(a >> 16) << 8;
++    }
++    return got;
++#endif
++}
+ #endif
+ 
+ static void uac_service(void)

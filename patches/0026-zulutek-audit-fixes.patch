@@ -1,0 +1,54 @@
+--- a/atek303/app/app.c
++++ b/atek303/app/app.c
+@@ -1074,9 +1074,9 @@
+         set.tempo = f->tempo;
+         p = gen_params();
+         acid_generate(&set.pattern, &p, f->seed);
+-        for (k = 0; k < 15 && f->name[k]; k++)
++        for (k = 0; k < (int)sizeof presets[i].name - 1 && f->name[k]; k++)   /* patch 0026 (audit UBSan): name[8] depuis 0010, boucle bornée + NUL garanti (0016 avait raté ce site) */
+             presets[i].name[k] = f->name[k];
+-        for (; k < 15; k++)
++        for (; k < (int)sizeof presets[i].name; k++)
+             presets[i].name[k] = 0;
+         presets[i].s = set;
+         presets[i].used = 1;
+@@ -1627,6 +1627,7 @@
+     int i, bank, ok;
+     for (i = 0; i < (int)sizeof presets[slot].name; i++)   /* patch 0016: name[8] depuis 0010, ne plus lire name[8..14] */
+         presets[slot].name[i] = (i < 15) ? name[i] : 0;
++    presets[slot].name[sizeof presets[slot].name - 1] = 0; /* patch 0026 (audit): nom de 8+ cars sinon non terminé */
+     presets[slot].s = set;
+     presets[slot].used = 1;
+     zsp_mod_save_part(zsp_preset_part(slot));   /* patch 0008: l'état de modulation courant suit la partie du preset */
+--- a/atek303/app/ztek_seqplus.c
++++ b/atek303/app/ztek_seqplus.c
+@@ -7,7 +7,7 @@
+ #include "ztek_seqplus.h"
+ #include "app.h"                 /* OBJ_ZSEQ, plat_store_* */
+ #include "ztek_drum.h"         /* patch 0008: destinations drum dans la matrice ASSIGN */
+-#include "fastmath.h"           /* patch 0008: comme les dsp/*.c — résolu via fm1-base (include/) au build FM-1 */
++#include "fastmath.h"           /* patch 0008: comme les sources de dsp/ — résolu via fm1-base (include/) au build FM-1 (patch 0026: -Wcomment corrigé) */
+ #include <string.h>
+ 
+ #define ZSP_MAGIC 0x5A535032u          /* 'ZSP2' (patch 0008: + dst drum, + part_saved) */
+@@ -47,7 +47,7 @@
+ static int   env_loop[2], env_stage[2];
+ static float ef_lvl, blk_peak, tool_state[6];
+ static float dst_base[ZSP_NDST];
+-static int   play_pos, play_dir;
++static int   play_dir;                                      /* patch 0026 (audit): play_pos inutilisé (-Wunused-variable) */
+ static uint32_t rng_ = 0x9e3779b9u;
+ 
+ static uint32_t lcg(void) { rng_ = rng_ * 1103515245u + 12345u; return rng_; }
+--- a/atek303/app/dsp/drum_engine.c
++++ b/atek303/app/dsp/drum_engine.c
+@@ -737,7 +737,8 @@
+             float s = cs * (1.0f - h) + bs * h;
+             const float *par = d->pad[p].par;
+             float pan = par[8] + d->mod_pan;         /* P8 = PAN + LFO PAN */
+-            if (pan < 0.0f) pan = 0.0f; if (pan > 1.0f) pan = 1.0f;
++            if (pan < 0.0f) pan = 0.0f;
++            if (pan > 1.0f) pan = 1.0f;
+             float pl = cosf(pan * 1.5707963f), pr = sinf(pan * 1.5707963f);
+             dryL += s * pl; dryR += s * pr;
+             det += fabsf(s) * (0.2f + 1.6f * par[11]); /* P11 = C.SEND */

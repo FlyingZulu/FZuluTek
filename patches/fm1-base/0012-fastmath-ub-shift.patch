@@ -1,0 +1,27 @@
+diff --git a/device/main_fm1.c b/device/main_fm1.c
+index 813c81e..8763b0a 100644
+--- a/device/main_fm1.c
++++ b/device/main_fm1.c
+@@ -1282,7 +1282,9 @@ static void fm1_main(void)
+ {
+     int32_t knob = 512 * 16;
+     uint32_t batt_t = 0;                            /* (the battery's last reading, fm1_ms) */
++#ifdef APP_BATTERY_RAW
+     uint32_t supply_t = 0;                          /* (the supply's: plat_battery_charging) */
++#endif
+     uint32_t last_frame = 0;
+     int took;                                       /* a SysEx frame taken this pass (not the updater's) */
+     {
+diff --git a/include/fastmath.h b/include/fastmath.h
+index 8a6aded..11f3c1a 100644
+--- a/include/fastmath.h
++++ b/include/fastmath.h
+@@ -55,7 +55,7 @@ static inline float fm_exp2_nf(int32_t n, float f)
+     p = p * f + 6.931472057e-01f;
+     p = p * f + 1.0f;
+     b.f = p;
+-    b.i += n << 23;
++    b.i += (int32_t)((uint32_t)n << 23);   /* patch audit 2026-11-22: décalage d'un négatif = UB (UBSan); identique en complément à 2 */
+     return b.f;
+ }
+ 
